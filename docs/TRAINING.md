@@ -520,3 +520,56 @@ Only source and docs get committed. Datasets, video, models, and secrets stay lo
 Sources: [RF-DETR](https://github.com/roboflow/rf-detr) (Apache 2.0),
 [SAM 3](https://github.com/facebookresearch/sam3) and its
 [licence](https://github.com/facebookresearch/sam3/blob/main/LICENSE).
+
+---
+
+## Scoring a model where it actually fails
+
+A validation split drawn from the training corpus measures accuracy on images that look like the
+training images. That is not what broke. On 2026 footage v2 recognised one to five robots in a
+six-robot match and nothing at all in the lower of two stacked camera views, while posting
+perfectly respectable val numbers. **A model can report excellent mAP and still be blind here,
+because the failure is distribution, not accuracy.**
+
+So before believing a new model is better, run it on the held-out viewpoint pack — 400 frames
+across 60 segments of exactly the footage that fails:
+
+```powershell
+python -m ingest.collection.viewpoint_eval --model data\robot-v3.onnx
+```
+
+The baseline to beat, measured on `robot-v2.onnx` at threshold 0.25:
+
+| | v2 |
+|---|---|
+| mean detections per frame | **3.47** (a six-robot match has 6) |
+| frames finding nothing | 13 / 400 (3.2%) |
+| frames finding all six | 55 / 400 (13.8%) |
+| weakest segment | 0.43 detections/frame |
+
+Read the **per-segment** breakdown, not just the mean. Three-everywhere and six-at-half-the-venues
+average the same and are not the same problem — only the first is fixed by more labels of the
+same kind. v2's spread runs from 0.43 to well above six, so its gap is venue-shaped.
+
+No ground truth is needed for this to be useful: a six-robot match contains six robots. Note that
+the pack's own `labels/` are **the detector's own proposals**, not truth — scoring against them
+measures self-agreement, and v2 scores 0.986 against boxes v2 drew. The tool refuses to report
+recall from them. Once a pack comes back from a labeller, point at it:
+
+```powershell
+python -m ingest.collection.viewpoint_eval --model data\robot-v3.onnx --truth data\returned\labels
+```
+
+### mAP@50-95 is not cosmetic here
+
+The spread between mAP@50 and mAP@50-95 measures how tightly boxes fit, and two things downstream
+depend on it more than on whether a robot was found at all:
+
+- **Tracking is IoU-based.** Loose or jittery boxes lower frame-to-frame overlap, association
+  fails, and one robot becomes several track IDs. Team attribution is *per track*, so every extra
+  fragment is another number a human has to type.
+- **Bumper OCR reads inside the box.** The ring test asks whether a digit is ringed by bumper
+  colour; a box padded with floor and truss dilutes exactly that signal.
+
+A model with better mAP@50 and worse mAP@50-95 can therefore cost more human time than the one it
+replaced.
