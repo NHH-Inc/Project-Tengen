@@ -70,3 +70,92 @@ class TestSteadyTags:
 
     def test_nothing_seen_is_not_a_crash(self):
         assert steady_tags({}) == ({}, [])
+
+
+# --------------------------------------------------------------------------- carpet mode
+#
+# Measured across all 60 sources: neither tag-based method can calibrate this corpus. `pose` is
+# ill-conditioned because every 2026 tag sits within 0.57 m of one plane while the field spans
+# 16.5 m, and `plane` needs four non-collinear tags at one height, which no steady camera sees.
+# Carpet mode is the remaining path -- hand-marked points, no tags, no focal length.
+
+
+def _square(tmp_path):
+    """A clean quadrilateral: the well-posed case, and the one a human is told to aim for."""
+    return [
+        {"image": [100, 900], "field": [0.0, 0.0]},
+        {"image": [1800, 900], "field": [54.0, 0.0]},
+        {"image": [1500, 500], "field": [54.0, 26.6]},
+        {"image": [400, 500], "field": [0.0, 26.6]},
+    ]
+
+
+def test_carpet_mode_ignores_tags_entirely(monkeypatch, tmp_path):
+    """No tags, no FOV, no camera pose -- only the marked points."""
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=_square(tmp_path), method="carpet")
+    assert result["mapping_source"] == "carpet_marked"
+    assert result["plane_height_ft"] == 0.0
+    assert result["point_count"] == 4
+    assert result["solution"] is not None
+
+
+def test_carpet_mode_maps_to_the_carpet_not_a_tag_plane(monkeypatch, tmp_path):
+    """The whole point: a robot's footprint is on the carpet, so the mapping must be too."""
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=_square(tmp_path), method="carpet")
+    assert result["plane_height_ft"] == 0.0
+
+
+def test_four_marked_points_cannot_be_checked(monkeypatch, tmp_path):
+    """Any four fit exactly, so redundancy is false and the error means nothing yet."""
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=_square(tmp_path), method="carpet")
+    assert result["solution"]["has_redundancy"] is False
+
+
+def test_a_fifth_point_makes_the_error_mean_something(monkeypatch, tmp_path):
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    points = _square(tmp_path) + [{"image": [950, 700], "field": [27.0, 13.3]}]
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=points, method="carpet")
+    assert result["point_count"] == 5
+    assert result["solution"]["has_redundancy"] is True
+
+
+def test_too_few_marked_points_refuses_rather_than_fitting(monkeypatch, tmp_path):
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=_square(tmp_path)[:3],
+                           method="carpet")
+    assert result["point_count"] == 3
+    assert result["solution"] is None
+
+
+def test_collinear_marked_points_are_refused(monkeypatch, tmp_path):
+    """Four points along one edge define no plane, and must not silently produce a matrix."""
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings", lambda *a, **k: ({}, 40))
+    line = [{"image": [100 + 200 * i, 900], "field": [float(13 * i), 0.0]} for i in range(4)]
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=line, method="carpet")
+    assert result["solution"] is None or not result["solution"]["trustworthy"]
+
+
+def test_carpet_mode_still_reports_what_tags_were_seen(monkeypatch, tmp_path):
+    """Read-only, for the operator's benefit -- they take no part in the fit."""
+    from ingest.collection import calibrate as mod
+
+    monkeypatch.setattr(mod, "gather_sightings",
+                        lambda *a, **k: ({7: mod.TagSighting(7, [10.0] * 5, [20.0] * 5)}, 40))
+    result = mod.calibrate(tmp_path / "clip.mp4", extra_points=_square(tmp_path), method="carpet")
+    assert result["tags_detected"] == [7]
+    assert result["point_count"] == 4      # the tag did not join the fit

@@ -619,3 +619,98 @@ work either way.
 So `"mode": "filter"` is the default. `"mode": "crop"` is kept because it is a few lines and
 already tested, and because a model *trained* on cropped frames would change the comparison — not
 because it helps today. **Re-measure before preferring it.**
+
+---
+
+## Field coordinates: the tags cannot do it, and here is the measurement
+
+`calibrate.py` can read the field's own AprilTags, and on this corpus that is **not enough for any
+camera**. All three tag-based routes were measured across all 60 sources; each fails for its own
+structural reason, and none of them is a tuning problem.
+
+### Why `pose` cannot work
+
+Pose mode recovers camera extrinsics from tags at different heights, then maps the carpet. The
+2026 field does put its 32 tags at three heights — but they are 0.552, 0.889 and 1.124 m, a total
+spread of **0.57 m across a field 16.5 m long**. On the best-conditioned camera in the corpus:
+
+```
+tag spread:        x 16.53 m   y 3.25 m   z 0.57 m
+singular values:   [16.06, 3.04, 0.60]
+out-of-plane:      3.8% of the largest dimension
+```
+
+That is a near-planar point set, where focal length and camera distance trade off against each
+other — the depth–focal ambiguity. Broadcast files carry no intrinsics, so the FOV is assumed, and
+sweeping it does not find an answer:
+
+| assumed HFOV | 10° | 40° | 70° | 100° | 120° |
+|---|---|---|---|---|---|
+| reprojection | 109.9 px | 96.8 px | 71.3 px | 46.1 px | 45.7 px |
+
+Monotonic to the edge of the sweep and flattening near 45 px — not a minimum, an unconstrained
+parameter. This on a camera whose seven tags were steady to **0.7 px**. The geometry is the limit,
+not the detection.
+
+### Why `plane` cannot work either
+
+Plane mode needs four tags at one height that are **not on a line**. Grouping the field's tags by
+height and measuring how far each group departs from one:
+
+| height | tags | off-line extent |
+|---|---|---|
+| 0.552 m | 8 | 18.1% |
+| **0.889 m** | **8** | **93.0%** |
+| 1.124 m | 16 | 12.3% |
+
+Only z=0.889 is well conditioned. Of 34 sources re-checked for a static camera, **14 have four or
+more steady tags at a single height — and 13 of those are at z=1.124**, the second-worst group.
+Most of those subsets measure **0% off-line**: perfectly collinear. The best in the whole corpus
+is 39%.
+
+The 0.889 m tags are never steadily visible in fours. They face away from the broadcast camera.
+
+### And the trick that would have avoided FOV
+
+Two plane homographies at different heights determine the camera centre without ever needing focal
+length, and the carpet homography follows. It needs one camera seeing four steady tags at **each**
+of two heights. **No source in the corpus has that.**
+
+### What does work: `--method carpet`
+
+Mark carpet features whose field coordinates you know and fit the carpet plane directly. No tags,
+no pose, no focal length — a plane-to-plane homography, well posed whenever the points are not
+collinear, and checkable against its own reprojection once there are five.
+
+```powershell
+# 1. Get a gridded reference frame for the camera (it writes one whenever it cannot finish).
+python -m ingest.collection.calibrate --video data\segments\<clip>.mp4 --out analysis\config\homography.<venue>.json --region 0.0 0.72
+
+# 2. Fill in the .extra-points.json it wrote, then:
+python -m ingest.collection.calibrate --video data\segments\<clip>.mp4 --out analysis\config\homography.<venue>.json --region 0.0 0.72 --method carpet --extra-points analysis\config\homography.<venue>.extra-points.json
+```
+
+**Mark five, not four.** Any four points fit a homography exactly, so the reprojection error is
+zero by construction and tells you nothing. The fifth is what turns it into evidence.
+
+**Spread them.** Two near corners and two far ones beat four along one edge — points along a line
+define no plane, and the tool refuses rather than fitting.
+
+### Which camera to do first
+
+The steadiest cameras in the corpus, by worst tag drift across 20 sampled frames:
+
+| source | drift | note |
+|---|---|---|
+| **`fMSSL1Iy_ig_00000_00215`** | **0.6 px** | **the real match, `2026tuis_qm29` — do this one** |
+| `Hw4BEIedNwA_00000_00215` | 0.4 px | |
+| `ulD5ox6pFdU_00000_00215` | 0.5 px | |
+| `a06OcIoltYI_00000_00215` | 0.7 px | 7 tags, the best tag geometry available |
+
+Start with `fMSSL1Iy_ig`: it is the camera behind the job that already runs end to end, so
+finishing it turns that job's tracks into field positions immediately.
+
+A camera that pans cannot be calibrated at all — a homography belongs to one pose. Beware of
+ranking sources by *tags seen*: a panning camera sweeps the field and racks up sightings, so that
+metric selects for the one thing that disqualifies a source. One source shows 20 tags and drifts
+1754 px.

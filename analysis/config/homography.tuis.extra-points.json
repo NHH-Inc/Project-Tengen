@@ -1,0 +1,7 @@
+[
+  {"_comment": "For --method pose, mark carpet features (z=0) such as corners. For --method plane, mark points on the same elevated tag plane. Origin is a field corner; delete this comment entry."},
+  {"image": [0, 0], "field": [0.0, 0.0]},
+  {"image": [0, 0], "field": [54.0, 0.0]},
+  {"image": [0, 0], "field": [54.0, 26.6]},
+  {"image": [0, 0], "field": [0.0, 26.6]}
+]

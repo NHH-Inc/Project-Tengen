@@ -208,12 +208,38 @@ def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0
         "tags_used": used_ids,
         "notes": notes,
         "point_count": 0,
-        "plane_height_ft": 0.0 if method == "pose" else (round(min(plane_heights), 3) if plane_heights else None),
-        "mapping_source": "carpet_pose" if method == "pose" else "tag_plane",
+        "plane_height_ft": 0.0 if method in ("pose", "carpet") else (round(min(plane_heights), 3) if plane_heights else None),
+        "mapping_source": {"pose": "carpet_pose", "carpet": "carpet_marked"}.get(method, "tag_plane"),
         "observed_points": observed_points,
         "points": [],
         "solution": None,
     }
+
+    if method == "carpet":
+        # Tags are read only so the caller can see what was there; they take no part in the fit.
+        # The carpet is its own plane and hand-marked points are already on it.
+        result["mapping_source"] = "carpet_marked"
+        result["plane_height_ft"] = 0.0
+        result["point_count"] = len(extra)
+        result["points"] = [
+            {"image": [round(image[0], 2), round(image[1], 2)],
+             "field": [round(field[0], 4), round(field[1], 4)]}
+            for image, field in extra
+        ]
+        if len(extra) < 4:
+            return result
+        solved = homography_module.solve(
+            [pair[0] for pair in extra], [pair[1] for pair in extra],
+            layout.length_ft, layout.width_ft,
+        )
+        if solved is not None:
+            result["matrix"] = solved.matrix
+            result["solution"] = {
+                "reprojection_ft": round(solved.reprojection_ft, 4),
+                "has_redundancy": solved.has_redundancy,
+                "trustworthy": solved.trustworthy,
+            }
+        return result
 
     if method == "pose":
         image_points = [observed[tag_id] for tag_id in used_ids]
@@ -340,9 +366,11 @@ def main(argv=None) -> int:
                         metavar=("TOP", "BOTTOM"),
                         help="fraction of frame height to search; use this when a broadcast "
                              "stacks two camera views, or tags from both get mixed into one fit")
-    parser.add_argument("--method", choices=("pose", "plane"), default="pose",
-                        help="pose maps robot feet to carpet using non-coplanar tags; plane is the "
-                             "legacy dominant-tag-height fallback")
+    parser.add_argument("--method", choices=("pose", "plane", "carpet"), default="pose",
+                        help="carpet fits hand-marked carpet points directly and needs no tags or "
+                             "FOV -- the only method that works on this corpus, see the module "
+                             "docstring; pose uses non-coplanar tags; plane is the legacy "
+                             "dominant-tag-height fallback")
     parser.add_argument("--hfov-deg", type=float, default=70.0,
                         help="horizontal camera FOV assumed by pose mode (measure it when possible)")
     parser.add_argument("--extra-points", type=Path,
@@ -381,6 +409,11 @@ def main(argv=None) -> int:
 
     if result["point_count"] < (6 if args.method == "pose" else 4):
         minimum = 6 if args.method == "pose" else 4
+        if args.method == "carpet":
+            return rescue(
+                f"carpet mode needs at least 4 marked points and got {result['point_count']}. "
+                f"Mark them on the reference frame below; five or more make the reprojection "
+                f"error mean something, because any four fit a homography exactly.")
         return rescue(f"only {result['point_count']} usable correspondences; {minimum} is the minimum for {args.method} mode.")
 
     height = result["plane_height_ft"]
@@ -391,6 +424,11 @@ def main(argv=None) -> int:
             return rescue(
                 "the camera pose could not be recovered; use a measured --hfov-deg, keep the "
                 "camera still, and include at least two AprilTag height groups")
+        if args.method == "carpet":
+            return rescue(
+                "the marked points are degenerate -- they lie on a line, so they cannot define a "
+                "plane. Spread them across the carpet: two near corners and two far ones beat "
+                "four along one edge.")
         return rescue(
             "the points are degenerate -- they lie on a line, so they cannot define a plane. "
             "On this footage all four coplanar tags sit within 0.1px of one image row, because "
