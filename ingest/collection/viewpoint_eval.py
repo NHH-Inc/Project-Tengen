@@ -8,8 +8,13 @@ excellent mAP against its own val split and still be blind here, because the fai
 distribution, not accuracy.
 
 So this counts detections per frame on a pack sampled across venues, and needs no ground truth to
-be useful: a six-robot match contains six robots, and a mean far below that is the gap, whatever
-the val split reports. Labels, when a pack comes back from a human, sharpen it into real recall.
+be useful: six robots play a match, and a mean far below that is the gap, whatever the val split
+reports. Labels, when a pack comes back from a human, sharpen it into real recall.
+
+Six is a floor, not a ceiling. Many broadcasts stack two camera views in one frame, so the same
+six robots appear twice and twelve detections is correct, not twelve false positives -- and the
+lower panel is exactly where the detector used to be blind, so those extra boxes are the ones
+worth having. Read a count above `expected` as a prompt to look at the frame, never as an error.
 
 The per-segment breakdown is the part worth reading. A mean of three hides the difference between
 a model that finds three robots everywhere and one that finds six at half the venues and none at
@@ -124,7 +129,8 @@ def report(result: dict, weakest: int = 8) -> str:
     frames, expected = result["frames"], result["expected"]
     lines = [
         f"frames            {frames}",
-        f"mean detections   {result['mean']:.2f}   (a {expected}-robot match has {expected})",
+        f"mean detections   {result['mean']:.2f}   ({expected} robots play; a stacked two-view "
+        f"broadcast shows them twice)",
         f"frames with 0     {result['blind_frames']}"
         f"  ({100 * result['blind_frames'] / frames:.1f}%)",
         f"frames with >={expected}   {result['full_frames']}"

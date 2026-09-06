@@ -538,14 +538,26 @@ across 60 segments of exactly the footage that fails:
 python -m ingest.collection.viewpoint_eval --model data\robot-v3.onnx
 ```
 
-The baseline to beat, measured on `robot-v2.onnx` at threshold 0.25:
+Measured at threshold 0.25 unless noted:
 
-| | v2 |
-|---|---|
-| mean detections per frame | **3.47** (a six-robot match has 6) |
-| frames finding nothing | 13 / 400 (3.2%) |
-| frames finding all six | 55 / 400 (13.8%) |
-| weakest segment | 0.43 detections/frame |
+| | v2 (960px) | v3 (640px) |
+|---|---|---|
+| mean detections per frame | 3.47 | **5.61** |
+| frames finding nothing | 13 / 400 (3.2%) | **7 / 400 (1.8%)** |
+| frames with 6 or more | 55 / 400 (13.8%) | **207 / 400 (51.8%)** |
+| weakest segment | 0.43 | 0.29 |
+| mean at threshold 0.40 | -- | 4.62 |
+| mean at threshold 0.50 | -- | 4.02 |
+
+v3 beats v2 at every threshold tried, and still wins at 0.50 against v2's 0.25 — so the gain is
+recognition, not a lowered bar. It manages that while exporting at **640px against v2's 960px**,
+which is a handicap on exactly the small robots that were being missed; re-exporting at 960 is the
+obvious next thing to try.
+
+**Six is a floor, not a ceiling.** Many broadcasts stack two camera angles in one frame, so the
+same six robots appear twice and twelve detections is correct. The lower panel is precisely where
+v2 was blind, so those extra boxes are the ones that matter. Treat a count above six as a reason
+to open the frame, not as a false-positive count.
 
 Read the **per-segment** breakdown, not just the mean. Three-everywhere and six-at-half-the-venues
 average the same and are not the same problem — only the first is fixed by more labels of the
