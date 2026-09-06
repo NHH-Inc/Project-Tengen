@@ -538,39 +538,30 @@ across 60 segments of exactly the footage that fails:
 python -m ingest.collection.viewpoint_eval --model data\robot-v3.onnx
 ```
 
-Measured at threshold 0.25 unless noted:
+Measured at threshold 0.25:
 
-| | v2 (960px) | v3 (640px) |
-|---|---|---|
-| mean detections per frame | 3.47 | **5.61** |
-| frames finding nothing | 13 / 400 (3.2%) | **7 / 400 (1.8%)** |
-| frames with 6 or more | 55 / 400 (13.8%) | **207 / 400 (51.8%)** |
-| weakest segment | 0.43 | 0.29 |
-| mean at threshold 0.40 | -- | 4.62 |
-| mean at threshold 0.50 | -- | 4.02 |
+| | v2 (960px) | v3 (640px) | **v3 (960px)** |
+|---|---|---|---|
+| mean detections per frame | 3.47 | 5.61 | **6.34** |
+| frames finding nothing | 13 (3.2%) | 7 (1.8%) | **0 (0.0%)** |
+| frames with 6 or more | 55 (13.8%) | 207 (51.8%) | **258 (64.5%)** |
+| weakest segment | 0.43 | 0.29 | **1.14** |
 
-v3 beats v2 at every threshold tried, and still wins at 0.50 against v2's 0.25 — so the gain is
-recognition, not a lowered bar. It manages that while exporting at **640px against v2's 960px**,
-which is a handicap on exactly the small robots that were being missed; re-exporting at 960 is the
-obvious next thing to try.
+`best.pt` is byte-identical between the two v3 rows — the same weights, re-exported at a different
+input size. So that column is purely what resolution buys: **+13% detections and the last of the
+blind frames.** There is now no frame in the 400 where the detector finds nothing.
+
+Export at 960 rather than the 640 default:
+
+```powershell
+yolo export model=best.pt format=onnx imgsz=960
+```
 
 **Six is a floor, not a ceiling.** Many broadcasts stack two camera angles in one frame, so the
 same six robots appear twice and twelve detections is correct. The lower panel is precisely where
 v2 was blind, so those extra boxes are the ones that matter. Treat a count above six as a reason
-to open the frame, not as a false-positive count.
-
-Read the **per-segment** breakdown, not just the mean. Three-everywhere and six-at-half-the-venues
-average the same and are not the same problem — only the first is fixed by more labels of the
-same kind. v2's spread runs from 0.43 to well above six, so its gap is venue-shaped.
-
-No ground truth is needed for this to be useful: a six-robot match contains six robots. Note that
-the pack's own `labels/` are **the detector's own proposals**, not truth — scoring against them
-measures self-agreement, and v2 scores 0.986 against boxes v2 drew. The tool refuses to report
-recall from them. Once a pack comes back from a labeller, point at it:
-
-```powershell
-python -m ingest.collection.viewpoint_eval --model data\robot-v3.onnx --truth data\returned\labels
-```
+to open the frame, not as a false-positive count — and see RUNNING.md for how a source's second
+view is found and excluded, so it is not counted twice downstream.
 
 ### mAP@50-95 is not cosmetic here
 

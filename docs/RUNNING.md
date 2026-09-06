@@ -565,7 +565,7 @@ robots, so the detector finds each robot twice, the tracker makes two tracks of 
 team attribution is **per track** — a human is asked for the same team number twice while every
 shot on that robot is counted twice. A duplicate is worse for the numbers than a miss.
 
-**35 of the 60 sources in `data\segments` do this.** Their seams sit between 0.44 and 0.77 of
+**39 of the 60 sources in `data\segments` do this.** Their seams sit between 0.42 and 0.78 of
 frame height, median 0.70, so no single crop line serves them.
 
 ### Calibrate once per source
@@ -580,7 +580,7 @@ band, two views put the same robots in two bands with a gap between. That needs 
 it is a calibration pass:
 
 ```powershell
-python -m ingest.collection.calibrate_region --model data\robot-v2.onnx --segments data\segments --out analysis\config\regions.json
+python -m ingest.collection.calibrate_region --model data\robot-v3.onnx --segments data\segments --out analysis\config\regions.json
 ```
 
 Point the detector config at the result, and the analyzer looks up each video by its filename stem:
@@ -589,25 +589,33 @@ Point the detector config at the result, and the analyzer looks up each video by
 { "regions_path": "../config/regions.json" }
 ```
 
-An unlisted source keeps the whole frame, which is the safe default. Use a model that can actually
-see the lower panel — v2 finds so little down there that it reports only 25 of the 35, and a
-source wrongly called single-view goes on double-counting.
+An unlisted source keeps the whole frame, which is the safe default.
+
+**Re-run this whenever the model changes materially**, because a model that cannot see the lower
+panel cannot find the seam. The same corpus reports 35 stacked sources at a 640px export and 39
+at 960, and a source wrongly called single-view goes on double-counting silently. The seams
+themselves are stable — only 2 of the 33 sources found by both moved by more than 0.03.
 
 ### Filter, do not crop
 
-Two ways to act on a region, and the appealing one loses. Cropping before inference should spend
-the model's whole input on the panel that matters rather than two thirds of it. Measured across
-the 28 stacked segments of the viewpoint pack:
+Two ways to act on a region, and neither argument for the appealing one survived measurement.
+Cropping before inference should spend the model's whole input on the panel that matters rather
+than two thirds of it, and should be cheaper for handing over a smaller image. Across the stacked
+segments of the viewpoint pack:
 
-| | boxes per frame |
-|---|---|
-| filter after inference | **4.22** |
-| crop before inference | 4.05 |
+| export | filter | crop | cropping ahead in |
+|---|---|---|---|
+| 640px | **4.22** | 4.05 | 7 of 28 segments |
+| 960px | 4.50 | 4.52 | 15 of 38 segments |
 
-Cropping is ahead in only 7 of 28 segments. The model was trained on whole frames, and moving the
-aspect ratio away from that costs more than the extra pixels return.
+At 640 filtering wins outright — the model was trained on whole frames, and moving the aspect
+ratio away from that costs more than the extra pixels return. At 960 they tie, which fits that
+reading: the resolution the crop was buying stops mattering once there is enough of it.
 
-So `"mode": "filter"` is the default. `"mode": "crop"` is kept because it feeds the model a
-smaller image and is therefore cheaper, which matters for throughput on the day, and because the
-balance may move with input size — the numbers above are at a 640px export, and resolution is the
-reason cropping should have won. **Re-measure before changing the default.**
+The speed argument is simply false. Per frame at 960: **68.7 ms** whole-frame, **70.0 ms**
+filtering, **70.8 ms** cropping. Both letterbox into the same square, so the model does identical
+work either way.
+
+So `"mode": "filter"` is the default. `"mode": "crop"` is kept because it is a few lines and
+already tested, and because a model *trained* on cropped frames would change the comparison — not
+because it helps today. **Re-measure before preferring it.**

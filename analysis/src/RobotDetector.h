@@ -39,10 +39,12 @@ struct ViewRegion {
     double w = 1.0;
     double h = 1.0;
     //: false filters boxes after inference, true crops the frame before it. Filtering measured
-    //: better -- 4.22 boxes per frame against 4.05 across 28 stacked sources -- because the model
-    //: was trained on whole frames, and moving the aspect ratio away from that costs more than
-    //: the extra pixels return. Cropping is kept because it feeds the model a smaller image, and
-    //: the balance may move with input size. See ingest/collection/view_region.py.
+    //: better at a 640px export -- 4.22 boxes per frame against 4.05 -- because the model was
+    //: trained on whole frames, and moving the aspect ratio away from that costs more than the
+    //: extra pixels return. At 960 they tie (4.50 against 4.52), and they cost the same either
+    //: way, since both letterbox into the same square. Cropping is kept because a model trained
+    //: on cropped frames would change that, not because it helps today.
+    //: See ingest/collection/view_region.py.
     bool crop = false;
 
     [[nodiscard]] bool is_full_frame() const {

@@ -5,17 +5,25 @@ detector finds each robot twice, the tracker makes two tracks of it, and -- beca
 per track -- a human is asked to type the same team number twice while every shot on that robot is
 counted twice. A duplicate is not a harmless extra box; it is worse for the numbers than a miss.
 
-There are two ways to act on that, and the appealing one loses. Cropping before inference should
-spend the model's whole input on the panel that matters rather than two thirds of it; filtering
-after inference pays for boxes it throws away. Measured across the 28 stacked segments of the
-viewpoint pack, **filtering wins**: 4.22 boxes per frame against cropping's 4.05, and cropping is
-ahead in only 7 of the 28. The model was trained on whole frames, and moving the aspect ratio away
-from that costs more than the extra pixels return.
+There are two ways to act on that, and neither of the arguments for the appealing one survived
+measurement. Cropping before inference should spend the model's whole input on the panel that
+matters rather than two thirds of it, and should be cheaper for handing over a smaller image.
+Across the stacked segments of the viewpoint pack:
 
-So `FILTER` is the default. `CROP` is kept because it feeds the model a smaller image and is
-therefore cheaper, which matters for throughput on the day, and because the balance may move with
-input size -- the numbers above are at a 640px export, and the reason cropping should have won is
-resolution. Re-measure before changing the default.
+    input   filter   crop     cropping ahead in
+    640px    4.22    4.05     7 of 28 segments
+    960px    4.50    4.52    15 of 38 segments
+
+At 640 filtering wins outright, because the model was trained on whole frames and moving the
+aspect ratio away from that costs more than the extra pixels return. At 960 they tie, which fits
+that reading -- the resolution the crop was buying stops mattering once there is enough of it.
+
+The speed argument is simply false: 68.7 ms per frame whole-frame, 70.0 filtering, 70.8 cropping.
+Both letterbox into the same square, so the model does identical work either way.
+
+So `FILTER` is the default, on the strength of the 640 result and a tie at 960. `CROP` is kept
+because it is six lines and already tested, and because a model *trained* on cropped frames would
+change the comparison -- not because it currently helps. Re-measure before preferring it.
 
 **The seam cannot be read off a single frame.** The obvious signal -- the row where consecutive
 rows stop resembling each other -- was measured across the 400-frame viewpoint pack and does not
