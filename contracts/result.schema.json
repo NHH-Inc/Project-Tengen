@@ -20,6 +20,10 @@
       "description": "Hertz -- samples per second, not a frame interval. Served to component 3 on the tracks response."
     },
     "homography_ok": { "type": "boolean" },
+    "homography_source": {
+      "type": ["string", "null"],
+      "description": "carpet_pose or tag_plane; null when no mapping was applied."
+    },
     "frames_total": { "type": "integer", "minimum": 0 },
     "frames_analyzed": { "type": "integer", "minimum": 0 },
     "frames_skipped_shot_change": { "type": "integer", "minimum": 0 },

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -14,12 +15,16 @@ from pathlib import Path
 # Normalized coordinates of the yellow-marked upper broadcast panel in the supplied reference.
 # The small margins keep the yellow markup itself out of the model input.
 DEFAULT_CROP = (0.02, 0.035, 0.98, 0.66)  # left, top, right, bottom
+# A sudden identity swap or bad calibration can manufacture an impossible velocity. Keep that
+# out of scouting metrics instead of presenting it as a very fast robot.
+MAX_PLAUSIBLE_FTPS = 20.0
 
 
 def contract_track_records(
-    tracks: dict[int, list[dict[str, float]]],
+    tracks: dict[int, list[dict[str, object]]],
     fps: float,
     alliances: dict[int, str | None] | None = None,
+    position_source: str | None = None,
 ) -> list[dict[str, object]]:
     if fps <= 0:
         raise ValueError("fps must be positive")
@@ -34,7 +39,7 @@ def contract_track_records(
                     "end": round(current["t"] - frame_interval, 6),
                     "reason": "detection_lost",
                 })
-        records.append({
+        record: dict[str, object] = {
             "schema_version": 3,
             "track_id": track_id,
             "team": None,
@@ -42,21 +47,25 @@ def contract_track_records(
             "team_confidence": None,
             "boxes": boxes,
             "gaps": gaps,
-        })
+        }
+        if position_source:
+            record["position_source"] = position_source
+        records.append(record)
     return records
 
 
 def write_track_records(
     path: Path,
-    tracks: dict[int, list[dict[str, float]]],
+    tracks: dict[int, list[dict[str, object]]],
     fps: float,
     alliances: dict[int, str | None] | None = None,
+    position_source: str | None = None,
 ) -> None:
     """Atomically publish the tracks accumulated so far for the live UI overlay."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp")
     with temporary.open("w", encoding="utf-8") as handle:
-        for record in contract_track_records(tracks, fps, alliances):
+        for record in contract_track_records(tracks, fps, alliances, position_source):
             handle.write(json.dumps(record, sort_keys=True) + "\n")
     # The browser polls the partial file while the worker is writing it. Windows can briefly
     # keep that read handle open, so retry the atomic swap instead of aborting the whole run.
@@ -128,6 +137,88 @@ def crop_bounds(width: int, height: int, crop: tuple[float, float, float, float]
     if (y1 - y0) % 2:
         y1 = y1 + 1 if y1 < height else y1 - 1
     return x0, y0, x1, y1
+
+
+def crop_box_to_source(
+    box: tuple[float, float, float, float],
+    crop: tuple[float, float, float, float],
+    cropped_width: int,
+    cropped_height: int,
+) -> tuple[float, float, float, float]:
+    """Convert a normalized box in the model crop back to full-source normalization."""
+
+    left, top, right, bottom = crop
+    crop_width = right - left
+    crop_height = bottom - top
+    x, y, width, height = box
+    return (
+        left + x * crop_width,
+        top + y * crop_height,
+        width * crop_width,
+        height * crop_height,
+    )
+
+
+def add_field_motion(
+    sample: dict[str, object],
+    mapper,
+    crop: tuple[float, float, float, float],
+    cropped_width: int,
+    cropped_height: int,
+    history: dict[int, list[tuple[float, float, float]]],
+    max_gap_seconds: float,
+) -> None:
+    """Attach carpet position and finite-difference motion to one tracked sample."""
+
+    track_id = sample.get("track_id")
+    if mapper is None or not isinstance(track_id, int):
+        return
+    bbox = sample.get("bbox_normalized")
+    if not isinstance(bbox, dict):
+        return
+    try:
+        source_box = crop_box_to_source(
+            (float(bbox["x"]), float(bbox["y"]), float(bbox["width"]), float(bbox["height"])),
+            crop,
+            cropped_width,
+            cropped_height,
+        )
+        image_width = cropped_width / (crop[2] - crop[0])
+        image_height = cropped_height / (crop[3] - crop[1])
+        field_x, field_y = mapper.box_to_field(*source_box, image_width, image_height)
+    except (KeyError, TypeError, ValueError):
+        return
+    if not (math.isfinite(field_x) and math.isfinite(field_y)):
+        return
+    pixel_x = (source_box[0] + source_box[2] / 2.0) * image_width
+    pixel_y = (source_box[1] + source_box[3]) * image_height
+    if not mapper.on_field(pixel_x, pixel_y):
+        return
+
+    timestamp = float(sample["t"])
+    sample["field_x"] = round(field_x, 4)
+    sample["field_y"] = round(field_y, 4)
+    observations = history.setdefault(track_id, [])
+    previous = observations[-1] if observations else None
+    if previous is not None:
+        previous_time, previous_x, previous_y = previous
+        dt = timestamp - previous_time
+        if 0.0 < dt <= max_gap_seconds:
+            velocity_x = (field_x - previous_x) / dt
+            velocity_y = (field_y - previous_y) / dt
+            speed = math.hypot(velocity_x, velocity_y)
+            if speed <= MAX_PLAUSIBLE_FTPS:
+                sample["velocity_x_ftps"] = round(velocity_x, 4)
+                sample["velocity_y_ftps"] = round(velocity_y, 4)
+                sample["speed_ftps"] = round(speed, 4)
+                sample["motion_heading_rad"] = round(math.atan2(velocity_y, velocity_x), 6)
+            else:
+                # Preserve the valid current position, but do not let a bad jump contaminate the
+                # next finite difference either.
+                observations.clear()
+    observations.append((timestamp, field_x, field_y))
+    if len(observations) > 4:
+        del observations[:-4]
 
 
 def build_cropped_video(source: Path, destination: Path, crop: tuple[float, float, float, float]) -> None:
@@ -331,6 +422,7 @@ def detection_records(result) -> list[dict[str, object]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--homography", help="calibration JSON for carpet positions and speed")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", help="local video file")
     source.add_argument("--stream-url", help="YouTube URL; media is consumed as a pipe")
@@ -378,18 +470,29 @@ def main() -> int:
     try:
         import cv2
         from ultralytics import YOLO
+        from ultralytics.data.build import SourceTypes
+        from ultralytics.data.loaders import LoadPilAndNumpy
     except ImportError as exc:
         raise SystemExit("Install training/requirements-yolo.txt in the dedicated vision venv") from exc
     if args.snapshot_interval <= 0:
         raise SystemExit("--snapshot-interval must be greater than zero")
     output.parent.mkdir(parents=True, exist_ok=True)
-    cropped_video_path = output.parent / "model_input_cropped.mp4"
+    mapper = None
+    position_source = None
+    if args.homography:
+        try:
+            from ingest.collection.homography import load_calibration
+            mapper = load_calibration(args.homography)
+        except (ImportError, OSError, ValueError) as exc:
+            raise SystemExit(f"Could not load homography {args.homography}: {exc}") from exc
+        if mapper is None:
+            raise SystemExit(f"Homography is missing, malformed, or untrustworthy: {args.homography}")
+        position_source = mapper.source
+
     if args.stream_url:
         fps = stream_source_fps(args.stream_url)
         total_frames = 0
         source_name = args.stream_url
-        from ultralytics.data.build import SourceTypes
-        from ultralytics.data.loaders import LoadPilAndNumpy
 
         class YtFrameLoader(LoadPilAndNumpy):
             """Ultralytics-compatible lazy loader around the yt-dlp/FFmpeg frame pipe."""
@@ -415,20 +518,53 @@ def main() -> int:
         source_frames = YtFrameLoader(stream_cropped_frames(args.stream_url, tuple(args.crop)))
     else:
         assert video_path is not None
-        build_cropped_video(video_path, cropped_video_path, tuple(args.crop))
-        capture = cv2.VideoCapture(str(cropped_video_path))
-        fps = float(capture.get(cv2.CAP_PROP_FPS)) or 30.0
-        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        capture.release()
-        source_frames = str(cropped_video_path)
         source_name = str(video_path)
+
+        class LocalFrameLoader(LoadPilAndNumpy):
+            """Lazy OpenCV source that crops each frame as YOLO requests it."""
+
+            def __init__(self, path: Path, crop):
+                self.capture = cv2.VideoCapture(str(path))
+                if not self.capture.isOpened():
+                    raise SystemExit(f"Could not open video: {path}")
+                self.fps = float(self.capture.get(cv2.CAP_PROP_FPS) or 30.0)
+                self.total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+                self.crop = tuple(crop)
+                self.mode = "stream"
+                self.bs = 1
+                self.count = 0
+                self.source_type = SourceTypes(stream=True, screenshot=False, from_img=False, tensor=False)
+
+            def __len__(self):
+                return 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                ok, frame = self.capture.read()
+                if not ok:
+                    self.capture.release()
+                    raise StopIteration
+                height, width = frame.shape[:2]
+                x0, y0, x1, y1 = crop_bounds(width, height, self.crop)
+                self.count += 1
+                return [f"video_stream_{self.count:08d}.jpg"], [frame[y0:y1, x0:x1]], [""]
+
+            def close(self):
+                self.capture.release()
+
+        source_frames = LocalFrameLoader(video_path, tuple(args.crop))
+        fps = source_frames.fps
+        total_frames = source_frames.total_frames
     model = YOLO(str(model_path))
     results = model.track(
         source=source_frames, stream=True, persist=True, tracker=f"{args.tracker}.yaml",
         conf=args.confidence, imgsz=args.image_size, device=args.device, verbose=False,
     )
-    tracks: dict[int, list[dict[str, float]]] = {}
+    tracks: dict[int, list[dict[str, object]]] = {}
     alliance_votes: dict[int, dict[str, int]] = {}
+    motion_history: dict[int, list[tuple[float, float, float]]] = {}
     writer = None
     annotated_path = Path(args.annotated_output) if args.annotated_output else None
     if annotated_path:
@@ -439,7 +575,10 @@ def main() -> int:
     next_snapshot = 0.0
     snapshot_annotations: list[dict[str, object]] = []
     partial_output = Path(args.partial_output) if args.partial_output else None
-    progress_interval = max(1, total_frames // 100) if total_frames else 0
+    # Publish immediately and then about once per source second. This keeps the UI useful for
+    # both finite files and never-ending streams without rewriting the complete output every
+    # frame.
+    publish_interval = max(1, int(round(fps)))
     for frame_index, result in enumerate(results):
         timestamp = round(frame_index / fps, 6)
         if result.boxes is not None:
@@ -458,12 +597,30 @@ def main() -> int:
                 if alliance:
                     counts = alliance_votes.setdefault(track_id, {"red": 0, "blue": 0})
                     counts[alliance] += 1
-                tracks.setdefault(track_id, []).append({
+                sample: dict[str, object] = {
                     "t": timestamp,
                     "x": round(left / width, 6), "y": round(top / height, 6),
                     "w": round((right - left) / width, 6),
                     "h": round((bottom - top) / height, 6),
-                })
+                    "track_id": track_id,
+                    "bbox_normalized": {
+                        "x": round(left / width, 6), "y": round(top / height, 6),
+                        "width": round((right - left) / width, 6),
+                        "height": round((bottom - top) / height, 6),
+                    },
+                }
+                add_field_motion(
+                    sample,
+                    mapper,
+                    tuple(args.crop),
+                    int(width),
+                    int(height),
+                    motion_history,
+                    max(1.5 / fps, 1.0),
+                )
+                sample.pop("track_id", None)
+                sample.pop("bbox_normalized", None)
+                tracks.setdefault(track_id, []).append(sample)
         if snapshot_dir and timestamp + (0.5 / fps) >= next_snapshot:
             clean_frame = result.orig_img.copy()
             snapshot_name = f"snapshot_{int(round(next_snapshot)):06d}s.jpg"
@@ -487,18 +644,20 @@ def main() -> int:
                     str(annotated_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
                 )
             writer.write(plotted)
-        if progress_interval and (frame_index == 0 or (frame_index + 1) % progress_interval == 0):
-            fraction = min(1.0, (frame_index + 1) / total_frames)
+        if frame_index == 0 or (frame_index + 1) % publish_interval == 0:
+            fraction = min(1.0, (frame_index + 1) / total_frames) if total_frames else None
             if partial_output:
-                write_track_records(partial_output, tracks, fps, resolved_alliances(alliance_votes))
+                write_track_records(
+                    partial_output, tracks, fps, resolved_alliances(alliance_votes), position_source
+                )
             print(json.dumps({
-                "progress": round(0.10 + fraction * 0.80, 6),
+                "progress": round(0.10 + fraction * 0.80, 6) if fraction is not None else None,
                 "stage": "tracking",
             }), flush=True)
     if writer is not None:
         writer.release()
     alliances = resolved_alliances(alliance_votes)
-    write_track_records(output, tracks, fps, alliances)
+    write_track_records(output, tracks, fps, alliances, position_source)
     if snapshot_dir:
         (snapshot_dir / "annotations.json").write_text(
             json.dumps({
@@ -515,8 +674,8 @@ def main() -> int:
             }, indent=2) + "\n",
             encoding="utf-8",
         )
-    if video_path is not None:
-        cropped_video_path.unlink(missing_ok=True)
+    if hasattr(source_frames, "close"):
+        source_frames.close()
     print(output)
     return 0
 

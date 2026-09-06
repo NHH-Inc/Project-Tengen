@@ -76,12 +76,24 @@ Without this, positions are pixels, `homography_ok` is false, and speed and dist
 units. With it they are feet, which is the only form comparable between venues, camera positions
 and zoom levels.
 
-The field's AprilTags are surveyed and published, and OpenCV reads their family, so a fixed camera
-can often calibrate itself from footage alone:
+The field's AprilTags are surveyed and published, and OpenCV reads their family. The default pose
+calibration uses tags at multiple heights, recovers the camera pose, and derives a carpet mapping:
 
 ```powershell
-python -m ingest.collection.calibrate --video data\segments\<clip>.mp4 --out analysis\config\homography.<venue>.json --region 0.0 0.68
+python -m ingest.collection.calibrate `
+  --video data\segments\<clip>.mp4 `
+  --out analysis\config\homography.<venue>.json `
+  --region 0.0 0.68 `
+  --method pose `
+  --hfov-deg 70
 ```
+
+`--hfov-deg` is the horizontal field of view of the source camera. Use the camera specification or
+measure it when possible; the default is only an explicit broadcast-camera approximation. The
+calibration stores the assumption and its pixel reprojection error in the JSON. If pose recovery
+is impossible, add hand-read carpet points with `--extra-points` (the template explains the
+format). `--method plane` remains available as a legacy fallback, but its coordinates are on the
+AprilTag plane, not the carpet.
 
 `--region` restricts the search to a band of the frame, given as fractions of its height. **Use it
 whenever a broadcast stacks two camera views**, which the 2026 ones do: the same physical tag
@@ -118,11 +130,10 @@ zero by construction and is not evidence. Five or more is where it starts to mea
 is what `--extra-points` is for. The tool says which case you are in rather than printing a
 reassuring number.
 
-**The mapping is to the tag plane, not the carpet.** The tags sit 3.68 ft up, so a position read
-through the homography is where the robot's box meets *that* plane — offset from where it actually
-stands by an amount that grows with camera angle. Fine for which end of the field a robot is in
-and roughly how fast it crossed; not fine for anything adversarial. The output records
-`plane_height_ft` so nobody has to guess.
+**Pose mode maps to the carpet.** Robot coordinates use the bottom-centre of each detection box,
+which approximates the bumper contact point. The output records `mapping_source` as
+`carpet_pose`; the legacy fallback records `tag_plane` and its `plane_height_ft`. Neither mode
+recovers robot body height or body orientation from a 2D box.
 
 ## Team identification needs Tesseract
 
@@ -274,11 +285,33 @@ path when it is available, or `native` to force the C++ RF-DETR path. Annotated 
 by default because the web app draws the stored tracks and an annotated 1080p60 copy is large;
 set `FRC_YOLO_SAVE_ANNOTATED=1` when a rendered video is needed.
 
-**Analysis now proves the full media path**: it opens the downloaded MP4 with OpenCV and counts
-real frames. With no configured model it emits zero tracks; that is expected and honest. Once a
-trained RF-DETR ONNX model is configured, it samples frames, emits detected robot tracks, and
-marks broadcast-cut gaps. Bumper OCR, team identity, field coordinates, and action events remain
-future work, so do not use this baseline for scouting decisions yet.
+For a configured homography, point the same runner at the calibration JSON:
+
+```powershell
+C:\yolo11-venv\Scripts\python.exe -m training.track_yolo `
+  --model data\models\robot-yolo11n-reviewed-aug-20260905-640-100ep\weights\best.pt `
+  --video data\segments\unseen-match.mp4 `
+  --homography analysis\config\homography.<venue>.json `
+  --output data\jobs\JOB_ID\tracks.jsonl `
+  --partial-output data\jobs\JOB_ID\tracks.partial.jsonl
+```
+
+Each box can then contain `field_x`, `field_y`, `velocity_x_ftps`, `velocity_y_ftps`,
+`speed_ftps`, and `motion_heading_rad`. The first valid sample, samples after a tracking gap, and
+off-field mappings leave velocity null. Motion heading is the direction the robot travelled; it is
+not the robot's body orientation.
+
+The local YOLO runner reads an MP4 lazily: it opens the file, crops each frame as the detector
+requests it, and begins inference on the first decoded frame. It no longer writes a complete
+temporary cropped video first. The `--stream-url` path does the same through yt-dlp, FFmpeg, and
+PyAV, so an unseen video does not need a preprocessing or training pass. ByteTrack associates
+detections online from the current frame history.
+
+This is real-time capable, not automatically real-time guaranteed. It is real-time only when
+detector/tracker throughput on the selected GPU and `--image-size` meets the source frame rate;
+local files run as fast as the machine can process them, while a network stream can be limited by
+download or decode speed. The model can detect a new viewpoint immediately, but accuracy depends
+on how well its training data covers that venue, camera angle, blur, and occlusion.
 
 Videos that need a login:
 

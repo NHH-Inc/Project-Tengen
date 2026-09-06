@@ -122,6 +122,7 @@ fails.
 | `YOLO_MODEL_PATH` | trained YOLO `.pt` path; defaults to the local FRC robot checkpoint when present |
 | `FRC_YOLO_TRACKER` | `bytetrack` |
 | `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `0` |
+| `FRC_HOMOGRAPHY_CONFIG` | optional camera calibration JSON for carpet position and speed |
 | `FRC_DEFAULT_SEASON` | `2026` |
 | `FRC_MIN_FREE_GB` | `10` — refuses to start a download below this. |
 | `FRC_SEGMENT_GRACE_DAYS` | `7` — how long a completed job's video survives before `clean` reclaims it. |

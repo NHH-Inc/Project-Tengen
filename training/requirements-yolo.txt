@@ -3,6 +3,8 @@
 # not replace it with an unsuitable build. Grounding DINO is installed separately from its
 # official source repository.
 ultralytics
+# Required by --stream-url for decoding the live FFmpeg pipe.
+av
 opencv-python
 pillow
 numpy

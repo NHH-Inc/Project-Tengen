@@ -69,12 +69,20 @@ export function boxAt(track: Track, t: number, holdSeconds = 0): Box | null {
   }
 
   const u = (t - a.t) / span;
+  const interpolate = (left: number | null, right: number | null): number | null =>
+    left != null && right != null ? left + (right - left) * u : null;
   return {
     t,
     x: a.x + (c.x - a.x) * u,
     y: a.y + (c.y - a.y) * u,
     w: a.w + (c.w - a.w) * u,
     h: a.h + (c.h - a.h) * u,
+    fieldX: interpolate(a.fieldX, c.fieldX),
+    fieldY: interpolate(a.fieldY, c.fieldY),
+    velocityXFtps: interpolate(a.velocityXFtps, c.velocityXFtps),
+    velocityYFtps: interpolate(a.velocityYFtps, c.velocityYFtps),
+    speedFtps: interpolate(a.speedFtps, c.speedFtps),
+    motionHeadingRad: interpolate(a.motionHeadingRad, c.motionHeadingRad),
   };
 }
 

@@ -11,6 +11,7 @@
     "track_id": { "type": "integer", "description": "Unique within a job only." },
     "team": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
     "alliance": { "type": ["string", "null"], "enum": ["red", "blue", null] },
+    "position_source": { "type": ["string", "null"], "description": "Calibration source used for optional field positions." },
     "team_confidence": {
       "type": ["number", "null"],
       "minimum": 0,
@@ -28,7 +29,13 @@
           "x": { "type": "number" },
           "y": { "type": "number" },
           "w": { "type": "number", "exclusiveMinimum": 0 },
-          "h": { "type": "number", "exclusiveMinimum": 0 }
+          "h": { "type": "number", "exclusiveMinimum": 0 },
+          "field_x": { "type": ["number", "null"], "description": "Robot footprint x in field feet." },
+          "field_y": { "type": ["number", "null"], "description": "Robot footprint y in field feet." },
+          "velocity_x_ftps": { "type": ["number", "null"], "description": "Field-axis velocity in feet per second." },
+          "velocity_y_ftps": { "type": ["number", "null"], "description": "Field-axis velocity in feet per second." },
+          "speed_ftps": { "type": ["number", "null"], "minimum": 0, "description": "Ground speed in feet per second." },
+          "motion_heading_rad": { "type": ["number", "null"], "description": "Direction of travel in field axes; not body orientation." }
         }
       }
     },

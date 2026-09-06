@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -112,6 +113,56 @@ frc::Event match_event(const frc::Job& job, const frc::SeasonConfig& season, dou
     event.confidence = 1.0;
     event.source = "model";
     return event;
+}
+
+bool gap_between(const frc::Track& track, double start, double end) {
+    for (const auto& gap : track.gaps) {
+        if (gap.start >= start && gap.end <= end) return true;
+    }
+    return false;
+}
+
+void annotate_field_motion(std::vector<frc::Track>& tracks,
+                           const frc::vision::Homography& homography,
+                           int image_width, int image_height) {
+    for (auto& track : tracks) {
+        std::optional<std::pair<double, double>> previous;
+        double previous_time = 0.0;
+        for (auto& box : track.boxes) {
+            const double pixel_x = (box.x + box.w / 2.0) * image_width;
+            const double pixel_y = (box.y + box.h) * image_height;
+            const auto position = homography.box_to_field(
+                box.x, box.y, box.w, box.h, image_width, image_height);
+            if (!position || !homography.on_field(pixel_x, pixel_y) ||
+                !std::isfinite(position->first) || !std::isfinite(position->second)) {
+                previous.reset();
+                continue;
+            }
+
+            box.field_x = position->first;
+            box.field_y = position->second;
+            if (previous.has_value() && !gap_between(track, previous_time, box.t)) {
+                const double dt = box.t - previous_time;
+                if (dt > 0.0) {
+                    const double vx = (position->first - previous->first) / dt;
+                    const double vy = (position->second - previous->second) / dt;
+                    const double speed = std::hypot(vx, vy);
+                    if (speed <= frc::vision::kMaxPlausibleFtps) {
+                        box.velocity_x_ftps = vx;
+                        box.velocity_y_ftps = vy;
+                        box.speed_ftps = speed;
+                        box.motion_heading_rad = std::atan2(vy, vx);
+                    } else {
+                        // Keep the position, but prevent an identity swap from contaminating the
+                        // next finite difference too.
+                        previous.reset();
+                    }
+                }
+            }
+            previous = position;
+            previous_time = box.t;
+        }
+    }
 }
 
 }  // namespace
@@ -247,7 +298,11 @@ int main(int argc, char* argv[]) {
 
         const double match_end_t = std::max(0.0, (decoded_frames - 1) / decode_fps);
         tracker.finish(match_end_t);
-        const std::vector<frc::Track>& tracks = tracker.tracks();
+        std::vector<frc::Track> tracks = tracker.tracks();
+        if (homography.has_value()) {
+            annotate_field_motion(tracks, *homography, decoded_width, decoded_height);
+            for (auto& track : tracks) track.position_source = homography->source();
+        }
         // Action/OCR inference needs reviewed data. Until it exists, emit only safe match-level
         // events; their required nullable fields are supplied by ContractModels.h.
         std::vector<frc::Event> events;
@@ -271,6 +326,7 @@ int main(int argc, char* argv[]) {
         result.model_version = detector_enabled ? detector_config.model_version : "detector-unconfigured";
         result.box_sample_rate = box_sample_rate;
         result.homography_ok = homography.has_value();
+        if (homography.has_value()) result.homography_source = homography->source();
         result.frames_total = decoded_frames;
         result.frames_analyzed = frames_analyzed;
         result.frames_skipped_shot_change = frames_skipped_shot_change;

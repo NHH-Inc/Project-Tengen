@@ -111,7 +111,19 @@ export interface WireEvent {
   correction_id?: string | null;
 }
 
-export interface WireBox { t: number; x: number; y: number; w: number; h: number }
+export interface WireBox {
+  t: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  field_x?: number | null;
+  field_y?: number | null;
+  velocity_x_ftps?: number | null;
+  velocity_y_ftps?: number | null;
+  speed_ftps?: number | null;
+  motion_heading_rad?: number | null;
+}
 export interface WireGap { start: number; end: number; reason: string }
 
 export interface WireTrack {
@@ -120,6 +132,7 @@ export interface WireTrack {
   team: number | null;
   alliance: string | null;
   team_confidence: number | null;
+  position_source?: string | null;
   boxes: WireBox[];
   gaps: WireGap[];
 }
@@ -190,7 +203,19 @@ export interface ScoutEvent {
   correctionId: string | null;
 }
 
-export interface Box { t: number; x: number; y: number; w: number; h: number }
+export interface Box {
+  t: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fieldX: number | null;
+  fieldY: number | null;
+  velocityXFtps: number | null;
+  velocityYFtps: number | null;
+  speedFtps: number | null;
+  motionHeadingRad: number | null;
+}
 
 export interface Gap {
   start: number;
@@ -202,6 +227,7 @@ export interface Track {
   trackId: number;
   team: number | null;
   alliance: Alliance | null;
+  positionSource: string | null;
   /** Confidence in the WHOLE track's identity, not any one event. Flags misattributions. */
   teamConfidence: number | null;
   boxes: Box[];
@@ -366,8 +392,17 @@ export function parseTrack(raw: WireTrack, log: ViolationLog): Track | null {
     trackId: raw.track_id,
     team: raw.team ?? null,
     alliance,
+    positionSource: raw.position_source ?? null,
     teamConfidence: typeof raw.team_confidence === 'number' ? raw.team_confidence : null,
-    boxes: raw.boxes ?? [],
+    boxes: (raw.boxes ?? []).map((box) => ({
+      ...box,
+      fieldX: box.field_x ?? null,
+      fieldY: box.field_y ?? null,
+      velocityXFtps: box.velocity_x_ftps ?? null,
+      velocityYFtps: box.velocity_y_ftps ?? null,
+      speedFtps: box.speed_ftps ?? null,
+      motionHeadingRad: box.motion_heading_rad ?? null,
+    })),
     gaps,
   };
 }

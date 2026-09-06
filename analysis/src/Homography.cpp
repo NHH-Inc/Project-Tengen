@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 #include <opencv2/calib3d.hpp>
@@ -11,14 +12,20 @@
 namespace frc::vision {
 
 Homography::Homography(std::array<double, 9> matrix, double reprojection_ft, int point_count,
-                       double field_length_ft, double field_width_ft)
+                       double field_length_ft, double field_width_ft,
+                       std::optional<double> plane_height_ft, std::string source,
+                       std::optional<bool> trusted_override)
     : matrix_(matrix),
       reprojection_ft_(reprojection_ft),
       point_count_(point_count),
       field_length_ft_(field_length_ft),
-      field_width_ft_(field_width_ft) {}
+      field_width_ft_(field_width_ft),
+      plane_height_ft_(plane_height_ft),
+      source_(std::move(source)),
+      trusted_override_(trusted_override) {}
 
 bool Homography::trustworthy() const {
+    if (trusted_override_.has_value()) return point_count_ >= 4 && *trusted_override_;
     if (point_count_ < 4) return false;
     // A four-point solve is geometrically valid but unverified; its zero error proves nothing.
     // Treated as usable and flagged via has_redundancy() rather than silently called confirmed.
@@ -107,6 +114,44 @@ std::optional<Homography> load_homography(double field_length_ft, double field_w
         return std::nullopt;
     }
 
+    const std::string source = document.value("mapping_source", "tag_plane");
+    const std::optional<double> plane_height =
+        document.contains("plane_height_ft") && document["plane_height_ft"].is_number()
+        ? std::optional<double>(document["plane_height_ft"].get<double>())
+        : std::nullopt;
+    const std::optional<bool> trusted_override =
+        document.contains("trustworthy") && document["trustworthy"].is_boolean()
+        ? std::optional<bool>(document["trustworthy"].get<bool>())
+        : std::nullopt;
+
+    // New calibrations persist the image-to-carpet matrix so the runtime does not need to redo
+    // pose solving. Keep point-based files below for compatibility with older calibrations.
+    if (document.contains("matrix") && document["matrix"].is_array()) {
+        const auto& raw = document["matrix"];
+        std::array<double, 9> matrix{};
+        if (raw.size() == 3 && raw[0].is_array() && raw[1].is_array() && raw[2].is_array() &&
+            raw[0].size() == 3 && raw[1].size() == 3 && raw[2].size() == 3) {
+            for (size_t r = 0; r < 3; ++r) {
+                for (size_t c = 0; c < 3; ++c) {
+                    if (!raw[r][c].is_number()) return std::nullopt;
+                    matrix[r * 3 + c] = raw[r][c].get<double>();
+                }
+            }
+        } else if (raw.size() == 9) {
+            for (size_t i = 0; i < 9; ++i) {
+                if (!raw[i].is_number()) return std::nullopt;
+                matrix[i] = raw[i].get<double>();
+            }
+        } else {
+            return std::nullopt;
+        }
+        const int point_count = document.value("point_count", 4);
+        const double reprojection = document.value("reprojection_ft", 0.0);
+        Homography loaded(matrix, reprojection, point_count, field_length_ft, field_width_ft,
+                          plane_height, source, trusted_override);
+        return loaded.trustworthy() ? std::optional<Homography>(loaded) : std::nullopt;
+    }
+
     if (!document.contains("points") || !document["points"].is_array()) return std::nullopt;
 
     std::vector<PointPair> points;
@@ -122,7 +167,9 @@ std::optional<Homography> load_homography(double field_length_ft, double field_w
 
     auto solved = solve_homography(points, field_length_ft, field_width_ft);
     if (!solved || !solved->trustworthy()) return std::nullopt;
-    return solved;
+    if (trusted_override.has_value() && !*trusted_override) return std::nullopt;
+    return Homography(solved->matrix(), solved->reprojection_ft(), solved->point_count(),
+                      field_length_ft, field_width_ft, plane_height, source, trusted_override);
 }
 
 }  // namespace frc::vision

@@ -27,6 +27,8 @@ inline constexpr double kMaxReprojectionFt = 1.5;
 // Slack outside the field before a mapped point counts as off-field. Bumpers overhang and the
 // camera sees past the guardrail, so the exact boundary is not a hard edge.
 inline constexpr double kFieldMarginFt = 4.0;
+// Used to reject identity swaps and bad mappings before they become scouting metrics.
+inline constexpr double kMaxPlausibleFtps = 20.0;
 
 struct PointPair {
     double image_x = 0.0;
@@ -39,7 +41,10 @@ class Homography {
 public:
     Homography() = default;
     Homography(std::array<double, 9> matrix, double reprojection_ft, int point_count,
-               double field_length_ft, double field_width_ft);
+               double field_length_ft, double field_width_ft,
+               std::optional<double> plane_height_ft = std::nullopt,
+               std::string source = "unknown",
+               std::optional<bool> trusted_override = std::nullopt);
 
     // Four correspondences determine a homography exactly, so the fit reproduces them with zero
     // error however wrong they are -- mistype a corner by twenty feet and the residual is still
@@ -50,6 +55,9 @@ public:
 
     [[nodiscard]] double reprojection_ft() const { return reprojection_ft_; }
     [[nodiscard]] int point_count() const { return point_count_; }
+    [[nodiscard]] const std::array<double, 9>& matrix() const { return matrix_; }
+    [[nodiscard]] const std::optional<double>& plane_height_ft() const { return plane_height_ft_; }
+    [[nodiscard]] const std::string& source() const { return source_; }
 
     // Pixel -> field feet. Returns nullopt for a point on the plane's horizon line, which has no
     // finite field position.
@@ -69,6 +77,9 @@ private:
     int point_count_ = 0;
     double field_length_ft_ = 0.0;
     double field_width_ft_ = 0.0;
+    std::optional<double> plane_height_ft_;
+    std::string source_ = "unknown";
+    std::optional<bool> trusted_override_;
 };
 
 // Solve from at least four correspondences. Returns nullopt when the input cannot describe a

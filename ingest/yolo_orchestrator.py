@@ -92,6 +92,7 @@ class YoloAnalysisOrchestrator:
         device: str = "0",
         save_annotated: bool = False,
         snapshot_interval: float = 5.0,
+        homography_path: str | Path | None = None,
     ):
         self.repo_root = Path(repo_root).resolve()
         self.python_path = self._resolve_optional(python_path)
@@ -103,6 +104,9 @@ class YoloAnalysisOrchestrator:
         self.device = device
         self.save_annotated = save_annotated
         self.snapshot_interval = snapshot_interval
+        self.homography_path = self._resolve_optional(
+            homography_path if homography_path is not None else os.environ.get("FRC_HOMOGRAPHY_CONFIG")
+        )
 
     def _resolve_optional(self, value: str | Path | None) -> Path | None:
         if value is None or str(value).strip() == "":
@@ -130,6 +134,8 @@ class YoloAnalysisOrchestrator:
             "image_size": self.image_size,
             "device": self.device,
             "snapshot_interval": self.snapshot_interval,
+            "homography": str(self.homography_path) if self.homography_path else None,
+            "homography_available": bool(self.homography_path and self.homography_path.is_file()),
             "model_crop": {
                 "left": MODEL_CROP[0],
                 "top": MODEL_CROP[1],
@@ -213,6 +219,8 @@ class YoloAnalysisOrchestrator:
             str(self.image_size),
             "--device",
             self.device,
+            *( ["--homography", str(self.homography_path)]
+               if self.homography_path and self.homography_path.is_file() else [] ),
             "--snapshot-dir",
             str(snapshot_dir),
             "--snapshot-interval",
@@ -287,12 +295,20 @@ class YoloAnalysisOrchestrator:
         )
         events = match_events(job_data, duration, season)
         _write_jsonl(events_path, events)
+        mapping_source = None
+        if self.homography_path and self.homography_path.is_file():
+            try:
+                document = json.loads(self.homography_path.read_text(encoding="utf-8"))
+                mapping_source = document.get("mapping_source", "tag_plane")
+            except (OSError, json.JSONDecodeError):
+                mapping_source = None
         result = {
             "schema_version": 3,
             "job_id": job_id,
             "model_version": self.model_version,
             "box_sample_rate": fps,
-            "homography_ok": False,
+            "homography_ok": bool(mapping_source),
+            "homography_source": mapping_source,
             "frames_total": frames_total,
             "frames_analyzed": frames_total,
             "frames_skipped_shot_change": 0,

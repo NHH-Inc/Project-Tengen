@@ -45,7 +45,10 @@ export function AnalysisPanel({
           <Metric label="Events emitted" value={result.eventsEmitted.toLocaleString()} />
           <Metric label="Box sample rate" value={`${result.boxSampleRate.toFixed(2)} Hz`} />
           <Metric label="Frames skipped at cuts" value={result.framesSkippedShotChange.toLocaleString()} />
-          <Metric label="Field mapping" value={result.homographyOk ? 'available' : 'not available'} />
+          <Metric
+            label="Field mapping"
+            value={result.homographyOk ? (result.homographySource ?? 'available') : 'not available'}
+          />
           <Metric label="Model" value={result.modelVersion} mono />
         </div>
       </section>

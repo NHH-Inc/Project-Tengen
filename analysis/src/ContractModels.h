@@ -215,6 +215,15 @@ struct Box {
     double y = 0.0;
     double w = 0.0;
     double h = 0.0;
+    // Optional field geometry. Pixel boxes remain valid when calibration is absent or a shot cut
+    // makes the mapping unsafe; these values are populated only for a valid observed position.
+    std::optional<double> field_x;
+    std::optional<double> field_y;
+    std::optional<double> velocity_x_ftps;
+    std::optional<double> velocity_y_ftps;
+    std::optional<double> speed_ftps;
+    // Direction of travel, not robot body orientation. A box alone cannot reveal body heading.
+    std::optional<double> motion_heading_rad;
 };
 
 /**
@@ -237,6 +246,8 @@ struct Track {
     std::optional<std::string> alliance;
     /** Confidence in the WHOLE track's identity, separate from per-event confidence. */
     std::optional<double> team_confidence;
+    /** Calibration source for optional field positions. */
+    std::optional<std::string> position_source;
     std::vector<Box> boxes;
     /**
      * REQUIRED, possibly empty. Do NOT split a track at a gap: re-identification exists to
@@ -254,6 +265,7 @@ struct RunResult {
     /** Hertz -- samples per second, not a frame interval. */
     double box_sample_rate = 0.0;
     bool homography_ok = false;
+    std::optional<std::string> homography_source;
     int frames_total = 0;
     int frames_analyzed = 0;
     int frames_skipped_shot_change = 0;
@@ -278,12 +290,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Job, schema_version, job_id, match_id, season
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Event, schema_version, job_id, match_id, event_id, team,
                                    track_id, t_seconds, phase, event_type, confidence, field_x,
                                    field_y, goal, source)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Box, t, x, y, w, h)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Box, t, x, y, w, h, field_x, field_y,
+                                   velocity_x_ftps, velocity_y_ftps, speed_ftps,
+                                   motion_heading_rad)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Gap, start, end, reason)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Track, schema_version, track_id, team, alliance,
-                                   team_confidence, boxes, gaps)
+                                   team_confidence, position_source, boxes, gaps)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(RunResult, schema_version, job_id, model_version,
-                                   box_sample_rate, homography_ok, frames_total,
+                                   box_sample_rate, homography_ok, homography_source, frames_total,
                                    frames_analyzed, frames_skipped_shot_change, tracks_emitted,
                                    events_emitted, reconstructed_score, started_at, finished_at)
 

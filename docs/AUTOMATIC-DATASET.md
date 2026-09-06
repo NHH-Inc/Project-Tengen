@@ -190,13 +190,24 @@ C:\yolo11-venv\Scripts\python.exe -m training.track_yolo `
   --model data\models\robot-yolo11n-v1\weights\best.pt `
   --video data\segments\unseen-match.mp4 `
   --tracker bytetrack `
+  --homography analysis\config\homography.<venue>.json `
   --output data\jobs\JOB_ID\tracks.jsonl `
+  --partial-output data\jobs\JOB_ID\tracks.partial.jsonl `
   --annotated-output data\previews\unseen-match-tracked.mp4
 ```
 
 The JSONL has one Contract C v3 record per persistent track, normalized boxes, null team/alliance
-until OCR exists, and `detection_lost` gaps when a track disappears and later returns. This file
-can be consumed by the existing ingest/web path without changing `/contracts`.
+until OCR exists, and `detection_lost` gaps when a track disappears and later returns. With a valid
+homography, boxes also carry carpet `field_x`/`field_y`, velocity components, scalar speed in
+feet/second, and travel heading in radians. The heading is motion direction, not robot body
+orientation. The partial file is atomically refreshed during processing for a live UI overlay.
+
+The local-video path is lazy: it starts YOLO on the first decoded frame instead of first producing
+an entire cropped copy. `--stream-url` is also lazy and decodes a yt-dlp/FFmpeg pipe. Therefore an
+unseen video does not need to be processed or trained on beforehand; the trained detector and
+ByteTrack begin from frame one. Whether it keeps up with live video depends on GPU inference,
+image size, decoding, network speed, and the source FPS. A file is processed as quickly as
+possible rather than wall-clock paced.
 
 ## Success gate
 

@@ -143,6 +143,7 @@ export interface WireRunResult {
   model_version: string;
   box_sample_rate: number;
   homography_ok: boolean;
+  homography_source?: string | null;
   frames_total: number;
   frames_analyzed: number;
   frames_skipped_shot_change: number;
@@ -158,6 +159,7 @@ export interface RunResult {
   modelVersion: string;
   boxSampleRate: number;
   homographyOk: boolean;
+  homographySource: string | null;
   framesTotal: number;
   framesAnalyzed: number;
   framesSkippedShotChange: number;
@@ -174,6 +176,7 @@ export function parseRunResult(raw: WireRunResult): RunResult {
     modelVersion: raw.model_version,
     boxSampleRate: raw.box_sample_rate,
     homographyOk: raw.homography_ok,
+    homographySource: raw.homography_source ?? null,
     framesTotal: raw.frames_total,
     framesAnalyzed: raw.frames_analyzed,
     framesSkippedShotChange: raw.frames_skipped_shot_change,

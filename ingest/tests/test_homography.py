@@ -6,12 +6,21 @@ computed from it inherits the error silently.
 """
 
 import math
+import json
+import tempfile
 import unittest
+from pathlib import Path
+
+import cv2
+import numpy as np
 
 from ingest.collection.homography import (
     MAX_PLAUSIBLE_FTPS,
     Homography,
+    camera_matrix_from_hfov,
+    load_calibration,
     implausible,
+    solve_camera_pose,
     solve,
     speed_ftps,
 )
@@ -124,6 +133,47 @@ class SpeedTests(unittest.TestCase):
         self.assertTrue(implausible(MAX_PLAUSIBLE_FTPS + 5))
         self.assertFalse(implausible(12.0))
         self.assertFalse(implausible(None))
+
+
+class PoseTests(unittest.TestCase):
+    def test_non_coplanar_references_recover_the_carpet_plane(self):
+        object_points = [
+            (0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 10.0, 0.0),
+            (2.0, 2.0, 3.0), (8.0, 2.0, 3.0), (2.0, 8.0, 3.0), (8.0, 8.0, 3.0),
+        ]
+        rvec = np.array([0.08, -0.12, 0.04], dtype=np.float64)
+        tvec = np.array([1.0, -2.0, 32.0], dtype=np.float64)
+        camera = camera_matrix_from_hfov(1920, 1080, 70.0)
+        projected, _ = cv2.projectPoints(np.asarray(object_points), rvec, tvec, camera, None)
+        image_points = [tuple(point) for point in projected.reshape(-1, 2)]
+
+        solved = solve_camera_pose(image_points, object_points, 1920, 1080, 70.0, 54.0, 26.6)
+        self.assertIsNotNone(solved)
+        mapper, pose = solved
+        self.assertEqual(mapper.source, "carpet_pose")
+        self.assertLess(pose["reprojection_px"], 0.01)
+
+        carpet_image, _ = cv2.projectPoints(
+            np.asarray([[(5.0, 4.0, 0.0)]]), rvec, tvec, camera, None
+        )
+        field = mapper.to_field(*carpet_image.reshape(2))
+        self.assertAlmostEqual(field[0], 5.0, places=3)
+        self.assertAlmostEqual(field[1], 4.0, places=3)
+
+    def test_matrix_calibration_round_trips_without_re_solving(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "homography.json"
+            path.write_text(json.dumps({
+                "mapping_source": "carpet_pose",
+                "field_length_ft": 54.0,
+                "field_width_ft": 26.6,
+                "point_count": 8,
+                "trustworthy": True,
+                "matrix": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            }), encoding="utf-8")
+            loaded = load_calibration(path)
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.source, "carpet_pose")
 
 
 if __name__ == "__main__":
