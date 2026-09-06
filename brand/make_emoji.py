@@ -203,6 +203,24 @@ def server_icon(size=512):
     return finish(img, size, "server-icon")
 
 
+def bot_avatar(size=1024):
+    """The mark on a full-bleed navy square, sized for Discord's circular crop.
+
+    Two differences from `server_icon`, both because of that crop. The square is filled edge to
+    edge rather than rounded, since the corners are discarded and a rounded rect only risks a
+    sliver of transparency at the circle's tangent points. And the mark is drawn larger, because
+    the crop removes about a fifth of the visible area and a mark sized for the square reads
+    undersized once it lands in the circle.
+
+    1024 rather than 512: Discord serves avatars at up to 512 on retina, and downscaling from
+    double that keeps the star's thin kites clean.
+    """
+    img, d = canvas(size, bg=NAVY)
+    s = size * SS
+    draw_mark(d, s / 2, s / 2, s * 0.40, width_scale=1.15)
+    return finish(img, size, "bot-avatar")
+
+
 if __name__ == "__main__":
     made = [
         emoji_tengen(),
@@ -214,10 +232,11 @@ if __name__ == "__main__":
         emoji_track(),
         emoji_stats(),
         server_icon(),
+        bot_avatar(),
     ]
     for path in made:
         kb = path.stat().st_size / 1024
-        limit = 256 if "server" not in path.stem else 8192
+        limit = 8192 if path.stem in ("server-icon", "bot-avatar") else 256
         flag = "ok" if kb < limit else "TOO BIG"
         print(f"  {path.name:<22} {kb:6.1f} KB  {flag}")
 
