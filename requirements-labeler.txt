@@ -1,0 +1,2 @@
+# Tkinter is included with most standard Windows Python installations.
+Pillow>=10.0

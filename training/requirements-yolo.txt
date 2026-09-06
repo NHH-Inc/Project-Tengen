@@ -1,0 +1,10 @@
+# Install only in the dedicated NVIDIA/CUDA vision environment.
+# Install CUDA-enabled PyTorch first using https://pytorch.org/get-started/locally/ so pip does
+# not replace it with an unsuitable build. Grounding DINO is installed separately from its
+# official source repository.
+ultralytics
+opencv-python
+pillow
+numpy
+tqdm
+PyYAML

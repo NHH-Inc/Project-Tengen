@@ -175,6 +175,23 @@ export class HttpApi implements ScoutingApi {
     };
   }
 
+  async getJobTracks(jobId: string): Promise<Parsed<TracksResponse>> {
+    const log = new ViolationLog();
+    const raw = await this.request<WireTrackList<WireTrack>>(
+      `/jobs/${encodeURIComponent(jobId)}/tracks`
+    );
+    const tracks = (raw.tracks ?? [])
+      .map((t) => parseTrack(t, log))
+      .filter((t): t is Track => t !== null);
+    if (typeof raw.box_sample_rate !== 'number' || raw.box_sample_rate <= 0) {
+      log.add('tracks.box_sample_rate', 'missing or not a positive number', raw);
+    }
+    return {
+      data: { boxSampleRate: raw.box_sample_rate, tracks },
+      violations: log.items,
+    };
+  }
+
   async getCorrections(matchId: string): Promise<Parsed<Correction[]>> {
     const log = new ViolationLog();
     const raw = await this.request<WireCorrectionList<WireCorrection>>(

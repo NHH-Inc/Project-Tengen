@@ -99,3 +99,23 @@ data/
 
 # Local detector configuration points at locally trained model weights.
 analysis/config/detector.local.json
+
+# Local model weights and generated media must remain outside Git.
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.safetensors
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.bmp
+*.tif
+*.tiff

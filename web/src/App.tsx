@@ -6,6 +6,7 @@ import { EventInspector } from './components/EventInspector';
 import { ExportPanel } from './components/ExportPanel';
 import { Sidebar } from './components/Sidebar';
 import { VideoPlayer } from './player/VideoPlayer';
+import { useJobTracks } from './state/useJobTracks';
 import { useJobs } from './state/useJobs';
 import { useMatch } from './state/useMatch';
 import { useRunResult } from './state/useRunResult';
@@ -112,8 +113,8 @@ export default function App() {
     event.target.value = '';
   };
 
-  // Events and tracks are written only after analysis. The local video itself is available
-  // earlier, so do not issue empty analysis requests while a job is still moving.
+  // Events are written after analysis. Job-level YOLO tracks are also published incrementally
+  // while a job is moving, so the player can show the live overlay before completion.
   const analysisComplete = job?.status === 'complete';
   const match = useMatch(job?.matchId ?? null, analysisComplete);
   const runResult = useRunResult(job?.jobId ?? null, Boolean(analysisComplete));
@@ -121,6 +122,15 @@ export default function App() {
   // A complete job whose media metadata never arrived cannot drive a player -- rather than
   // defaulting a duration and drawing a wrong scrub bar, the stage says so.
   const playable = isPlayable(job) ? job : null;
+  const jobTracks = useJobTracks(
+    job?.jobId ?? null,
+    Boolean(playable),
+    job?.status === 'analyzing'
+  );
+  const overlayTracks = jobTracks.tracks.length > 0 ? jobTracks.tracks : match.tracks;
+  const overlaySampleRate = jobTracks.boxSampleRate > 0
+    ? jobTracks.boxSampleRate
+    : match.boxSampleRate;
 
   // Doc 0: the season config is selected by the job's `season` field, so old footage stays
   // analyzable after the game changes. An unknown season is a bug, not something to guess.
@@ -301,10 +311,10 @@ export default function App() {
                   ? job.startOffset
                   : 0
               }
-              tracks={match.tracks}
+              tracks={overlayTracks}
               events={match.events}
               confidenceThreshold={confidenceThreshold}
-              boxSampleRate={match.boxSampleRate}
+              boxSampleRate={overlaySampleRate || job.fps || 30}
               selectedEventId={selectedEventId}
               onSelectEvent={setSelectedEventId}
               seekTo={seekTo}
@@ -326,7 +336,7 @@ export default function App() {
                 <span className="tabs-meta muted">
                   {match.loading
                     ? 'loading…'
-                    : `${match.events.length} events · ${match.tracks.length} tracks · boxes @ ${match.boxSampleRate.toFixed(0)} Hz`}
+                    : `${match.events.length} events · ${overlayTracks.length} tracks · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
                 </span>
               </nav>
             )}

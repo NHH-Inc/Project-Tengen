@@ -21,7 +21,17 @@ from starlette.concurrency import run_in_threadpool
 
 # Must run before database/TBA/Sheets read os.environ. See ingest/settings.py.
 from . import settings  # noqa: F401
-from . import apps_script_sheets, database, downloader, models, orchestrator, sheets, stats, tba
+from . import (
+    apps_script_sheets,
+    database,
+    downloader,
+    models,
+    orchestrator,
+    sheets,
+    stats,
+    tba,
+    yolo_orchestrator,
+)
 from .corrections import apply_corrections, apply_track_corrections
 from .serializers import (
     JOB_STATUSES,
@@ -66,7 +76,12 @@ def _classify(exc: Exception) -> str:
         return "video_unavailable"
     if "timed out" in text or "timeout" in text:
         return "timeout"
-    if "analysis exited" in text or "did not write" in text:
+    if (
+        "analysis exited" in text
+        or "did not write" in text
+        or "yolo tracker exited" in text
+        or "yolo backend" in text
+    ):
         return "analysis_failed"
     if "yt-dlp" in text or "download" in text or "403" in text:
         return "download_failed"
@@ -127,11 +142,37 @@ database.init_db()
 get_db = database.get_db
 
 data_dir = os.environ.get("FRC_DATA_DIR", "./data")
+REPO_ROOT = Path(__file__).resolve().parent.parent
 video_downloader = downloader.VideoDownloader(download_dir=os.path.join(data_dir, "segments"))
-analysis_orchestrator = orchestrator.AnalysisOrchestrator(
+native_analysis_orchestrator = orchestrator.AnalysisOrchestrator(
     binary_path=os.environ.get("ANALYSIS_BINARY", "./analysis/build/bin/analysis"),
     output_base_dir=os.path.join(data_dir, "jobs"),
 )
+
+_yolo_model_default = REPO_ROOT / "data" / "models" / "yolo11n-frc-robots-20260901" / "weights" / "best.pt"
+yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
+    repo_root=REPO_ROOT,
+    python_path=os.environ.get("YOLO_PYTHON"),
+    model_path=os.environ.get("YOLO_MODEL_PATH") or str(_yolo_model_default),
+    output_base_dir=os.path.join(data_dir, "jobs"),
+    tracker=os.environ.get("FRC_YOLO_TRACKER", "bytetrack"),
+    confidence=float(os.environ.get("FRC_YOLO_CONFIDENCE", "0.25")),
+    image_size=int(os.environ.get("FRC_YOLO_IMAGE_SIZE", "960")),
+    device=os.environ.get("FRC_YOLO_DEVICE", "0"),
+    save_annotated=os.environ.get("FRC_YOLO_SAVE_ANNOTATED", "0").lower()
+    in {"1", "true", "yes", "on"},
+    snapshot_interval=float(os.environ.get("FRC_YOLO_SNAPSHOT_INTERVAL", "5")),
+)
+
+_analysis_backend = os.environ.get("FRC_ANALYSIS_BACKEND", "auto").strip().lower()
+if _analysis_backend not in {"auto", "native", "yolo"}:
+    raise RuntimeError("FRC_ANALYSIS_BACKEND must be one of: auto, native, yolo")
+if _analysis_backend == "yolo" or (
+    _analysis_backend == "auto" and yolo_analysis_orchestrator.available
+):
+    analysis_orchestrator = yolo_analysis_orchestrator
+else:
+    analysis_orchestrator = native_analysis_orchestrator
 
 
 def _media_window(url: str, info: dict) -> tuple[float, float, bool]:
@@ -521,6 +562,37 @@ def get_match_tracks(
     # knows how much to interpolate instead of inferring it from sample spacing.
     job = db.query(models.Job).filter(models.Job.match_id == match_id).first()
     return {"box_sample_rate": _box_sample_rate(job), "tracks": tracks}
+
+
+@app.get("/api/jobs/{job_id}/tracks")
+def get_job_tracks(job_id: str, db: Session = Depends(get_db)):
+    """Serve a job's YOLO tracks, including the partial file while inference is running."""
+    job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job_dir = Path(analysis_orchestrator.output_base_dir) / job.job_id
+    final_path = job_dir / "tracks.jsonl"
+    partial_path = job_dir / "tracks.partial.jsonl"
+    path = final_path if final_path.exists() else partial_path
+    tracks = []
+    if path.exists():
+        try:
+            tracks = [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=503, detail=f"Could not read YOLO tracks: {exc}")
+
+    result = _read_result(job) or {}
+    sample_rate = float(result.get("box_sample_rate") or job.fps or 0.0)
+    return {
+        "box_sample_rate": sample_rate,
+        "tracks": tracks,
+        "complete": final_path.exists(),
+    }
 
 
 def _result_path(job) -> Path | None:
@@ -982,6 +1054,13 @@ def health():
         "schema_version": SCHEMA_VERSION,
         "statuses": sorted(JOB_STATUSES),
         "dependencies": video_downloader.dependency_status(),
+        "analysis": {
+            "selected_backend": "yolo"
+            if analysis_orchestrator is yolo_analysis_orchestrator
+            else "native",
+            "native_binary": native_analysis_orchestrator.binary_path,
+            "yolo": yolo_analysis_orchestrator.health(),
+        },
     }
 
 

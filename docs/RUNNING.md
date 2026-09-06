@@ -254,6 +254,26 @@ Now paste a YouTube link into the sidebar. The job walks
 `queued → downloading → downloaded → analyzing → complete`, and **the player opens as soon as the
 download finishes** — you do not wait for analysis.
 
+### Using the trained YOLO detector with ByteTrack
+
+The ingest service can run the trained Ultralytics checkpoint in a separate vision environment,
+so the lighter service environment does not need CUDA or Ultralytics installed. In
+`ingest\.env`, set the dedicated Python executable and select the tracker:
+
+```powershell
+# in: REPO
+YOLO_PYTHON=C:\yolo11-venv\Scripts\python.exe
+YOLO_MODEL_PATH=.\data\models\yolo11n-frc-robots-20260901\weights\best.pt
+FRC_ANALYSIS_BACKEND=yolo
+FRC_YOLO_TRACKER=bytetrack
+```
+
+The API then invokes `training\track_yolo.py`, which writes Contract D `tracks.jsonl` and the
+database receives those persistent track IDs. Use `FRC_ANALYSIS_BACKEND=auto` to prefer this
+path when it is available, or `native` to force the C++ RF-DETR path. Annotated MP4 output is off
+by default because the web app draws the stored tracks and an annotated 1080p60 copy is large;
+set `FRC_YOLO_SAVE_ANNOTATED=1` when a rendered video is needed.
+
 **Analysis now proves the full media path**: it opens the downloaded MP4 with OpenCV and counts
 real frames. With no configured model it emits zero tracks; that is expected and honest. Once a
 trained RF-DETR ONNX model is configured, it samples frames, emits detected robot tracks, and

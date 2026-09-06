@@ -1,0 +1,52 @@
+season: 2026
+game: REBUILT
+storage:
+  root: data
+  segments: data/segments
+  collections: data/collections
+  datasets: data/datasets
+sampling:
+  # One full-field frame every second. Use 0.5 for a two-second interval or 2.0 for 0.5 seconds.
+  fps: 1.0
+  image_format: jpg
+  jpeg_quality: 85
+  include_endpoints: true
+split:
+  seed: 20260831
+  # Event-level grouping is the safest evaluation. Pass --event-id when the match key is not a
+  # canonical TBA key such as 2026casf_qm42.
+  group_by: event
+  train: 0.70
+  val: 0.15
+  test: 0.15
+classes:
+  - {name: robot, id: 0}
+quality:
+  allow_empty_frames: true
+  exclude_flags: [replay_closeup, camera_cut, unreadable_frame]
+grounding_dino:
+  prompt: "robot . competition robot . wheeled robot ."
+  box_threshold: 0.25
+  text_threshold: 0.20
+frc_filter:
+  min_confidence: 0.25
+  # A high-confidence one-frame detection may survive without temporal support.
+  high_confidence: 0.60
+  min_area: 0.00015
+  max_area: 0.30
+  min_aspect_ratio: 0.20
+  max_aspect_ratio: 5.0
+  nms_iou: 0.75
+  # Normalized center-of-box region. Leave full-frame unless a specific video source has a known
+  # scoreboard/sidebar crop. Do not tune this to remove hard on-field examples.
+  roi: [0.0, 0.0, 1.0, 1.0]
+  bumper_color:
+    enabled: true
+    min_fraction: 0.02
+    confidence_bonus: 0.08
+temporal:
+  enabled: true
+  association_iou: 0.15
+  max_center_distance: 0.10
+  max_gap_frames: 2
+  min_track_hits: 2

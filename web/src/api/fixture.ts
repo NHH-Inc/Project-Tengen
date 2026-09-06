@@ -300,6 +300,10 @@ export class FixtureApi implements ScoutingApi {
     };
   }
 
+  async getJobTracks(_jobId: string): Promise<Parsed<TracksResponse>> {
+    return { data: { boxSampleRate: 0, tracks: [] }, violations: [] };
+  }
+
   async getCorrections(matchId: string): Promise<Parsed<Correction[]>> {
     await this.seed();
     return { data: this.correctionsFor(matchId), violations: [] };

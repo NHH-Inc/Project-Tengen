@@ -57,6 +57,7 @@ export interface ScoutingApi {
 
   getEvents(matchId: string, query?: EventQuery): Promise<Parsed<ScoutEvent[]>>;
   getTracks(matchId: string, query?: EventQuery): Promise<Parsed<TracksResponse>>;
+  getJobTracks(jobId: string): Promise<Parsed<TracksResponse>>;
   getCorrections(matchId: string): Promise<Parsed<Correction[]>>;
   getAccuracy(matchId: string): Promise<Accuracy>;
 

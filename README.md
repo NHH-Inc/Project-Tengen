@@ -56,6 +56,18 @@ npm run dev
 Open `http://localhost:5173`. You get a real 152-second clip with real tracks and events. This is
 the right way to work on the web app, and the right way to see what the project does.
 
+## Review robot boxes in competition images
+
+The standalone Python labeler opens local image/JSON pairs, overlays the JSON boxes, and autosaves
+red/blue corrections back to the matching JSON file:
+
+```powershell
+python -m pip install -r requirements-labeler.txt
+python robot_box_labeler.py "C:\path\to\competition-images"
+```
+
+Full input-format and editing details: [docs/ROBOT-BOX-LABELER.md](docs/ROBOT-BOX-LABELER.md).
+
 ## The real thing
 
 ```powershell
@@ -105,6 +117,11 @@ fails.
 | `SHEETS_SPREADSHEET_ID` + `GOOGLE_APPLICATION_CREDENTIALS` | `POST /api/export/sheets` returns 503 instead of silently not writing. |
 | `FRC_DATA_DIR` | `./data` — segments in `data/segments/`, job output in `data/jobs/`. |
 | `ANALYSIS_BINARY` | `./analysis/build/bin/analysis` |
+| `FRC_ANALYSIS_BACKEND` | `auto` — selects YOLO + ByteTrack when configured, otherwise native |
+| `YOLO_PYTHON` | unset — dedicated Python executable containing Ultralytics, so native is used unless set |
+| `YOLO_MODEL_PATH` | trained YOLO `.pt` path; defaults to the local FRC robot checkpoint when present |
+| `FRC_YOLO_TRACKER` | `bytetrack` |
+| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `0` |
 | `FRC_DEFAULT_SEASON` | `2026` |
 | `FRC_MIN_FREE_GB` | `10` — refuses to start a download below this. |
 | `FRC_SEGMENT_GRACE_DAYS` | `7` — how long a completed job's video survives before `clean` reclaims it. |

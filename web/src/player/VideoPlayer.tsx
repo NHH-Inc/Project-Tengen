@@ -21,6 +21,12 @@ const RED = '#e0555f';
 const BLUE = '#4c8cf0';
 const GREY = '#8a8f9c';
 const LOW_CONF = '#e8b93b';
+// Same normalized crop passed to the YOLO worker: the upper broadcast panel marked in the
+// supplied reference image. The stage is sized to this rectangle and the full video is shifted
+// underneath it, so the live video and normalized model boxes stay aligned.
+const VIDEO_CROP = { left: 0.02, top: 0.035, right: 0.98, bottom: 0.66 } as const;
+const VIDEO_CROP_WIDTH = VIDEO_CROP.right - VIDEO_CROP.left;
+const VIDEO_CROP_HEIGHT = VIDEO_CROP.bottom - VIDEO_CROP.top;
 // Broadcast padding: the countdown before the match and the score card after it. Trimming these
 // makes review faster, but the amount of padding is a property of whoever cut the upload, not a
 // constant. Fixed values are dangerous here in one specific direction: an FRC match ends with
@@ -422,8 +428,8 @@ export function VideoPlayer({
         className="player-stage"
         style={{
           aspectRatio: sourceSize
-            ? `${sourceSize.width} / ${sourceSize.height}`
-            : `${job.width} / ${job.height}`,
+            ? `${sourceSize.width * VIDEO_CROP_WIDTH} / ${sourceSize.height * VIDEO_CROP_HEIGHT}`
+            : `${job.width * VIDEO_CROP_WIDTH} / ${job.height * VIDEO_CROP_HEIGHT}`,
         }}
       >
         <video
@@ -432,6 +438,14 @@ export function VideoPlayer({
           src={src}
           preload="auto"
           playsInline
+          style={{
+            position: 'absolute',
+            width: `${(100 / VIDEO_CROP_WIDTH).toFixed(4)}%`,
+            height: 'auto',
+            left: `${(-100 * VIDEO_CROP.left / VIDEO_CROP_WIDTH).toFixed(4)}%`,
+            top: `${(-100 * VIDEO_CROP.top / VIDEO_CROP_HEIGHT).toFixed(4)}%`,
+            maxWidth: 'none',
+          }}
           onPlay={() => {
             setPlaying(true);
             const audio = audioRef.current;

@@ -35,6 +35,11 @@ class CollectionConfig:
         return float(self.raw["sampling"]["fps"])
 
     @property
+    def split_group_by(self) -> str:
+        """Field used to keep related frames in a single dataset split."""
+        return str(self.raw.get("split", {}).get("group_by", "event"))
+
+    @property
     def jpeg_quality(self) -> int:
         return int(self.raw["sampling"].get("jpeg_quality", 85))
 
