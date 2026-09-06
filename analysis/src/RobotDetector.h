@@ -1,6 +1,7 @@
 #ifndef ROBOT_DETECTOR_H
 #define ROBOT_DETECTOR_H
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +18,48 @@ struct Detection {
     double h = 0.0;
     double confidence = 0.0;
     int class_id = 0;
+};
+
+/**
+ * The part of a frame that holds the field, for broadcasts that composite a second camera view
+ * into one picture.
+ *
+ * Both panels show the same six robots, so without this every robot is detected twice, the
+ * tracker makes two tracks of it, and -- because team attribution is per track -- a human is
+ * asked for the same team number twice while every shot on that robot is counted twice. A
+ * duplicate is worse for the numbers than a miss.
+ *
+ * The seam cannot be read from a single frame; it is calibrated per source by
+ * `ingest.collection.calibrate_region`, which samples frames and looks for two separated bands of
+ * robots. An absent entry means the whole frame, which is the safe default.
+ */
+struct ViewRegion {
+    double x = 0.0;
+    double y = 0.0;
+    double w = 1.0;
+    double h = 1.0;
+    //: false filters boxes after inference, true crops the frame before it. Filtering measured
+    //: better -- 4.22 boxes per frame against 4.05 across 28 stacked sources -- because the model
+    //: was trained on whole frames, and moving the aspect ratio away from that costs more than
+    //: the extra pixels return. Cropping is kept because it feeds the model a smaller image, and
+    //: the balance may move with input size. See ingest/collection/view_region.py.
+    bool crop = false;
+
+    [[nodiscard]] bool is_full_frame() const {
+        return x == 0.0 && y == 0.0 && w == 1.0 && h == 1.0;
+    }
+
+    /**
+     * Whether a box belongs to this view, judged by its centre.
+     *
+     * The centre, not the edges: a robot straddling the seam belongs to whichever panel it is
+     * mostly in, and testing edges would either drop it from both or keep it in both.
+     */
+    [[nodiscard]] bool contains_centre(const Detection& detection) const {
+        const double cx = detection.x + detection.w / 2.0;
+        const double cy = detection.y + detection.h / 2.0;
+        return cx >= x && cx <= x + w && cy >= y && cy <= y + h;
+    }
 };
 
 /** Which export the ONNX file is. The two families disagree on every step of pre- and
@@ -62,7 +105,19 @@ struct DetectorConfig {
     double tile_overlap = 0.25;
     double sample_rate_hz = 2.0;
     double shot_change_threshold = 0.55;
+    //: Applied when a source has no entry of its own.
+    ViewRegion region;
+    //: Per-source regions, keyed by the video file's stem. Written by
+    //: `ingest.collection.calibrate_region`; sources composite differently and 35 of 60 measured
+    //: sources carry a second view, so one setting cannot serve them all.
+    std::map<std::string, ViewRegion> regions;
 };
+
+/** The region for one video, by its path's stem, falling back to the config's default. */
+ViewRegion region_for(const DetectorConfig& config, const std::string& video_path);
+
+/** A box found inside a crop, expressed relative to the whole frame. */
+Detection map_from_region(const Detection& detection, const ViewRegion& region);
 
 /** Reads FRC_DETECTOR_CONFIG. No environment setting means detector work is deliberately off. */
 DetectorConfig load_detector_config();
@@ -123,6 +178,9 @@ class RobotDetector {
     [[nodiscard]] bool enabled() const;
     [[nodiscard]] const DetectorConfig& config() const;
     [[nodiscard]] std::vector<Detection> infer(const cv::Mat& bgr_frame) const;
+    /** As above, restricted to one view of a composited frame. */
+    [[nodiscard]] std::vector<Detection> infer(const cv::Mat& bgr_frame,
+                                               const ViewRegion& region) const;
 
   private:
     /** One pass over one image. `infer` calls this for the whole frame and again per tile. */

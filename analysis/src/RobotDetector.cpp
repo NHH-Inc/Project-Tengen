@@ -77,6 +77,43 @@ bool clip_to_frame(Detection& d) {
     return true;
 }
 
+
+ViewRegion parse_region(const nlohmann::json& value) {
+    ViewRegion region;
+    region.x = optional_value<double>(value, "x", region.x);
+    region.y = optional_value<double>(value, "y", region.y);
+    region.w = optional_value<double>(value, "w", region.w);
+    region.h = optional_value<double>(value, "h", region.h);
+    // Python writes a mode string; a bool is accepted too so a hand-edited config is not a trap.
+    if (value.contains("mode")) {
+        const auto mode = value.at("mode").get<std::string>();
+        if (mode != "filter" && mode != "crop") {
+            throw std::runtime_error("region mode must be \"filter\" or \"crop\", not \"" +
+                                     mode + "\"");
+        }
+        region.crop = (mode == "crop");
+    } else {
+        region.crop = optional_value<bool>(value, "crop", region.crop);
+    }
+    if (region.w <= 0.0 || region.h <= 0.0) {
+        throw std::runtime_error("A view region has no area");
+    }
+    // A tolerance, because these come from a median of measured seams rather than round numbers.
+    if (region.x < 0.0 || region.y < 0.0 || region.x + region.w > 1.000001 ||
+        region.y + region.h > 1.000001) {
+        throw std::runtime_error("A view region falls outside the frame");
+    }
+    return region;
+}
+
+/** The filename without directories or extension, matching how Python keys the regions file. */
+std::string path_stem(const std::string& path) {
+    const auto slash = path.find_last_of("/\\");
+    const auto name = (slash == std::string::npos) ? path : path.substr(slash + 1);
+    const auto dot = name.find_last_of('.');
+    return (dot == std::string::npos) ? name : name.substr(0, dot);
+}
+
 }  // namespace
 
 DetectorConfig load_detector_config() {
@@ -112,6 +149,30 @@ DetectorConfig load_detector_config() {
     config.tile_overlap = optional_value<double>(value, "tile_overlap", config.tile_overlap);
     if (config.tile_size < 0 || config.tile_overlap < 0.0 || config.tile_overlap >= 1.0) {
         throw std::runtime_error("tile_size must be >= 0 and tile_overlap in [0, 1)");
+    }
+    if (value.contains("region")) {
+        config.region = parse_region(value.at("region"));
+    }
+    // Either inline, or a path to the file calibrate_region writes -- which is the normal case,
+    // since it is regenerated whenever the corpus grows and does not belong in a hand-edited file.
+    if (value.contains("regions_path")) {
+        const auto path = value.at("regions_path").get<std::string>();
+        std::ifstream regions_file(path);
+        if (!regions_file) {
+            throw std::runtime_error("regions_path does not exist: " + path);
+        }
+        nlohmann::json regions_json;
+        regions_file >> regions_json;
+        const auto& entries = regions_json.contains("regions") ? regions_json.at("regions")
+                                                               : regions_json;
+        for (const auto& [source, entry] : entries.items()) {
+            config.regions[source] = parse_region(entry);
+        }
+    }
+    if (value.contains("regions")) {
+        for (const auto& [source, entry] : value.at("regions").items()) {
+            config.regions[source] = parse_region(entry);
+        }
     }
     config.sample_rate_hz = optional_value<double>(value, "sample_rate_hz", config.sample_rate_hz);
     config.shot_change_threshold = optional_value<double>(value, "shot_change_threshold", config.shot_change_threshold);
@@ -185,6 +246,21 @@ std::vector<Detection> decode_yolo(const float* data, int64_t dim1, int64_t dim2
         if (clip_to_frame(detection)) detections.push_back(detection);
     }
     return detections;
+}
+
+ViewRegion region_for(const DetectorConfig& config, const std::string& video_path) {
+    const auto found = config.regions.find(path_stem(video_path));
+    return (found == config.regions.end()) ? config.region : found->second;
+}
+
+Detection map_from_region(const Detection& detection, const ViewRegion& region) {
+    if (region.is_full_frame()) return detection;
+    Detection mapped = detection;
+    mapped.x = region.x + detection.x * region.w;
+    mapped.y = region.y + detection.y * region.h;
+    mapped.w = detection.w * region.w;
+    mapped.h = detection.h * region.h;
+    return mapped;
 }
 
 std::vector<Detection> non_max_suppression(std::vector<Detection> boxes, double iou_threshold) {
@@ -330,7 +406,30 @@ bool RobotDetector::enabled() const { return impl_ != nullptr; }
 const DetectorConfig& RobotDetector::config() const { return config_; }
 
 std::vector<Detection> RobotDetector::infer(const cv::Mat& bgr_frame) const {
+    return infer(bgr_frame, config_.region);
+}
+
+std::vector<Detection> RobotDetector::infer(const cv::Mat& bgr_frame,
+                                            const ViewRegion& region) const {
     if (!enabled() || bgr_frame.empty()) return {};
+
+    // Cropping runs the whole pipeline -- tiles included -- on the panel alone, then puts the
+    // boxes back. Filtering runs it on the frame and drops what belongs to the other panel.
+    if (region.crop && !region.is_full_frame()) {
+        const cv::Rect roi(
+            static_cast<int>(std::lround(region.x * bgr_frame.cols)),
+            static_cast<int>(std::lround(region.y * bgr_frame.rows)),
+            std::max(1, static_cast<int>(std::lround(region.w * bgr_frame.cols))),
+            std::max(1, static_cast<int>(std::lround(region.h * bgr_frame.rows))));
+        const cv::Rect clamped = roi & cv::Rect(0, 0, bgr_frame.cols, bgr_frame.rows);
+        if (clamped.width <= 0 || clamped.height <= 0) return {};
+        std::vector<Detection> mapped;
+        for (const auto& found : infer(bgr_frame(clamped), ViewRegion{})) {
+            mapped.push_back(map_from_region(found, region));
+        }
+        return mapped;
+    }
+
     auto detections = infer_once(bgr_frame);
 
     // A second look at native resolution. The whole-frame pass shrinks a 1920-wide frame to fit a
@@ -355,6 +454,14 @@ std::vector<Detection> RobotDetector::infer(const cv::Mat& bgr_frame) const {
             }
         }
         detections = non_max_suppression(std::move(detections), config_.nms_iou);
+    }
+
+    if (!region.is_full_frame()) {
+        std::vector<Detection> kept;
+        for (const auto& detection : detections) {
+            if (region.contains_centre(detection)) kept.push_back(detection);
+        }
+        return kept;
     }
     return detections;
 }

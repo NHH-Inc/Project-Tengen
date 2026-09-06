@@ -555,3 +555,59 @@ Both are legal.
 
 **A job failed** — read `error_code`, not just the message. It is a closed set and tells you
 whether retrying helps: `rate_limited` yes, `video_unavailable` no.
+
+---
+
+## When a broadcast shows the field twice
+
+Many venues composite a second camera view under the main one. Both panels show the same six
+robots, so the detector finds each robot twice, the tracker makes two tracks of it, and — because
+team attribution is **per track** — a human is asked for the same team number twice while every
+shot on that robot is counted twice. A duplicate is worse for the numbers than a miss.
+
+**35 of the 60 sources in `data\segments` do this.** Their seams sit between 0.44 and 0.77 of
+frame height, median 0.70, so no single crop line serves them.
+
+### Calibrate once per source
+
+The seam cannot be read off a single frame. The obvious signal — the row where consecutive rows
+stop resembling each other — was measured across the 400-frame viewpoint pack and does **not**
+separate the two cases: stacked frames score a median 4.55 and single-view frames 4.49. A
+scoreboard edge, a spectator rail and a carpet boundary are all just as sharp as a panel join.
+
+What does separate them is where robots are *found*: one view puts them in a single horizontal
+band, two views put the same robots in two bands with a gap between. That needs the detector, so
+it is a calibration pass:
+
+```powershell
+python -m ingest.collection.calibrate_region --model data\robot-v2.onnx --segments data\segments --out analysis\config\regions.json
+```
+
+Point the detector config at the result, and the analyzer looks up each video by its filename stem:
+
+```json
+{ "regions_path": "../config/regions.json" }
+```
+
+An unlisted source keeps the whole frame, which is the safe default. Use a model that can actually
+see the lower panel — v2 finds so little down there that it reports only 25 of the 35, and a
+source wrongly called single-view goes on double-counting.
+
+### Filter, do not crop
+
+Two ways to act on a region, and the appealing one loses. Cropping before inference should spend
+the model's whole input on the panel that matters rather than two thirds of it. Measured across
+the 28 stacked segments of the viewpoint pack:
+
+| | boxes per frame |
+|---|---|
+| filter after inference | **4.22** |
+| crop before inference | 4.05 |
+
+Cropping is ahead in only 7 of 28 segments. The model was trained on whole frames, and moving the
+aspect ratio away from that costs more than the extra pixels return.
+
+So `"mode": "filter"` is the default. `"mode": "crop"` is kept because it feeds the model a
+smaller image and is therefore cheaper, which matters for throughput on the day, and because the
+balance may move with input size — the numbers above are at a 640px export, and resolution is the
+reason cropping should have won. **Re-measure before changing the default.**

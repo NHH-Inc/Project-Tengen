@@ -19,11 +19,15 @@
 #include "../src/RobotDetector.h"
 
 using frc::vision::Detection;
+using frc::vision::DetectorConfig;
 using frc::vision::Letterbox;
 using frc::vision::clipped_by_tile;
 using frc::vision::decode_yolo;
 using frc::vision::letterbox_for;
+using frc::vision::ViewRegion;
+using frc::vision::map_from_region;
 using frc::vision::map_from_tile;
+using frc::vision::region_for;
 using frc::vision::non_max_suppression;
 using frc::vision::tile_origins;
 
@@ -307,6 +311,63 @@ void tile_seams() {
           "the same box is fine when that edge is the bottom of the frame");
 }
 
+
+// --- a composited second camera view ------------------------------------------------------------
+
+Detection box_at(double x, double y, double w = 0.05, double h = 0.05) {
+    Detection d;
+    d.x = x; d.y = y; d.w = w; d.h = h; d.confidence = 0.9;
+    return d;
+}
+
+void view_regions() {
+    std::printf("\na frame with a second camera view composited under the first\n");
+
+    const ViewRegion whole;
+    check(whole.is_full_frame(), "the default region is the whole frame");
+    check(whole.contains_centre(box_at(0.5, 0.97)), "and it keeps a box near the bottom edge");
+
+    const ViewRegion top{0.0, 0.0, 1.0, 0.70, false};
+    check(!top.is_full_frame(), "a region that stops short of the bottom is not the full frame");
+    check(top.contains_centre(box_at(0.5, 0.30)), "a robot in the upper panel is kept");
+    check(!top.contains_centre(box_at(0.5, 0.90)), "the same robot in the lower panel is dropped");
+
+    // The centre decides, so a robot lying across the seam belongs to one panel rather than to
+    // both or neither. Testing edges instead would double-count it or lose it.
+    check(top.contains_centre(box_at(0.5, 0.62, 0.05, 0.10)),
+          "a box straddling the seam, mostly above it, is kept");
+    check(!top.contains_centre(box_at(0.5, 0.68, 0.05, 0.10)),
+          "a box straddling the seam, mostly below it, is dropped");
+
+    // Mapping back after a crop. Getting this wrong is silent: every box stays a valid normalized
+    // box, and every robot simply reports higher up the frame than it really is.
+    const Detection inside = box_at(0.25, 0.50, 0.10, 0.20);
+    const Detection mapped = map_from_region(inside, top);
+    check(near(mapped.y, 0.35), "y is scaled by the region's height, not left alone");
+    check(near(mapped.h, 0.14), "height is scaled too");
+    check(near(mapped.x, 0.25), "x is untouched by a full-width region");
+    check(near(mapped.w, 0.10), "and so is width");
+    check(near(map_from_region(inside, whole).y, 0.50),
+          "mapping through the full frame changes nothing");
+
+    const ViewRegion offset{0.20, 0.30, 0.50, 0.50, true};
+    const Detection corner = map_from_region(box_at(0.0, 0.0), offset);
+    check(near(corner.x, 0.20) && near(corner.y, 0.30),
+          "a box at a crop's origin lands at the region's origin");
+
+    // Lookup by source, which is how a per-venue setting reaches a run.
+    DetectorConfig config;
+    config.regions["ulD5ox6pFdU_00000_00215"] = top;
+    check(near(region_for(config, "data/segments/ulD5ox6pFdU_00000_00215.mp4").h, 0.70),
+          "a listed source gets its own region, found by the path's stem");
+    check(near(region_for(config, "C:\\data\\segments\\ulD5ox6pFdU_00000_00215.mp4").h, 0.70),
+          "backslashes separate a path too");
+    check(region_for(config, "data/segments/unlisted_00000_00215.mp4").is_full_frame(),
+          "an unlisted source keeps the whole frame rather than borrowing another's crop");
+    check(region_for(config, "no_extension").is_full_frame(),
+          "a path without an extension does not confuse the lookup");
+}
+
 }  // namespace
 
 int main() {
@@ -320,6 +381,7 @@ int main() {
     tiling_geometry();
     tile_coordinates();
     tile_seams();
+    view_regions();
     std::printf("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

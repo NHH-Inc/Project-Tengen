@@ -3,9 +3,10 @@
   "model_version": "yolo11s-robot-v2",
   "family": "yolo",
   "score_threshold": 0.35,
-  "nms_iou": 0.50,
+  "nms_iou": 0.5,
   "tile_size": 960,
   "tile_overlap": 0.25,
   "sample_rate_hz": 2.0,
-  "shot_change_threshold": 0.55
+  "shot_change_threshold": 0.55,
+  "regions_path": "../config/regions.json"
 }

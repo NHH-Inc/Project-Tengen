@@ -252,6 +252,12 @@ int main(int argc, char* argv[]) {
         const frc::vision::RobotDetector detector(detector_config);
         const bool detector_enabled = detector.enabled();
 
+        // Which part of each frame is the field. Broadcasts that composite a second camera view
+        // show the same six robots twice, and without this each becomes two tracks and two team
+        // numbers for a human to type. Keyed by the source's stem; an unlisted source keeps the
+        // whole frame. See ingest/collection/calibrate_region.py.
+        const auto view_region = frc::vision::region_for(detector.config(), *job.local_path);
+
         print_progress(0.05, frc::stage::kDecoding);
         cv::Mat frame;
         int decoded_frames = 0;
@@ -283,7 +289,7 @@ int main(int argc, char* argv[]) {
                     tracker.update(t_seconds, {}, true);
                 } else {
                     print_progress(0.25, frc::stage::kDetecting);
-                    const auto detections = detector.infer(frame);
+                    const auto detections = detector.infer(frame, view_region);
                     ++frames_analyzed;
                     print_progress(0.55, frc::stage::kTracking);
                     tracker.update(t_seconds, detections, false);

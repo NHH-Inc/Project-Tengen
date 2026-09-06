@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .box_fusion import estimate_source_weights, fuse_frame
+from .view_region import CROP, Region, crop, map_from_region
 
 
 class Detector(Protocol):
@@ -35,8 +36,26 @@ class Detector(Protocol):
         ...
 
 
+class RegionCropped:
+    """Runs the wrapped decode on a crop of the frame and puts the boxes back where they belong.
+
+    Both detector families inherit this rather than each cropping for itself. They already differ
+    on normalisation, letterboxing and output layout; a third thing for them to disagree about --
+    silently, since a mis-mapped box is still a valid box -- is not worth the duplication.
+    """
+
+    def detect(self, image_bgr) -> list[dict]:
+        region = getattr(self, "region", None) or Region()
+        if region.is_full_frame:
+            return self._detect_cropped(image_bgr)
+        if region.mode == CROP:
+            boxes = self._detect_cropped(crop(image_bgr, region))
+            return [map_from_region(b, region) for b in boxes]
+        return [b for b in self._detect_cropped(image_bgr) if region.contains_centre(b)]
+
+
 @dataclass
-class OnnxDetector:
+class OnnxDetector(RegionCropped):
     """A YOLO-family ONNX model.
 
     Output layout is not guessed. YOLOv8/11 export a single tensor shaped (1, 4+nc, anchors);
@@ -55,6 +74,10 @@ class OnnxDetector:
     #: thousands of overlapping candidates per object; without suppression one robot arrives as
     #: seven boxes and every count downstream is meaningless.
     nms_iou: float = 0.50
+    #: The part of the frame that holds the field, for sources that composite a second camera view
+    #: into one picture and would otherwise have every robot counted twice. See view_region for
+    #: which of its two modes is the default and the measurement behind that.
+    region: "Region | None" = None
     _session: object = None
 
     def __post_init__(self):
@@ -67,7 +90,7 @@ class OnnxDetector:
             shape = self._session.get_inputs()[0].shape
             self.input_size = int(shape[2]) if isinstance(shape[2], int) else 640
 
-    def detect(self, image_bgr) -> list[dict]:
+    def _detect_cropped(self, image_bgr) -> list[dict]:
         import numpy as np
         import cv2
 
@@ -111,7 +134,7 @@ class OnnxDetector:
 
 
 @dataclass
-class RfDetrDetector:
+class RfDetrDetector(RegionCropped):
     """An RF-DETR ONNX export.
 
     The output format is DETR's, not YOLO's, and the decode matches analysis/src/RFDetrDetector.cpp
@@ -132,6 +155,7 @@ class RfDetrDetector:
     input_size: int = 640
     robot_class_id: int = 0        # this export puts robot at class 0; class 1 is inert
     nms_iou: float = 0.50
+    region: "Region | None" = None
     _session: object = None
 
     def __post_init__(self):
@@ -140,7 +164,7 @@ class RfDetrDetector:
             self.model_path, providers=["CPUExecutionProvider"]
         )
 
-    def detect(self, image_bgr) -> list[dict]:
+    def _detect_cropped(self, image_bgr) -> list[dict]:
         import numpy as np
         import cv2
 
