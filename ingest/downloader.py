@@ -192,9 +192,9 @@ class VideoDownloader:
             "noplaylist": True,
             "skip_download": True,
             "format": (
-                "bv[ext=mp4][vcodec^=avc1][height<=720]+ba[ext=m4a]/"
-                "bv[ext=mp4][height<=720]+ba[ext=m4a]/"
-                "bv[height<=720]+ba/b[height<=720]/best"
+                "bv[ext=mp4][vcodec^=avc1][height<=1080]+ba[ext=m4a]/"
+                "bv[ext=mp4][height<=1080]+ba[ext=m4a]/"
+                "bv[height<=1080]+ba/b[height<=1080]/best"
             ),
         }
         apply_cookies(options)

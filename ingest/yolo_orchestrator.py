@@ -185,12 +185,15 @@ class YoloAnalysisOrchestrator:
         duration = (frames - 1) / fps if frames > 1 and fps > 0 else fallback_duration
         return frames, fps, max(0.0, duration)
 
-    def _job_homography(self, video_path: Path, job_dir: Path) -> Path | None:
-        """Use an explicit calibration, or derive one from steady AprilTags in this clip."""
+    def _job_homography(self, video_path: Path | None, job_dir: Path) -> Path | None:
+        """Use an explicit calibration, or derive one from steady AprilTags in a local clip."""
 
         if self.homography_path and self.homography_path.is_file():
             return self.homography_path
-        if not self.auto_homography:
+        if not self.auto_homography or video_path is None:
+            # A stream has no seekable local frames for the legacy calibration helper. An
+            # explicit FRC_HOMOGRAPHY_CONFIG still works, while the detector continues without
+            # fabricated field coordinates when no trusted mapping is available.
             return None
 
         from .collection.apriltag_layout import load_layout
@@ -246,9 +249,10 @@ class YoloAnalysisOrchestrator:
                 "YOLO backend is not configured. Set YOLO_PYTHON to the dedicated vision "
                 "Python and YOLO_MODEL_PATH to a trained .pt file."
             )
-        video_path = Path(str(job_data.get("local_path", ""))).resolve()
-        if not video_path.is_file():
-            raise RuntimeError(f"Downloaded video is missing: {video_path}")
+        stream_url = str(job_data.get("stream_url") or "").strip()
+        video_path = None if stream_url else Path(str(job_data.get("local_path", ""))).resolve()
+        if not stream_url and (video_path is None or not video_path.is_file()):
+            raise RuntimeError(f"Stream URL is missing and local video is unavailable: {video_path}")
         if self.tracker not in {"bytetrack", "botsort"}:
             raise RuntimeError(f"Unsupported YOLO tracker: {self.tracker}")
         if not 0.0 <= self.confidence <= 1.0:
@@ -285,8 +289,8 @@ class YoloAnalysisOrchestrator:
             "training.track_yolo",
             "--model",
             str(self.model_path),
-            "--video",
-            str(video_path),
+            *( ["--stream-url", stream_url] if stream_url else ["--video", str(video_path)] ),
+            *( ["--auto-homography"] if stream_url and self.auto_homography and not job_homography else [] ),
             "--output",
             str(tracks_path),
             "--tracker",
@@ -366,6 +370,14 @@ class YoloAnalysisOrchestrator:
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Could not read YOLO tracks: {exc}") from exc
 
+        # Stream calibration is performed inside the dedicated vision process so it can share
+        # the yt-dlp/PyAV environment. Surface that generated calibration in the run result just
+        # like a local-file calibration instead of reporting a false homography failure.
+        if job_homography is None:
+            generated_homography = job_dir / "homography.json"
+            if generated_homography.is_file():
+                job_homography = generated_homography
+
         try:
             season = json.loads(Path(season_path).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -373,9 +385,22 @@ class YoloAnalysisOrchestrator:
 
         fallback_fps = float(job_data.get("fps") or 30.0)
         fallback_duration = float(job_data.get("duration") or 0.0)
-        frames_total, fps, duration = self._probe_video(
-            video_path, fallback_fps, fallback_duration
-        )
+        if video_path is not None:
+            frames_total, fps, duration = self._probe_video(
+                video_path, fallback_fps, fallback_duration
+            )
+        else:
+            fps = fallback_fps
+            duration = fallback_duration
+            frames_total = max(0, int(round(duration * fps))) if duration > 0 else 0
+            if duration <= 0 and track_rows:
+                last_timestamp = max(
+                    float(box.get("t", 0.0))
+                    for track in track_rows
+                    for box in track.get("boxes", [])
+                )
+                duration = max(0.0, last_timestamp + 1.0 / fps)
+                frames_total = max(1, int(round(duration * fps)))
         events = match_events(job_data, duration, season)
         _write_jsonl(events_path, events)
         mapping_source = None
@@ -397,6 +422,7 @@ class YoloAnalysisOrchestrator:
             if (job_dir / "homography.diagnostics.json").is_file() else None,
             "frames_total": frames_total,
             "frames_analyzed": frames_total,
+            "duration": duration,
             "frames_skipped_shot_change": 0,
             "tracks_emitted": len(track_rows),
             "events_emitted": len(events),

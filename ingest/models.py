@@ -31,8 +31,8 @@ class Job(Base):
     capture_mode = Column(String, nullable=False, default="recorded", server_default="recorded")
     local_path = Column(String, nullable=True)
     start_offset = Column(Float, default=0.0, nullable=False)
-    # Unknowable until the download reports them; required from status 'downloaded' onward.
-    # See contracts/job.schema.json, which encodes that conditionally.
+    # Stream jobs never materialize a media file, so this remains NULL. Media dimensions are
+    # still written to the job before analysis completes.
     duration = Column(Float, nullable=True)
     fps = Column(Float, nullable=True)
     width = Column(Integer, nullable=True)

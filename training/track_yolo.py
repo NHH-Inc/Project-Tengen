@@ -132,8 +132,11 @@ def eligible_track_ids(
     return {
         track_id
         for track_id, boxes in tracks.items()
-        if track_id not in suppressed
-        and (colours.get(track_id) in {"red", "blue"} or track_has_motion(boxes))
+        # A confirmed alliance colour is the signal that this is a real robot.  Do not remove
+        # a robot merely because it waits in place; only stationary, colourless false positives
+        # (the laptop/field-hardware case) are suppressed.
+        if colours.get(track_id) in {"red", "blue"}
+        or (track_id not in suppressed and track_has_motion(boxes))
     }
 
 
@@ -445,7 +448,12 @@ def bumper_color(image, raw_box: list[float]) -> str | None:
 
 
 def resolved_alliances(votes: dict[int, dict[str, int]]) -> dict[int, str | None]:
-    """Keep a bumper color only when repeated evidence gives it a clear majority."""
+    """Keep a bumper color when repeated evidence gives it a strict majority.
+
+    A 60% cutoff was too conservative for broadcast compression and occlusion: robots that were
+    visibly coloured in individual frames could end up colourless after a whole-match vote and
+    then be removed by the stationary false-positive filter. Ties remain unknown.
+    """
     resolved: dict[int, str | None] = {}
     for track_id, counts in votes.items():
         total = counts.get("red", 0) + counts.get("blue", 0)
@@ -453,7 +461,8 @@ def resolved_alliances(votes: dict[int, dict[str, int]]) -> dict[int, str | None
             resolved[track_id] = None
             continue
         colour, count = max(counts.items(), key=lambda item: item[1])
-        resolved[track_id] = colour if count / total >= 0.60 else None
+        other = total - count
+        resolved[track_id] = colour if count > other else None
     return resolved
 
 
@@ -590,7 +599,7 @@ def build_cropped_video(source: Path, destination: Path, crop: tuple[float, floa
         raise RuntimeError(f"Cropped model input contains no frames: {destination}")
 
 
-STREAM_SELECTOR = "bv[height<=720][ext=mp4][vcodec^=avc1]/bv[height<=720][ext=mp4]/bv[height<=720]"
+STREAM_SELECTOR = "bv[height<=1080][ext=mp4][vcodec^=avc1]/bv[height<=1080][ext=mp4]/bv[height<=1080]"
 
 
 def stream_source_fps(url: str) -> float:
@@ -608,8 +617,8 @@ def stream_source_fps(url: str) -> float:
     return float(info.get("fps") or 30.0)
 
 
-def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
-    """Yield cropped BGR frames from yt-dlp/FFmpeg pipes without saving the source video."""
+def stream_source_frames(url: str):
+    """Yield full BGR frames from a yt-dlp/FFmpeg pipe without saving the source video."""
     try:
         import av
         import yt_dlp
@@ -648,10 +657,7 @@ def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
     try:
         with av.open(ffmpeg_process.stdout, mode="r", format="matroska") as container:
             for frame in container.decode(video=0):
-                image = frame.to_ndarray(format="bgr24")
-                height, width = image.shape[:2]
-                x0, y0, x1, y1 = crop_bounds(width, height, crop)
-                yield image[y0:y1, x0:x1]
+                yield frame.to_ndarray(format="bgr24")
     finally:
         if ffmpeg_process.poll() is None:
             ffmpeg_process.terminate()
@@ -665,6 +671,109 @@ def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
             raise RuntimeError(f"ffmpeg stream failed: {ffmpeg_stderr.strip()[-1000:]}")
         if yt_process.returncode not in (0, -15, 15) and yt_stderr.strip():
             raise RuntimeError(f"yt-dlp stream failed: {yt_stderr.strip()[-1000:]}")
+
+
+def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
+    """Yield cropped BGR frames from yt-dlp/FFmpeg pipes without saving the source video."""
+
+    for image in stream_source_frames(url):
+        height, width = image.shape[:2]
+        x0, y0, x1, y1 = crop_bounds(width, height, crop)
+        yield image[y0:y1, x0:x1]
+
+
+def stream_homography(
+    url: str,
+    layout_path: Path,
+    *,
+    hfov_deg: float = 70.0,
+    samples: int = 12,
+    max_frames: int = 900,
+    region: tuple[float, float] = (0.0, 0.68),
+) -> dict[str, object] | None:
+    """Fit a carpet mapping from AprilTags while keeping the source stream in memory only."""
+
+    from ingest.collection.apriltag_layout import load_layout
+    from ingest.collection.calibrate import UPSCALE, TagSighting, build_detector, steady_tags
+    from ingest.collection import homography as homography_module
+    import cv2
+
+    layout = load_layout(layout_path)
+    target_indices = {
+        int(round(max_frames * (0.08 + 0.84 * i / max(1, samples - 1))))
+        for i in range(samples)
+    }
+    detector = build_detector()
+    sightings: dict[int, TagSighting] = {}
+    frames_read = 0
+    width = height = 0
+    for index, frame in enumerate(stream_source_frames(url)):
+        if index > max(target_indices):
+            break
+        if index not in target_indices:
+            continue
+        frames_read += 1
+        height, width = frame.shape[:2]
+        region_top = max(0, min(height - 1, int(round(region[0] * height))))
+        region_bottom = max(region_top + 1, min(height, int(round(region[1] * height))))
+        grey = cv2.cvtColor(frame[region_top:region_bottom], cv2.COLOR_BGR2GRAY)
+        image = cv2.resize(grey, None, fx=UPSCALE, fy=UPSCALE,
+                           interpolation=cv2.INTER_CUBIC)
+        corners, ids, _ = detector.detectMarkers(image)
+        for corner, tag_id in zip(corners, (ids.flatten() if ids is not None else [])):
+            centre = corner.reshape(4, 2).mean(axis=0) / UPSCALE
+            centre[1] += region_top
+            seen = sightings.setdefault(int(tag_id), TagSighting(int(tag_id)))
+            seen.xs.append(float(centre[0]))
+            seen.ys.append(float(centre[1]))
+
+    observed, _notes = steady_tags(sightings)
+    used_ids = sorted(tag_id for tag_id in observed if tag_id in layout.tags)
+    image_points = [observed[tag_id] for tag_id in used_ids]
+    field_points_3d = [
+        (layout.tags[tag_id].x_ft, layout.tags[tag_id].y_ft, layout.tags[tag_id].z_ft)
+        for tag_id in used_ids
+    ]
+    if width <= 0 or height <= 0 or len(image_points) < 4:
+        return None
+
+    low = max(25.0, float(hfov_deg) - 30.0)
+    high = min(120.0, float(hfov_deg) + 30.0)
+    candidates = []
+    for candidate in [float(hfov_deg), *(low + 2.0 * i for i in range(int((high - low) / 2.0) + 1))]:
+        attempt = homography_module.solve_camera_pose(
+            image_points, field_points_3d, width, height, candidate,
+            layout.length_ft, layout.width_ft,
+        )
+        if attempt is not None:
+            candidates.append(attempt)
+    if not candidates:
+        return None
+    mapper, pose = min(candidates, key=lambda item: item[1]["reprojection_px"])
+    best_hfov = float(pose["hfov_deg"])
+    refinements = []
+    for offset in range(-8, 9):
+        attempt = homography_module.solve_camera_pose(
+            image_points, field_points_3d, width, height, best_hfov + offset * 0.25,
+            layout.length_ft, layout.width_ft,
+        )
+        if attempt is not None:
+            refinements.append(attempt)
+    if refinements:
+        mapper, pose = min(refinements, key=lambda item: item[1]["reprojection_px"])
+    return {
+        "mapping_source": "carpet_pose",
+        "field_length_ft": layout.length_ft,
+        "field_width_ft": layout.width_ft,
+        "plane_height_ft": 0.0,
+        "point_count": len(image_points),
+        "has_redundancy": len(image_points) >= 7,
+        "trustworthy": bool(mapper.trustworthy),
+        "tags_used": used_ids,
+        "frames_sampled": frames_read,
+        "matrix": mapper.matrix,
+        "pose": pose,
+    }
 
 
 def colored_detections(result, stable_ids=None, visible_track_ids: set[int] | None = None):
@@ -774,6 +883,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True)
     parser.add_argument("--homography", help="calibration JSON for carpet positions and speed")
+    parser.add_argument(
+        "--auto-homography",
+        action="store_true",
+        help="fit a carpet mapping from AprilTags in the stream without writing media to disk",
+    )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", help="local video file")
     source.add_argument("--stream-url", help="YouTube URL; media is consumed as a pipe")
@@ -852,16 +966,38 @@ def main() -> int:
     if args.reid_max_distance <= 0:
         raise SystemExit("--reid-max-distance must be greater than zero")
     output.parent.mkdir(parents=True, exist_ok=True)
+    homography_path = args.homography
+    if args.stream_url and args.auto_homography and not homography_path:
+        diagnostics_path = output.parent / "homography.diagnostics.json"
+        try:
+            from ingest.collection.apriltag_layout import load_layout
+
+            layout_path = Path(__file__).resolve().parent.parent / "contracts" / "fields" / "2026-apriltags.json"
+            calibration = stream_homography(args.stream_url, layout_path)
+            diagnostics_path.write_text(
+                json.dumps(calibration or {"solution": None}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            if calibration and calibration.get("trustworthy") and calibration.get("matrix"):
+                homography_path = str(output.parent / "homography.json")
+                Path(homography_path).write_text(
+                    json.dumps(calibration, indent=2) + "\n", encoding="utf-8"
+                )
+        except Exception as exc:
+            diagnostics_path.write_text(
+                json.dumps({"error": str(exc)}, indent=2) + "\n", encoding="utf-8"
+            )
+
     mapper = None
     position_source = None
-    if args.homography:
+    if homography_path:
         try:
             from ingest.collection.homography import load_calibration
-            mapper = load_calibration(args.homography)
+            mapper = load_calibration(homography_path)
         except (ImportError, OSError, ValueError) as exc:
-            raise SystemExit(f"Could not load homography {args.homography}: {exc}") from exc
+            raise SystemExit(f"Could not load homography {homography_path}: {exc}") from exc
         if mapper is None:
-            raise SystemExit(f"Homography is missing, malformed, or untrustworthy: {args.homography}")
+            raise SystemExit(f"Homography is missing, malformed, or untrustworthy: {homography_path}")
         position_source = mapper.source
 
     if args.stream_url:

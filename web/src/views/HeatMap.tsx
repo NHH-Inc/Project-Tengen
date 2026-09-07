@@ -45,7 +45,7 @@ export function HeatMap({
       if (track.positionSource) sources.add(track.positionSource);
       let lastIncluded = -Infinity;
       for (const box of track.boxes) {
-        if (suppressedAt != null && box.t >= suppressedAt) continue;
+        if (track.alliance == null && suppressedAt != null && box.t >= suppressedAt) continue;
         sampleCount++;
         if (box.fieldX == null || box.fieldY == null) {
           missing++;

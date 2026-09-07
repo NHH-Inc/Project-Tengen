@@ -221,6 +221,13 @@ def _media_window(url: str, info: dict) -> tuple[float, float, bool]:
     return start, duration, full_video
 
 
+def _analysis_stream_url(video_id: str, start_offset: float) -> str:
+    """Build the seek point used by the lazy yt-dlp analysis pipe."""
+
+    suffix = f"&t={start_offset:g}s" if start_offset > 0 else ""
+    return f"https://www.youtube.com/watch?v={video_id}{suffix}"
+
+
 # ---------------------------------------------------------------- jobs
 
 
@@ -376,55 +383,22 @@ def process_job(job_id: str, url: str, live_capture: bool = False):
     try:
         set_status("downloading", stage="downloading", progress=0.0)
 
-        last_download_progress = -1.0
-
-        def on_download_progress(progress, stage):
-            nonlocal last_download_progress
-            # yt-dlp can emit dozens of hooks per second. Persist useful increments rather
-            # than turning SQLite/Postgres into the bottleneck.
-            should_commit = (
-                progress is None
-                or progress >= 1.0
-                or progress - last_download_progress >= 0.02
-                or job.stage != stage
-            )
-            if not should_commit:
-                return
-            job.progress = progress
-            # Contract A intentionally has a closed stage enum. The additive capture_mode field
-            # tells the UI this is live capture while the valid lifecycle stage remains download.
-            job.stage = "downloading"
-            if progress is not None:
-                last_download_progress = progress
-            db.commit()
-
+        info = video_downloader.get_video_info(url)
         if live_capture:
-            local_path = video_downloader.capture_live(
-                video_id=job.video_id, job_id=job_id, on_progress=on_download_progress,
-            )
-            media = video_downloader.probe_media(local_path)
-            start_offset = 0.0
-            duration, fps = media["duration"], media["fps"]
-            width, height = media["width"], media["height"]
+            # Live streams have no finite duration at queue time. The stream analyzer publishes
+            # the final duration when the broadcast ends.
+            start_offset, duration = 0.0, None
         else:
-            info = video_downloader.get_video_info(url)
-            start_offset, duration, full_video = _media_window(url, info)
-            local_path = video_downloader.download_segment(
-                video_id=job.video_id,
-                start_time=start_offset,
-                duration=duration,
-                job_id=job_id,
-                full_video=full_video,
-                on_progress=on_download_progress,
-            )
-            fps = info.get("fps") or 30.0
-            width, height = info.get("width") or 1920, info.get("height") or 1080
+            start_offset, duration, _full_video = _media_window(url, info)
+        fps = info.get("fps") or 30.0
+        width, height = info.get("width") or 1920, info.get("height") or 1080
+        stream_url = _analysis_stream_url(job.video_id, start_offset)
 
-        # Write the media metadata back to the JOB, not just into the dict handed to the
-        # binary. Component 3 sizes the player from these and cannot open one without them.
+        # Only metadata is persisted. Both the model and browser consume the yt-dlp stream;
+        # no downloaded segment is created or attached to the job.
         set_status(
             "downloaded",
-            local_path=local_path,
+            local_path=None,
             start_offset=start_offset,
             duration=duration,
             fps=fps,
@@ -440,6 +414,7 @@ def process_job(job_id: str, url: str, live_capture: bool = False):
         job_data.pop("progress", None)
         job_data.pop("stage", None)
         job_data.pop("created_at", None)
+        job_data["stream_url"] = stream_url
 
         def on_progress(progress, stage):
             # Contract D streams this so a progress bar can exist; component 3 draws it, so
@@ -452,7 +427,21 @@ def process_job(job_id: str, url: str, live_capture: bool = False):
             job_data, season_path=str(_season_path(job.season)), on_progress=on_progress
         )
         import_results(db, job, results)
-        set_status("complete", progress=1.0, stage=None, error=None)
+        result_metadata = results.get("result") or {}
+        final_duration = result_metadata.get("duration")
+        if duration is None and isinstance(final_duration, (int, float)) and final_duration > 0:
+            duration = float(final_duration)
+        set_status(
+            "complete",
+            local_path=None,
+            duration=duration,
+            fps=result_metadata.get("box_sample_rate") or fps,
+            width=width,
+            height=height,
+            progress=1.0,
+            stage=None,
+            error=None,
+        )
 
     except Exception as exc:
         # Doc 2: "treat a failed download as an expected condition, not a crash." Keep the

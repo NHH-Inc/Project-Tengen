@@ -171,7 +171,7 @@ export function visibleBoxes(
   const out: Array<{ track: Track; box: Box }> = [];
   for (const track of tracks) {
     const suppressedAt = stationarySuppressionAt(track);
-    if (suppressedAt != null && t >= suppressedAt) continue;
+    if (track.alliance == null && suppressedAt != null && t >= suppressedAt) continue;
     const box = boxAt(track, t, holdSeconds);
     if (box) out.push({ track, box });
   }

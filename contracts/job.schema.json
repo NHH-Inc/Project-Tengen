@@ -76,11 +76,10 @@
   },
   "allOf": [
     {
-      "$comment": "Doc 0: media metadata must be non-null once status is downloaded/analyzing/complete.",
+      "$comment": "Doc 0: stream media metadata must be non-null once status is downloaded/analyzing/complete. local_path stays null for yt-dlp stream jobs.",
       "if": { "properties": { "status": { "enum": ["downloaded", "analyzing", "complete"] } }, "required": ["status"] },
       "then": {
         "properties": {
-          "local_path": { "type": "string" },
           "duration": { "type": "number" },
           "fps": { "type": "number" },
           "width": { "type": "integer" },

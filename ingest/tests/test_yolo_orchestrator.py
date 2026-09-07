@@ -1,4 +1,5 @@
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ from training.track_yolo import (
     crop_box_to_source,
     eligible_track_ids,
     image_window_has_motion,
+    resolved_alliances,
     track_has_motion,
 )
 
@@ -51,6 +53,62 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertEqual(adapter.model_version, "model+bytetrack")
             self.assertEqual(health["reid_memory_seconds"], 5.0)
             self.assertTrue(health["auto_homography"])
+
+    def test_stream_job_invokes_yolo_without_a_local_video(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            python = root / "python.exe"
+            model = root / "model.pt"
+            output_base = root / "jobs"
+            python.write_bytes(b"")
+            model.write_bytes(b"")
+            command_seen = []
+
+            class FakeProcess:
+                returncode = 0
+
+                def __init__(self, command, **_kwargs):
+                    command_seen.append(command)
+                    output = Path(command[command.index("--output") + 1])
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_text(json.dumps({
+                        "track_id": 1,
+                        "robot_name": "robot1",
+                        "alliance": "blue",
+                        "boxes": [{"t": 0.0, "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.1}],
+                        "gaps": [],
+                    }) + "\n", encoding="utf-8")
+                    self.stdout = io.StringIO('{"stage":"tracking"}\n')
+                    self.stderr = io.StringIO("")
+
+                def wait(self):
+                    return 0
+
+            adapter = YoloAnalysisOrchestrator(
+                repo_root=Path.cwd(),
+                python_path=python,
+                model_path=model,
+                output_base_dir=output_base,
+                auto_homography=False,
+            )
+            with patch("ingest.yolo_orchestrator.subprocess.Popen", FakeProcess):
+                result = adapter.run_job(
+                    {
+                        "job_id": "11111111-1111-4111-8111-111111111111",
+                        "video_id": "abcdefghijk",
+                        "match_id": None,
+                        "season": 2026,
+                        "duration": 2.0,
+                        "fps": 30.0,
+                        "stream_url": "https://www.youtube.com/watch?v=abcdefghijk",
+                    },
+                    season_path=str(Path.cwd() / "contracts" / "seasons" / "2026.json"),
+                )
+
+            command = command_seen[0]
+            self.assertIn("--stream-url", command)
+            self.assertNotIn("--video", command)
+            self.assertEqual(result["result"]["duration"], 2.0)
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
         box = crop_box_to_source((0.0, 0.0, 1.0, 1.0), (0.02, 0.035, 0.98, 0.66), 960, 625)
@@ -159,14 +217,28 @@ class StationaryNeutralFilterTests(unittest.TestCase):
         boxes = [{"t": i / 10, "x": 0.96, "y": 0.30, "w": 0.04, "h": 0.14}
                  for i in range(80)]
         self.assertEqual(
-            eligible_track_ids({1: boxes}, {1: "red"}, suppressed_track_ids={1}),
+            eligible_track_ids({1: boxes}, {1: None}, suppressed_track_ids={1}),
             set(),
         )
         self.assertEqual(
             contract_track_records(
-                {1: boxes}, 10.0, {1: "red"}, visible_track_ids=set()
+                {1: boxes}, 10.0, {1: None}, visible_track_ids=set()
             ),
             [],
+        )
+
+    def test_stationary_coloured_robot_survives_suppression_timer(self):
+        boxes = [{"t": i / 10, "x": 0.20, "y": 0.30, "w": 0.10, "h": 0.14}
+                 for i in range(80)]
+        self.assertEqual(
+            eligible_track_ids({1: boxes}, {1: "blue"}, suppressed_track_ids={1}),
+            {1},
+        )
+
+    def test_repeated_strict_colour_majority_keeps_robot_identified(self):
+        self.assertEqual(
+            resolved_alliances({1: {"red": 3, "blue": 2}, 2: {"red": 2, "blue": 2}}),
+            {1: "red", 2: None},
         )
 
 
