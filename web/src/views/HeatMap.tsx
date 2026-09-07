@@ -45,6 +45,9 @@ export function HeatMap({
       if (track.positionSource) sources.add(track.positionSource);
       let lastIncluded = -Infinity;
       for (const box of track.boxes) {
+        // The heat map is a playback view, not a full-match report: future samples must not
+        // reveal where a robot will travel later in the match.
+        if (box.t > currentTime) continue;
         if (track.alliance == null && suppressedAt != null && box.t >= suppressedAt) continue;
         sampleCount++;
         if (box.fieldX == null || box.fieldY == null) {
@@ -78,7 +81,7 @@ export function HeatMap({
       positionedTracks: positioned.size,
       positionSources: [...sources].sort(),
     };
-  }, [tracks, selectedTeam, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
+  }, [tracks, selectedTeam, currentTime, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
 
   const liveRobots = useMemo(
     () => visibleBoxes(tracks, currentTime, 0.25).filter(({ track, box }) =>
@@ -209,7 +212,7 @@ export function HeatMap({
       <div className="panel-head">
         <h2>Field heat map</h2>
         <span className="muted">
-          {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · dwell density + paths
+          {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · through {formatTime(currentTime)}
         </span>
       </div>
       <canvas ref={canvasRef} className="heatmap" />
@@ -236,6 +239,11 @@ export function HeatMap({
       </p>
     </div>
   );
+}
+
+function formatTime(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
 }
 
 /** Dark blue -> cyan -> amber -> white. Perceptually rising, readable on a dark field. */

@@ -103,6 +103,8 @@ class YoloAnalysisOrchestrator:
         reid_template_gallery_size: int = 5,
         reid_template_confirmation_frames: int = 3,
         reid_template_min_confidence: float = 0.50,
+        reid_alliance_lock_seconds: float = 5.0,
+        reid_alliance_lock_margin_seconds: float = 2.0,
         auto_homography: bool = True,
         homography_hfov_deg: float = 70.0,
     ):
@@ -125,6 +127,8 @@ class YoloAnalysisOrchestrator:
         self.reid_template_gallery_size = reid_template_gallery_size
         self.reid_template_confirmation_frames = reid_template_confirmation_frames
         self.reid_template_min_confidence = reid_template_min_confidence
+        self.reid_alliance_lock_seconds = reid_alliance_lock_seconds
+        self.reid_alliance_lock_margin_seconds = reid_alliance_lock_margin_seconds
         self.auto_homography = auto_homography
         self.homography_hfov_deg = homography_hfov_deg
         self.homography_path = self._resolve_optional(
@@ -166,6 +170,8 @@ class YoloAnalysisOrchestrator:
             "reid_template_gallery_size": self.reid_template_gallery_size,
             "reid_template_confirmation_frames": self.reid_template_confirmation_frames,
             "reid_template_min_confidence": self.reid_template_min_confidence,
+            "reid_alliance_lock_seconds": self.reid_alliance_lock_seconds,
+            "reid_alliance_lock_margin_seconds": self.reid_alliance_lock_margin_seconds,
             "homography": str(self.homography_path) if self.homography_path else None,
             "homography_available": bool(self.homography_path and self.homography_path.is_file()),
             "auto_homography": self.auto_homography,
@@ -295,6 +301,10 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES must be greater than zero")
         if not 0.0 <= self.reid_template_min_confidence <= 1.0:
             raise RuntimeError("FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE must be between zero and one")
+        if self.reid_alliance_lock_seconds <= 0:
+            raise RuntimeError("FRC_YOLO_REID_ALLIANCE_LOCK_SECONDS must be greater than zero")
+        if self.reid_alliance_lock_margin_seconds < 0:
+            raise RuntimeError("FRC_YOLO_REID_ALLIANCE_LOCK_MARGIN_SECONDS cannot be negative")
 
         job_id = str(job_data["job_id"])
         job_dir = self.output_base_dir / job_id
@@ -350,6 +360,10 @@ class YoloAnalysisOrchestrator:
             str(self.reid_template_confirmation_frames),
             "--reid-template-min-confidence",
             str(self.reid_template_min_confidence),
+            "--reid-alliance-lock-seconds",
+            str(self.reid_alliance_lock_seconds),
+            "--reid-alliance-lock-margin-seconds",
+            str(self.reid_alliance_lock_margin_seconds),
             "--raw-output",
             str(raw_tracks_path),
             *(["--homography", str(job_homography)] if job_homography else []),

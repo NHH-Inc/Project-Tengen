@@ -41,6 +41,9 @@ DEFAULT_REID_EDGE_THRESHOLD = 0.10
 DEFAULT_REID_TEMPLATE_GALLERY_SIZE = 5
 DEFAULT_REID_TEMPLATE_CONFIRMATION_FRAMES = 3
 DEFAULT_REID_TEMPLATE_MIN_CONFIDENCE = 0.50
+DEFAULT_REID_ALLIANCE_LOCK_SECONDS = 5.0
+DEFAULT_REID_ALLIANCE_LOCK_MARGIN_SECONDS = 2.0
+DEFAULT_REID_ALLIANCE_EVIDENCE_MAX_GAP_SECONDS = 0.25
 MAX_ROBOTS = 6
 
 
@@ -266,6 +269,11 @@ class ReIDConfig:
     raw_continuity_bonus: float = 0.06
     velocity_update_weight: float = 0.45
     template_distinct_similarity: float = 0.995
+    alliance_lock_seconds: float = DEFAULT_REID_ALLIANCE_LOCK_SECONDS
+    alliance_lock_margin_seconds: float = DEFAULT_REID_ALLIANCE_LOCK_MARGIN_SECONDS
+    alliance_evidence_max_gap_seconds: float = DEFAULT_REID_ALLIANCE_EVIDENCE_MAX_GAP_SECONDS
+    alliance_evidence_min_detection_confidence: float = 0.50
+    alliance_evidence_min_assignment_score: float = 0.70
 
 
 @dataclass(frozen=True)
@@ -294,6 +302,9 @@ class _IdentityState:
     pending_raw_id: int | None = None
     pending_template: list[float] | None = None
     pending_count: int = 0
+    alliance_evidence_seconds: dict[str, float] = field(
+        default_factory=lambda: {"red": 0.0, "blue": 0.0}
+    )
 
 
 class AppearanceTrackMemory:
@@ -340,6 +351,36 @@ class AppearanceTrackMemory:
         if detection.descriptor is None or not state.templates:
             return None
         return max(appearance_similarity(detection.descriptor, template) for template in state.templates)
+
+    def _record_alliance_evidence(
+        self,
+        state: _IdentityState,
+        timestamp: float,
+        detection: ReIDDetection,
+        assignment_score: float,
+    ) -> None:
+        """Accumulate trusted observation time, then permanently lock a clear alliance."""
+
+        if state.alliance is not None or detection.alliance not in {"red", "blue"}:
+            return
+        if detection.confidence < self.config.alliance_evidence_min_detection_confidence:
+            return
+        if assignment_score < self.config.alliance_evidence_min_assignment_score:
+            return
+        observed_seconds = min(
+            max(0.0, timestamp - state.last_seen),
+            self.config.alliance_evidence_max_gap_seconds,
+        )
+        state.alliance_evidence_seconds[detection.alliance] += observed_seconds
+        ordered = sorted(
+            state.alliance_evidence_seconds.items(), key=lambda item: item[1], reverse=True
+        )
+        (best_alliance, best_seconds), (_, second_seconds) = ordered
+        if (
+            best_seconds >= self.config.alliance_lock_seconds
+            and best_seconds - second_seconds >= self.config.alliance_lock_margin_seconds
+        ):
+            state.alliance = best_alliance
 
     def _pair_score(
         self,
@@ -463,7 +504,9 @@ class AppearanceTrackMemory:
             self.states[stable_id] = _IdentityState(
                 last_seen=timestamp,
                 center=detection.center,
-                alliance=detection.alliance,
+                # One bumper-colour read is provisional; sustained evidence below performs the
+                # irreversible alliance lock.
+                alliance=None,
                 templates=[detection.descriptor] if detection.descriptor is not None else [],
                 last_raw_id=detection.raw_track_id,
                 last_edge=detection.edge or self._edge(detection.center),
@@ -526,14 +569,13 @@ class AppearanceTrackMemory:
             state.pending_template = None
             state.pending_count = 0
 
+        self._record_alliance_evidence(state, timestamp, detection, assignment_score)
         state.last_seen = timestamp
         state.center = detection.center
         state.field_center = detection.field_center
         state.camera_offset = self.camera_offset
         state.last_edge = detection.edge or self._edge(detection.center)
         state.last_raw_id = detection.raw_track_id
-        if state.alliance is None and detection.alliance is not None:
-            state.alliance = detection.alliance
 
     def resolve_frame(
         self,
@@ -1273,6 +1315,18 @@ def parse_args() -> argparse.Namespace:
         help="minimum detector confidence for adding a confirmed appearance exemplar",
     )
     parser.add_argument(
+        "--reid-alliance-lock-seconds",
+        type=float,
+        default=DEFAULT_REID_ALLIANCE_LOCK_SECONDS,
+        help="trusted same-alliance observation time required to lock a robot identity",
+    )
+    parser.add_argument(
+        "--reid-alliance-lock-margin-seconds",
+        type=float,
+        default=DEFAULT_REID_ALLIANCE_LOCK_MARGIN_SECONDS,
+        help="required evidence-time lead over the opposite alliance before locking",
+    )
+    parser.add_argument(
         "--raw-output",
         help="immutable raw tracker-tracklet JSONL (default: <output stem>.raw.jsonl)",
     )
@@ -1346,6 +1400,10 @@ def main() -> int:
         raise SystemExit("--reid-template-confirmation-frames must be greater than zero")
     if not 0.0 <= args.reid_template_min_confidence <= 1.0:
         raise SystemExit("--reid-template-min-confidence must be between zero and one")
+    if args.reid_alliance_lock_seconds <= 0:
+        raise SystemExit("--reid-alliance-lock-seconds must be greater than zero")
+    if args.reid_alliance_lock_margin_seconds < 0:
+        raise SystemExit("--reid-alliance-lock-margin-seconds cannot be negative")
     output.parent.mkdir(parents=True, exist_ok=True)
     homography_path = args.homography
     if args.stream_url and args.auto_homography and not homography_path:
@@ -1473,6 +1531,8 @@ def main() -> int:
         template_gallery_size=args.reid_template_gallery_size,
         template_confirmation_frames=args.reid_template_confirmation_frames,
         template_min_detection_confidence=args.reid_template_min_confidence,
+        alliance_lock_seconds=args.reid_alliance_lock_seconds,
+        alliance_lock_margin_seconds=args.reid_alliance_lock_margin_seconds,
     )
     track_memory = AppearanceTrackMemory(config=reid_config)
     raw_tracklets: dict[int, dict[str, object]] = {}

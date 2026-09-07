@@ -128,6 +128,7 @@ fails.
 | `FRC_YOLO_REID_EDGE_THRESHOLD` | `0.10` — boundary band for edge-consistent re-entry |
 | `FRC_YOLO_REID_TEMPLATE_GALLERY_SIZE` / `FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES` | `5` / `3` — protected appearance gallery settings |
 | `FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE` | `0.50` — minimum detector confidence for a new gallery exemplar |
+| `FRC_YOLO_REID_ALLIANCE_LOCK_SECONDS` / `FRC_YOLO_REID_ALLIANCE_LOCK_MARGIN_SECONDS` | `5.0` / `2.0` — trusted observation time and evidence lead required before an identity's alliance becomes permanent |
 | `FRC_AUTO_HOMOGRAPHY` | `1` — fit a carpet mapping from steady field AprilTags for each job |
 | `FRC_HOMOGRAPHY_CONFIG` | optional fixed camera calibration JSON; takes precedence over automatic calibration |
 | `FRC_DEFAULT_SEASON` | `2026` |

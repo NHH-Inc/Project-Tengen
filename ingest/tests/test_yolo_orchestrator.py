@@ -76,6 +76,8 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertEqual(health["tracker"], "bytetrack")
             self.assertEqual(adapter.model_version, "model+bytetrack")
             self.assertEqual(health["reid_memory_seconds"], 5.0)
+            self.assertEqual(health["reid_alliance_lock_seconds"], 5.0)
+            self.assertEqual(health["reid_alliance_lock_margin_seconds"], 2.0)
             self.assertTrue(health["auto_homography"])
 
     def test_stream_job_invokes_yolo_without_a_local_video(self):
@@ -132,6 +134,8 @@ class YoloOrchestratorTests(unittest.TestCase):
             command = command_seen[0]
             self.assertIn("--stream-url", command)
             self.assertNotIn("--video", command)
+            self.assertIn("--reid-alliance-lock-seconds", command)
+            self.assertIn("--reid-alliance-lock-margin-seconds", command)
             self.assertEqual(result["result"]["duration"], 2.0)
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
@@ -325,6 +329,50 @@ class AppearanceMemoryTests(unittest.TestCase):
             self.detection(99, [0.0, 1.0], (0.21, 0.5), "red")
         ])[0]
         self.assertNotEqual(returned, first)
+
+    def test_alliance_becomes_permanent_after_sustained_clear_evidence(self):
+        memory = self.memory(
+            alliance_lock_seconds=1.0,
+            alliance_lock_margin_seconds=0.5,
+            alliance_evidence_max_gap_seconds=0.5,
+        )
+        first = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5), "blue")
+        ])[0]
+        memory.resolve_frame(0.5, [
+            self.detection(10, [1.0, 0.0], (0.21, 0.5), "blue")
+        ])
+        memory.resolve_frame(1.0, [
+            self.detection(10, [1.0, 0.0], (0.22, 0.5), "blue")
+        ])
+        self.assertEqual(memory.states[first].alliance, "blue")
+
+        conflicting = memory.resolve_frame(1.2, [
+            self.detection(99, [1.0, 0.0], (0.23, 0.5), "red")
+        ])[0]
+        self.assertNotEqual(conflicting, first)
+        self.assertEqual(memory.states[first].alliance, "blue")
+
+    def test_one_wrong_colour_read_does_not_lock_an_identity(self):
+        memory = self.memory(
+            alliance_lock_seconds=1.0,
+            alliance_lock_margin_seconds=0.5,
+            alliance_evidence_max_gap_seconds=0.5,
+        )
+        first = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5), "blue")
+        ])[0]
+        memory.resolve_frame(0.1, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5), "red")
+        ])
+        self.assertIsNone(memory.states[first].alliance)
+        memory.resolve_frame(0.6, [
+            self.detection(10, [1.0, 0.0], (0.21, 0.5), "blue")
+        ])
+        memory.resolve_frame(1.1, [
+            self.detection(10, [1.0, 0.0], (0.22, 0.5), "blue")
+        ])
+        self.assertEqual(memory.states[first].alliance, "blue")
 
     def test_two_same_colour_robots_returning_simultaneously_use_global_assignment(self):
         memory = self.memory()
