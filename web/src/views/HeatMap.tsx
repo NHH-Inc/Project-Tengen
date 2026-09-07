@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Alliance, Track } from '../contracts';
 import { robotName, stationarySuppressionAt, visibleBoxes } from '../lib/tracks';
 import { fieldExtents, type SeasonConfig } from '../season';
+import fieldBackgroundUrl from '../assets/field-heatmap-background.png';
 
 // Contract C already carries optional field_x/field_y on every box. The YOLO runner fills them
 // from its AprilTag camera-pose calibration, so this view is dwell density and robot paths rather
@@ -111,15 +112,6 @@ export function HeatMap({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    // Alliance shading is a presentation choice and must not control the coordinate transform.
-    // This broadcast has blue on the left and red on the right.
-    ctx.fillStyle = '#171a21';
-    ctx.fillRect(0, 0, cssW, cssH);
-    ctx.fillStyle = 'rgba(76,140,240,0.10)';
-    ctx.fillRect(0, 0, cssW * 0.16, cssH);
-    ctx.fillStyle = 'rgba(224,85,95,0.10)';
-    ctx.fillRect(cssW * 0.84, 0, cssW * 0.16, cssH);
-
     // Density grid with a small gaussian splat per quarter-second observation.
     const grid = new Float32Array(GRID_X * GRID_Y);
     const radius = Math.ceil(SIGMA * 2.5);
@@ -210,17 +202,6 @@ export function HeatMap({
       ctx.fillText(robotName(track, tracks), x + 7, y + 3);
     }
 
-    // Field markings on top of the heat.
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0.5, 0.5, cssW - 1, cssH - 1);
-    ctx.beginPath();
-    ctx.moveTo(cssW / 2, 0);
-    ctx.lineTo(cssW / 2, cssH);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.08, 0, Math.PI * 2);
-    ctx.stroke();
   }, [points, liveRobots, tracks, FIELD.lengthFt, FIELD.widthFt, FIELD.minX, FIELD.minY]);
 
   return (
@@ -231,7 +212,17 @@ export function HeatMap({
           {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · through {formatTime(currentTime)}
         </span>
       </div>
-      <canvas ref={canvasRef} className="heatmap" />
+      <canvas
+        ref={canvasRef}
+        className="heatmap"
+        style={{
+          backgroundColor: '#101827',
+          backgroundImage: `url(${fieldBackgroundUrl})`,
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: '100% 100%',
+        }}
+      />
       <div className="heat-axis">
         <span className="muted">x = {MIRROR_FIELD_X_FOR_BROADCAST ? season.fieldLengthFt.toFixed(1) : '0'} ft</span>
         <span className="muted">WPILib AprilTag field coordinates · +y is drawn lower</span>
