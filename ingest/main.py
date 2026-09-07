@@ -35,6 +35,7 @@ from . import (
 )
 from .corrections import apply_corrections, apply_track_corrections
 from .serializers import (
+    cap_public_tracks,
     JOB_STATUSES,
     SCHEMA_VERSION,
     correction_to_dict,
@@ -583,6 +584,8 @@ def get_match_tracks(
         if raw
         else apply_track_corrections(rows, _corrections_for(db, match_id))
     )
+    if not raw:
+        tracks = cap_public_tracks(tracks)
     # Contract C: the sample rate is stated in result.json and served here, so component 3
     # knows how much to interpolate instead of inferring it from sample spacing.
     job = db.query(models.Job).filter(models.Job.match_id == match_id).first()
@@ -590,7 +593,11 @@ def get_match_tracks(
 
 
 @app.get("/api/jobs/{job_id}/tracks")
-def get_job_tracks(job_id: str, db: Session = Depends(get_db)):
+def get_job_tracks(
+    job_id: str,
+    raw: bool = Query(False, description="Return every preserved legacy/raw track fragment."),
+    db: Session = Depends(get_db),
+):
     """Serve a job's YOLO tracks, including the partial file while inference is running."""
     job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
     if not job:
@@ -613,9 +620,11 @@ def get_job_tracks(job_id: str, db: Session = Depends(get_db)):
 
     result = _read_result(job) or {}
     sample_rate = float(result.get("box_sample_rate") or job.fps or 0.0)
+    public_tracks = tracks if raw else cap_public_tracks(tracks)
     return {
         "box_sample_rate": sample_rate,
-        "tracks": tracks,
+        "tracks": public_tracks,
+        "suppressed_track_count": len(tracks) - len(public_tracks),
         "complete": final_path.exists(),
     }
 

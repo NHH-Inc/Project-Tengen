@@ -11,6 +11,30 @@ snake_case throughout, per doc 0. Component 3 converts to camelCase at its own b
 import datetime
 
 SCHEMA_VERSION = 3
+MAX_PUBLIC_ROBOTS = 6
+
+
+def cap_public_tracks(tracks: list[dict], limit: int = MAX_PUBLIC_ROBOTS) -> list[dict]:
+    """Return at most six strongest tracks without modifying preserved analyzer output.
+
+    Current trackers emit stable IDs 1-6. This ranking is a compatibility guard for legacy jobs
+    containing dozens of raw fragments: prefer confirmed alliance tracks and longer histories,
+    then return the selected records in deterministic track-id order. Raw API requests can bypass
+    this view when exact historical analyzer output is needed.
+    """
+
+    if len(tracks) <= limit:
+        return tracks
+    ranked = sorted(
+        tracks,
+        key=lambda track: (
+            track.get("alliance") not in {"red", "blue"},
+            -len(track.get("boxes") or []),
+            int(track.get("track_id") or 0),
+        ),
+    )
+    selected = ranked[:limit]
+    return sorted(selected, key=lambda track: int(track.get("track_id") or 0))
 
 
 def iso_z(dt: datetime.datetime | None) -> str | None:

@@ -22,10 +22,11 @@ const stationaryCache = new WeakMap<object, number | null>();
  * ids such as "track 1427".
  */
 export function robotName(track: Pick<Track, 'trackId' | 'robotName'>, tracks: Track[]): string {
-  if (track.robotName) return track.robotName;
+  const explicit = /^robot([1-6])$/.exec(track.robotName ?? '');
+  if (explicit) return explicit[0];
   const ids = [...new Set(tracks.map((candidate) => candidate.trackId))].sort((a, b) => a - b);
   const index = ids.indexOf(track.trackId);
-  return `robot${index >= 0 ? index + 1 : 1}`;
+  return index >= 0 && index < 6 ? `robot${index + 1}` : 'unassigned';
 }
 
 function median(values: number[]): number {
