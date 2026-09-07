@@ -10,9 +10,9 @@ import { fieldExtents, type SeasonConfig } from '../season';
 const GRID_X = 72;
 const GRID_Y = 36;
 const SIGMA = 1.6; // grid cells
-// AprilTag field coordinates use the opposite X direction from this broadcast view. Keep the
-// display transform in one place so the field walls and robot positions share the same orientation.
-const MIRROR_FIELD_X_FOR_BROADCAST = true;
+// The generated homography's X direction already matches the broadcast video. Y is inverted
+// below because canvas Y grows downward while the calibrated field axis points the other way.
+const MIRROR_FIELD_X_FOR_BROADCAST = false;
 
 export interface HeatMapProps {
   season: SeasonConfig;
@@ -111,16 +111,13 @@ export function HeatMap({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    // Draw alliance walls in the same left/right orientation as the broadcast video.
+    // Alliance shading is a presentation choice and must not control the coordinate transform.
+    // This broadcast has blue on the left and red on the right.
     ctx.fillStyle = '#171a21';
     ctx.fillRect(0, 0, cssW, cssH);
-    ctx.fillStyle = MIRROR_FIELD_X_FOR_BROADCAST
-      ? 'rgba(76,140,240,0.10)'
-      : 'rgba(224,85,95,0.10)';
+    ctx.fillStyle = 'rgba(76,140,240,0.10)';
     ctx.fillRect(0, 0, cssW * 0.16, cssH);
-    ctx.fillStyle = MIRROR_FIELD_X_FOR_BROADCAST
-      ? 'rgba(224,85,95,0.10)'
-      : 'rgba(76,140,240,0.10)';
+    ctx.fillStyle = 'rgba(224,85,95,0.10)';
     ctx.fillRect(cssW * 0.84, 0, cssW * 0.16, cssH);
 
     // Density grid with a small gaussian splat per quarter-second observation.
