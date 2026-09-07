@@ -35,7 +35,7 @@ from . import (
 )
 from .corrections import apply_corrections, apply_track_corrections
 from .serializers import (
-    cap_public_tracks,
+    normalize_public_track_labels,
     JOB_STATUSES,
     SCHEMA_VERSION,
     correction_to_dict,
@@ -585,7 +585,7 @@ def get_match_tracks(
         else apply_track_corrections(rows, _corrections_for(db, match_id))
     )
     if not raw:
-        tracks = cap_public_tracks(tracks)
+        tracks = normalize_public_track_labels(tracks)
     # Contract C: the sample rate is stated in result.json and served here, so component 3
     # knows how much to interpolate instead of inferring it from sample spacing.
     job = db.query(models.Job).filter(models.Job.match_id == match_id).first()
@@ -620,11 +620,11 @@ def get_job_tracks(
 
     result = _read_result(job) or {}
     sample_rate = float(result.get("box_sample_rate") or job.fps or 0.0)
-    public_tracks = tracks if raw else cap_public_tracks(tracks)
+    public_tracks = tracks if raw else normalize_public_track_labels(tracks)
     return {
         "box_sample_rate": sample_rate,
         "tracks": public_tracks,
-        "suppressed_track_count": len(tracks) - len(public_tracks),
+        "suppressed_track_count": 0,
         "complete": final_path.exists(),
     }
 

@@ -15,6 +15,7 @@ import { AnalysisPanel } from './views/Analysis';
 import { HeatMap } from './views/HeatMap';
 import { TeamStats } from './views/TeamStats';
 import { Timeline } from './views/Timeline';
+import { robotName } from './lib/tracks';
 
 type Tab = 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
 
@@ -84,6 +85,10 @@ export default function App() {
     job?.status === 'analyzing'
   );
   const overlayTracks = jobTracks.tracks.length > 0 ? jobTracks.tracks : match.tracks;
+  const overlayRobotLabels = useMemo(
+    () => new Set(overlayTracks.map((track) => robotName(track, overlayTracks))).size,
+    [overlayTracks]
+  );
   const overlaySampleRate = jobTracks.boxSampleRate > 0
     ? jobTracks.boxSampleRate
     : match.boxSampleRate;
@@ -224,7 +229,7 @@ export default function App() {
                 <span className="tabs-meta muted">
                   {match.loading
                     ? 'loading…'
-                    : `${match.events.length} events · ${overlayTracks.length} tracks · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
+                    : `${match.events.length} events · ${overlayRobotLabels} robot labels · ${overlayTracks.length} track fragments · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
                 </span>
               </nav>
             )}

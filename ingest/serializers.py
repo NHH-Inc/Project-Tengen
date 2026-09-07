@@ -14,27 +14,34 @@ SCHEMA_VERSION = 3
 MAX_PUBLIC_ROBOTS = 6
 
 
-def cap_public_tracks(tracks: list[dict], limit: int = MAX_PUBLIC_ROBOTS) -> list[dict]:
-    """Return at most six strongest tracks without modifying preserved analyzer output.
+def normalize_public_track_labels(
+    tracks: list[dict], limit: int = MAX_PUBLIC_ROBOTS
+) -> list[dict]:
+    """Keep every fragment while restricting display labels to robot1..robot6.
 
-    Current trackers emit stable IDs 1-6. This ranking is a compatibility guard for legacy jobs
-    containing dozens of raw fragments: prefer confirmed alliance tracks and longer histories,
-    then return the selected records in deterministic track-id order. Raw API requests can bypass
-    this view when exact historical analyzer output is needed.
+    New analyzer output already uses stable public identities. Legacy output can contain a raw
+    tracker ID (and matching ``robot_name``) for every fragment. Those IDs remain untouched so
+    corrections and audit trails still address the original fragment; only an invalid public
+    display name is remapped deterministically into the six-label namespace.
     """
 
-    if len(tracks) <= limit:
-        return tracks
-    ranked = sorted(
-        tracks,
-        key=lambda track: (
-            track.get("alliance") not in {"red", "blue"},
-            -len(track.get("boxes") or []),
-            int(track.get("track_id") or 0),
-        ),
-    )
-    selected = ranked[:limit]
-    return sorted(selected, key=lambda track: int(track.get("track_id") or 0))
+    if limit < 1:
+        raise ValueError("public robot label limit must be positive")
+
+    track_ids = sorted({int(track.get("track_id") or 0) for track in tracks})
+    fallback_names = {
+        track_id: f"robot{index % limit + 1}" for index, track_id in enumerate(track_ids)
+    }
+    valid_names = {f"robot{index}" for index in range(1, limit + 1)}
+    normalized = []
+    for track in tracks:
+        public_track = dict(track)
+        explicit_name = str(track.get("robot_name") or "")
+        if explicit_name not in valid_names:
+            track_id = int(track.get("track_id") or 0)
+            public_track["robot_name"] = fallback_names[track_id]
+        normalized.append(public_track)
+    return normalized
 
 
 def iso_z(dt: datetime.datetime | None) -> str | None:

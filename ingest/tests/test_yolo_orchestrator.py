@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ingest.yolo_orchestrator import YoloAnalysisOrchestrator, match_events, phase_at
-from ingest.serializers import cap_public_tracks
+from ingest.serializers import normalize_public_track_labels
 from training.track_yolo import (
     AppearanceTrackMemory,
     ReIDConfig,
@@ -22,19 +22,26 @@ from training.track_yolo import (
 
 
 class YoloOrchestratorTests(unittest.TestCase):
-    def test_legacy_public_track_view_is_capped_to_six_without_mutating_raw_tracks(self):
+    def test_legacy_public_track_view_keeps_boxes_and_caps_label_namespace(self):
         raw = [
             {
                 "track_id": track_id,
+                "robot_name": f"robot{track_id}",
                 "alliance": "red" if track_id % 2 else None,
                 "boxes": [{}] * track_id,
             }
             for track_id in range(1, 10)
         ]
-        public = cap_public_tracks(raw)
-        self.assertEqual(len(public), 6)
+        public = normalize_public_track_labels(raw)
+        self.assertEqual(len(public), 9)
         self.assertEqual(len(raw), 9)
-        self.assertTrue(all(track in raw for track in public))
+        self.assertEqual(sum(len(track["boxes"]) for track in public), 45)
+        self.assertEqual(raw[6]["robot_name"], "robot7")
+        self.assertEqual(public[6]["robot_name"], "robot1")
+        self.assertEqual(public[8]["robot_name"], "robot3")
+        self.assertTrue(
+            all(track["robot_name"] in {f"robot{i}" for i in range(1, 7)} for track in public)
+        )
 
     def test_phase_boundaries_are_season_configured(self):
         season = {"auto_seconds": 15, "teleop_seconds": 135}

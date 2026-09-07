@@ -26,7 +26,7 @@ export function robotName(track: Pick<Track, 'trackId' | 'robotName'>, tracks: T
   if (explicit) return explicit[0];
   const ids = [...new Set(tracks.map((candidate) => candidate.trackId))].sort((a, b) => a - b);
   const index = ids.indexOf(track.trackId);
-  return index >= 0 && index < 6 ? `robot${index + 1}` : 'unassigned';
+  return `robot${index >= 0 ? (index % 6) + 1 : 1}`;
 }
 
 function median(values: number[]): number {
