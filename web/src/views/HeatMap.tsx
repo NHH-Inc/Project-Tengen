@@ -10,9 +10,10 @@ import { fieldExtents, type SeasonConfig } from '../season';
 const GRID_X = 72;
 const GRID_Y = 36;
 const SIGMA = 1.6; // grid cells
-// The broadcast view used by this deployment has the blue wall on screen-left. AprilTag field
-// coordinates put +x at that wall, so mirror x when drawing field positions over the video view.
-const MIRROR_FIELD_X_FOR_BROADCAST = true;
+// The generated AprilTag homography is calibrated from the broadcast frame itself. Its field X
+// already has the same left/right orientation as the video (blue on the left, red on the right),
+// so applying another mirror here would put red robots on the blue side.
+const MIRROR_FIELD_X_FOR_BROADCAST = false;
 
 export interface HeatMapProps {
   season: SeasonConfig;
