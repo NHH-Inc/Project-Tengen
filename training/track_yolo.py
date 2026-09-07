@@ -1311,6 +1311,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-size", type=int, default=960)
     parser.add_argument("--device", default="0")
     parser.add_argument(
+        "--expected-duration",
+        type=float,
+        default=0.0,
+        help="known source duration used to estimate streamed frame progress",
+    )
+    parser.add_argument(
         "--reid-memory-seconds",
         type=float,
         default=DEFAULT_REID_MEMORY_SECONDS,
@@ -1436,6 +1442,8 @@ def main() -> int:
         raise SystemExit("Install training/requirements-yolo.txt in the dedicated vision venv") from exc
     if args.snapshot_interval <= 0:
         raise SystemExit("--snapshot-interval must be greater than zero")
+    if args.expected_duration < 0:
+        raise SystemExit("--expected-duration cannot be negative")
     if args.reid_memory_seconds <= 0:
         raise SystemExit("--reid-memory-seconds must be greater than zero")
     if not 0.0 <= args.reid_appearance_threshold <= 1.0:
@@ -1499,7 +1507,11 @@ def main() -> int:
 
     if args.stream_url:
         fps = stream_source_fps(args.stream_url)
-        total_frames = 0
+        total_frames = (
+            max(1, int(round(args.expected_duration * fps)))
+            if args.expected_duration > 0 and fps > 0
+            else 0
+        )
         source_name = args.stream_url
 
         class YtFrameLoader(LoadPilAndNumpy):

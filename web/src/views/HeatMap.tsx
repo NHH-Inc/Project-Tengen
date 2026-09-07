@@ -10,6 +10,9 @@ import { fieldExtents, type SeasonConfig } from '../season';
 const GRID_X = 72;
 const GRID_Y = 36;
 const SIGMA = 1.6; // grid cells
+// The broadcast view used by this deployment has the blue wall on screen-left. AprilTag field
+// coordinates put +x at that wall, so mirror x when drawing field positions over the video view.
+const MIRROR_FIELD_X_FOR_BROADCAST = true;
 
 export interface HeatMapProps {
   season: SeasonConfig;
@@ -108,19 +111,26 @@ export function HeatMap({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    // Field. +x points at the blue alliance wall, so blue is on the right.
+    // Draw alliance walls in the same left/right orientation as the broadcast video.
     ctx.fillStyle = '#171a21';
     ctx.fillRect(0, 0, cssW, cssH);
-    ctx.fillStyle = 'rgba(224,85,95,0.10)';
+    ctx.fillStyle = MIRROR_FIELD_X_FOR_BROADCAST
+      ? 'rgba(76,140,240,0.10)'
+      : 'rgba(224,85,95,0.10)';
     ctx.fillRect(0, 0, cssW * 0.16, cssH);
-    ctx.fillStyle = 'rgba(76,140,240,0.10)';
+    ctx.fillStyle = MIRROR_FIELD_X_FOR_BROADCAST
+      ? 'rgba(224,85,95,0.10)'
+      : 'rgba(76,140,240,0.10)';
     ctx.fillRect(cssW * 0.84, 0, cssW * 0.16, cssH);
 
     // Density grid with a small gaussian splat per quarter-second observation.
     const grid = new Float32Array(GRID_X * GRID_Y);
     const radius = Math.ceil(SIGMA * 2.5);
     for (const e of points) {
-      const gx = ((e.fieldX! - FIELD.minX) / FIELD.lengthFt) * (GRID_X - 1);
+      const displayFieldX = MIRROR_FIELD_X_FOR_BROADCAST
+        ? FIELD.maxX - e.fieldX! + FIELD.minX
+        : e.fieldX!;
+      const gx = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * (GRID_X - 1);
       const gy = ((e.fieldY! - FIELD.minY) / FIELD.widthFt) * (GRID_Y - 1);
       const x0 = Math.max(0, Math.floor(gx - radius));
       const x1 = Math.min(GRID_X - 1, Math.ceil(gx + radius));
@@ -167,7 +177,10 @@ export function HeatMap({
           : 'rgba(235,240,248,0.24)';
       ctx.beginPath();
       for (let i = 0; i < path.length; i++) {
-        const x = ((path[i].fieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
+        const displayFieldX = MIRROR_FIELD_X_FOR_BROADCAST
+          ? FIELD.maxX - path[i].fieldX + FIELD.minX
+          : path[i].fieldX;
+        const x = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
         const y = ((path[i].fieldY - FIELD.minY) / FIELD.widthFt) * cssH;
         if (i === 0 || path[i].t - path[i - 1].t > 0.75) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
@@ -179,7 +192,10 @@ export function HeatMap({
     // report. It is intentionally separate from dwell density so a robot can be visible even
     // before it has accumulated enough samples to make a bright heat spot.
     for (const { track, box } of liveRobots) {
-      const x = ((box.fieldX! - FIELD.minX) / FIELD.lengthFt) * cssW;
+      const displayFieldX = MIRROR_FIELD_X_FOR_BROADCAST
+        ? FIELD.maxX - box.fieldX! + FIELD.minX
+        : box.fieldX!;
+      const x = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
       const y = ((box.fieldY! - FIELD.minY) / FIELD.widthFt) * cssH;
       const colour = track.alliance === 'red' ? '#ff6973' : track.alliance === 'blue' ? '#69a5ff' : '#f0f3f8';
       ctx.fillStyle = colour;
@@ -217,9 +233,9 @@ export function HeatMap({
       </div>
       <canvas ref={canvasRef} className="heatmap" />
       <div className="heat-axis">
-        <span className="muted">x = 0 ft</span>
+        <span className="muted">x = {MIRROR_FIELD_X_FOR_BROADCAST ? season.fieldLengthFt.toFixed(1) : '0'} ft</span>
         <span className="muted">WPILib AprilTag field coordinates · +y is drawn lower</span>
-        <span className="muted">x = {season.fieldLengthFt.toFixed(1)} ft</span>
+        <span className="muted">x = {MIRROR_FIELD_X_FOR_BROADCAST ? '0' : season.fieldLengthFt.toFixed(1)} ft</span>
       </div>
       <p className="note">
         {positionedTracks} positioned {positionedTracks === 1 ? 'track' : 'tracks'} ·{' '}

@@ -16,6 +16,7 @@ import { HeatMap } from './views/HeatMap';
 import { TeamStats } from './views/TeamStats';
 import { Timeline } from './views/Timeline';
 import { robotName } from './lib/tracks';
+import { fmtPercent } from './lib/format';
 
 type Tab = 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
 
@@ -184,7 +185,7 @@ export default function App() {
                     Ad-free yt-dlp stream ready.{' '}
                     Pipeline is {job.status}
                     {job.stage ? ` · ${job.stage}` : ''}
-                    {job.progress != null ? ` · ${Math.round(job.progress * 100)}%` : ''}.
+                    {job.progress != null ? ` · ${fmtPercent(job.progress, 1)}` : ''}.
                   </>
                 )}
               </div>

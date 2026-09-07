@@ -141,6 +141,8 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertIn("--reid-alliance-lock-margin-seconds", command)
             self.assertIn("--startup-position-seconds", command)
             self.assertIn("--startup-split-x", command)
+            self.assertIn("--expected-duration", command)
+            self.assertEqual(command[command.index("--expected-duration") + 1], "2.0")
             self.assertEqual(result["result"]["duration"], 2.0)
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):

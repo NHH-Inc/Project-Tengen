@@ -352,6 +352,12 @@ class YoloAnalysisOrchestrator:
             str(self.image_size),
             "--device",
             self.device,
+            *(
+                ["--expected-duration", str(float(job_data["duration"]))]
+                if isinstance(job_data.get("duration"), (int, float))
+                and float(job_data["duration"]) > 0
+                else []
+            ),
             "--reid-memory-seconds",
             str(self.reid_memory_seconds),
             "--reid-appearance-threshold",

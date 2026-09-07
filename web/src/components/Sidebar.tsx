@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ContractViolation, Job } from '../contracts';
-import { STATUS_LABEL, isMatchKey, parseVideoId } from '../lib/format';
+import { STATUS_LABEL, fmtPercent, isMatchKey, parseVideoId } from '../lib/format';
 
 // Doc 3: "Sidebar for pasting YouTube links, viewing queue status, and browsing extracted
 // results." A stored job can also be retried or deliberately re-run over its previous result.
@@ -212,7 +212,7 @@ function JobCard({
             {job.captureMode === 'live' && job.status === 'downloading'
               ? 'capturing live stream'
               : job.stage}
-            {job.progress != null ? ` · ${Math.round(job.progress * 100)}%` : ''}
+            {job.progress != null ? ` · ${fmtPercent(job.progress, 1)}` : ''}
           </div>
         )}
         {job.status === 'failed' && job.error && <div className="job-error">{job.error}</div>}
