@@ -1,20 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { EventType } from '../contracts';
-import type { ViewEvent } from '../lib/corrections';
-import { EVENT_LABEL } from '../lib/format';
+import type { Alliance, Track } from '../contracts';
+import { robotName, stationarySuppressionAt, visibleBoxes } from '../lib/tracks';
 import { fieldExtents, type SeasonConfig } from '../season';
 
-// Doc 3: "Field heat maps, once homography is working, showing where a robot spends time."
-//
-// Two honest limits, both surfaced in the UI rather than papered over:
-//
-//  1. This is event density, not dwell time. Field coordinates arrive on events, and Contract
-//     C's boxes are image space, not field space -- component 3 has no homography of its own
-//     and doc 0 is explicit that it must not invent one. So "where a robot scores from" is
-//     answerable today; "where a robot spends time" needs field coordinates on track samples,
-//     which is a contract change nobody has asked for yet.
-//  2. field_x/field_y are null wherever homography failed. Those events are counted and
-//     reported, never silently dropped.
+// Contract C already carries optional field_x/field_y on every box. The YOLO runner fills them
+// from its AprilTag camera-pose calibration, so this view is dwell density and robot paths rather
+// than the old event-only placeholder.
 
 const GRID_X = 72;
 const GRID_Y = 36;
@@ -22,30 +13,82 @@ const SIGMA = 1.6; // grid cells
 
 export interface HeatMapProps {
   season: SeasonConfig;
-  events: ViewEvent[];
+  tracks: Track[];
   selectedTeam: number | null;
-  eventTypes?: EventType[];
+  currentTime: number;
 }
 
 export function HeatMap({
   season,
-  events,
+  tracks,
   selectedTeam,
-  eventTypes = ['shot_made', 'shot_attempt'],
+  currentTime,
 }: HeatMapProps) {
   const FIELD = fieldExtents(season);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const { points, missing } = useMemo(() => {
-    const wanted = new Set(eventTypes);
-    const pool = events.filter(
-      (e) => wanted.has(e.eventType) && (selectedTeam == null || e.team === selectedTeam)
-    );
+  const { points, missing, sampleCount, positionedTracks, positionSources } = useMemo(() => {
+    const points: Array<{
+      fieldX: number;
+      fieldY: number;
+      trackId: number;
+      alliance: Alliance | null;
+      t: number;
+    }> = [];
+    const positioned = new Set<number>();
+    const sources = new Set<string>();
+    let missing = 0;
+    let sampleCount = 0;
+    for (const track of tracks) {
+      if (selectedTeam != null && track.team !== selectedTeam) continue;
+      const suppressedAt = stationarySuppressionAt(track);
+      if (track.positionSource) sources.add(track.positionSource);
+      let lastIncluded = -Infinity;
+      for (const box of track.boxes) {
+        if (suppressedAt != null && box.t >= suppressedAt) continue;
+        sampleCount++;
+        if (box.fieldX == null || box.fieldY == null) {
+          missing++;
+          continue;
+        }
+        if (
+          box.fieldX < FIELD.minX || box.fieldX > FIELD.maxX ||
+          box.fieldY < FIELD.minY || box.fieldY > FIELD.maxY
+        ) {
+          missing++;
+          continue;
+        }
+        positioned.add(track.trackId);
+        // Four points per second preserves dwell time while keeping a 60 fps match cheap to draw.
+        if (box.t - lastIncluded < 0.25) continue;
+        lastIncluded = box.t;
+        points.push({
+          fieldX: box.fieldX,
+          fieldY: box.fieldY,
+          trackId: track.trackId,
+          alliance: track.alliance,
+          t: box.t,
+        });
+      }
+    }
     return {
-      points: pool.filter((e) => e.fieldX != null && e.fieldY != null),
-      missing: pool.filter((e) => e.fieldX == null || e.fieldY == null).length,
+      points,
+      missing,
+      sampleCount,
+      positionedTracks: positioned.size,
+      positionSources: [...sources].sort(),
     };
-  }, [events, selectedTeam, eventTypes]);
+  }, [tracks, selectedTeam, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
+
+  const liveRobots = useMemo(
+    () => visibleBoxes(tracks, currentTime, 0.25).filter(({ track, box }) =>
+      (selectedTeam == null || track.team === selectedTeam) &&
+      box.fieldX != null && box.fieldY != null &&
+      box.fieldX >= FIELD.minX && box.fieldX <= FIELD.maxX &&
+      box.fieldY >= FIELD.minY && box.fieldY <= FIELD.maxY
+    ),
+    [tracks, currentTime, selectedTeam, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,7 +113,7 @@ export function HeatMap({
     ctx.fillStyle = 'rgba(76,140,240,0.10)';
     ctx.fillRect(cssW * 0.84, 0, cssW * 0.16, cssH);
 
-    // Density grid with a small gaussian splat per event.
+    // Density grid with a small gaussian splat per quarter-second observation.
     const grid = new Float32Array(GRID_X * GRID_Y);
     const radius = Math.ceil(SIGMA * 2.5);
     for (const e of points) {
@@ -103,6 +146,51 @@ export function HeatMap({
       }
     }
 
+    // Draw each stable robot's path over the dwell heat. Gaps naturally break because the
+    // pipeline emits no samples while the robot is unobserved.
+    const byTrack = new Map<number, typeof points>();
+    for (const point of points) {
+      const group = byTrack.get(point.trackId) ?? [];
+      group.push(point);
+      byTrack.set(point.trackId, group);
+    }
+    ctx.lineWidth = 1.4;
+    for (const path of byTrack.values()) {
+      if (path.length < 2) continue;
+      ctx.strokeStyle = path[0].alliance === 'red'
+        ? 'rgba(255,105,115,0.42)'
+        : path[0].alliance === 'blue'
+          ? 'rgba(105,165,255,0.42)'
+          : 'rgba(235,240,248,0.24)';
+      ctx.beginPath();
+      for (let i = 0; i < path.length; i++) {
+        const x = ((path[i].fieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
+        const y = ((path[i].fieldY - FIELD.minY) / FIELD.widthFt) * cssH;
+        if (i === 0 || path[i].t - path[i - 1].t > 0.75) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // A live marker makes the field view follow playback instead of looking like a static
+    // report. It is intentionally separate from dwell density so a robot can be visible even
+    // before it has accumulated enough samples to make a bright heat spot.
+    for (const { track, box } of liveRobots) {
+      const x = ((box.fieldX! - FIELD.minX) / FIELD.lengthFt) * cssW;
+      const y = ((box.fieldY! - FIELD.minY) / FIELD.widthFt) * cssH;
+      const colour = track.alliance === 'red' ? '#ff6973' : track.alliance === 'blue' ? '#69a5ff' : '#f0f3f8';
+      ctx.fillStyle = colour;
+      ctx.strokeStyle = '#0d0f14';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.font = '600 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillStyle = '#f4f6fb';
+      ctx.fillText(robotName(track, tracks), x + 7, y + 3);
+    }
+
     // Field markings on top of the heat.
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1;
@@ -114,35 +202,37 @@ export function HeatMap({
     ctx.beginPath();
     ctx.arc(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.08, 0, Math.PI * 2);
     ctx.stroke();
-  }, [points]);
+  }, [points, liveRobots, tracks, FIELD.lengthFt, FIELD.widthFt, FIELD.minX, FIELD.minY]);
 
   return (
     <div className="panel">
       <div className="panel-head">
         <h2>Field heat map</h2>
         <span className="muted">
-          {selectedTeam ? `team ${selectedTeam}` : 'all teams'} ·{' '}
-          {eventTypes.map((t) => EVENT_LABEL[t].toLowerCase()).join(' + ')}
+          {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · dwell density + paths
         </span>
       </div>
       <canvas ref={canvasRef} className="heatmap" />
       <div className="heat-axis">
-        <span className="red">← red alliance wall</span>
-        <span className="muted">field centre (0, 0) · scoring table side is +y, drawn lower</span>
-        <span className="blue">blue alliance wall →</span>
+        <span className="muted">x = 0 ft</span>
+        <span className="muted">WPILib AprilTag field coordinates · +y is drawn lower</span>
+        <span className="muted">x = {season.fieldLengthFt.toFixed(1)} ft</span>
       </div>
       <p className="note">
-        {points.length} positioned {points.length === 1 ? 'event' : 'events'}
+        {positionedTracks} positioned {positionedTracks === 1 ? 'track' : 'tracks'} ·{' '}
+        {points.length} quarter-second dwell samples
         {missing > 0 && (
           <>
             {' · '}
             <span className="warn">
-              {missing} with no field position (homography failed for that frame range)
+              {missing} of {sampleCount} raw box samples have no valid field position
             </span>
           </>
         )}
-        . Density of scoring events, not dwell time — field coordinates arrive on events, and
-        Contract C boxes are image space.
+        . Calibration: {positionSources.length > 0 ? positionSources.join(', ') : 'unavailable'}.
+        {sampleCount > 0 && positionedTracks === 0 && (
+          <> Re-run this job to generate field positions from the AprilTag homography.</>
+        )}
       </p>
     </div>
   );

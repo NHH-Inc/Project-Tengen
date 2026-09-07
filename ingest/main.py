@@ -7,6 +7,7 @@ broken one at the browser.
 
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
 
@@ -137,6 +138,21 @@ def _season_path(season: int) -> Path:
         raise RuntimeError(f"No season config at contracts/seasons/{season}.json")
     return path
 
+
+def _clear_analysis_output(job_id: str) -> None:
+    """Remove exactly one job's analyzer directory before an overwrite run."""
+
+    base = Path(analysis_orchestrator.output_base_dir).resolve()
+    target = (base / job_id).resolve()
+    # Job ids are UUIDs, but keep the guard here so a malformed database row can never turn a
+    # user-requested re-run into a broad recursive delete.
+    if target.parent != base:
+        raise RuntimeError(f"Refusing to clear analyzer output outside {base}: {target}")
+    if target.exists():
+        if not target.is_dir():
+            raise RuntimeError(f"Analyzer output is not a directory: {target}")
+        shutil.rmtree(target)
+
 database.init_db()
 
 get_db = database.get_db
@@ -162,6 +178,14 @@ yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
     save_annotated=os.environ.get("FRC_YOLO_SAVE_ANNOTATED", "0").lower()
     in {"1", "true", "yes", "on"},
     snapshot_interval=float(os.environ.get("FRC_YOLO_SNAPSHOT_INTERVAL", "5")),
+    reid_memory_seconds=float(os.environ.get("FRC_YOLO_REID_MEMORY_SECONDS", "5.0")),
+    reid_appearance_threshold=float(
+        os.environ.get("FRC_YOLO_REID_APPEARANCE_THRESHOLD", "0.60")
+    ),
+    reid_max_distance=float(os.environ.get("FRC_YOLO_REID_MAX_DISTANCE", "0.60")),
+    auto_homography=os.environ.get("FRC_AUTO_HOMOGRAPHY", "1").lower()
+    in {"1", "true", "yes", "on"},
+    homography_hfov_deg=float(os.environ.get("FRC_HOMOGRAPHY_HFOV_DEG", "70")),
 )
 
 _analysis_backend = os.environ.get("FRC_ANALYSIS_BACKEND", "auto").strip().lower()
@@ -305,14 +329,21 @@ def delete_job(job_id: str, db: Session = Depends(get_db)):
 async def retry_job(
     job_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
 ):
-    """Doc 3: retry "does not require re-pasting the link" -- the video_id is already here.
+    """Retry a failed job or replace a completed result with a fresh pipeline run.
 
-    Not in Contract E (see contracts/OPEN_QUESTIONS.md #5). Reusing the same job_id keeps the
-    failure history attached instead of orphaning it behind a fresh UUID.
+    Reusing the same job_id keeps the selected video in place. The previous analyzer files are
+    cleared before the worker starts, and import_results replaces the raw database rows when the
+    new run succeeds.
     """
     job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.status in {"queued", "downloading", "downloaded", "analyzing"}:
+        raise HTTPException(status_code=409, detail="That job is already running")
+    try:
+        _clear_analysis_output(job_id)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not clear the previous result: {exc}") from exc
     job.status = "queued"
     job.error = None
     job.error_code = None
@@ -440,19 +471,18 @@ def process_job(job_id: str, url: str, live_capture: bool = False):
 
 
 def import_results(db: Session, job, results: dict):
-    """Load events.jsonl and tracks.jsonl into the database."""
+    """Replace this job's raw events and tracks with the latest analyzer output."""
+    # Re-analysis is an overwrite operation. Events use fresh UUIDs on every run, so checking
+    # whether an event id already exists would preserve the old result and leave stale rows in
+    # the match. Corrections remain a separate layer and are still composed on read.
+    db.query(models.Event).filter(models.Event.job_id == job.job_id).delete(synchronize_session=False)
+    db.query(models.Track).filter(models.Track.job_id == job.job_id).delete(synchronize_session=False)
+
     with open(results["events_path"], "r", encoding="utf-8") as handle:
         for line in handle:
             if not line.strip():
                 continue
             data = json.loads(line)
-            exists = (
-                db.query(models.Event)
-                .filter(models.Event.event_id == data["event_id"])
-                .first()
-            )
-            if exists:
-                continue
             db.add(
                 models.Event(
                     event_id=data["event_id"],
@@ -471,12 +501,6 @@ def import_results(db: Session, job, results: dict):
                     source=data.get("source", "model"),
                 )
             )
-
-    # A re-analysis supersedes the previous one rather than adding to it. Events are guarded by
-    # their event_id above; tracks had no such guard, so retrying a job silently doubled every
-    # track -- 45 became 90 -- and with them every count downstream. Track ids are stable within
-    # a job, so track-scoped corrections still apply after this.
-    db.query(models.Track).filter(models.Track.job_id == job.job_id).delete()
 
     with open(results["tracks_path"], "r", encoding="utf-8") as handle:
         for line in handle:

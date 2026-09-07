@@ -349,7 +349,7 @@ GET    /api/teams/:team/stats?event_key=&min_confidence=    → team_stats
 POST   /api/export/sheets             { match_ids, mode }   → export_result
 ```
 
-**Retry reuses the job id.** It resets `status` to `queued`, clears `error_code` and `error`, and increments `attempt`. Creating a new job would orphan the failed one's history.
+**Retry/re-run reuses the job id.** It resets `status` to `queued`, clears `error_code` and `error`, increments `attempt`, and replaces the prior raw analyzer result when the new run succeeds. Creating a new job would orphan the selected video's history.
 
 **`raw=true` is honoured on `/events` and `/tracks` only.** Default is corrected. Raw is what the accuracy comparison and the training-data export use.
 

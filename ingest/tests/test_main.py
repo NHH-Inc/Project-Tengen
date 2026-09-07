@@ -143,6 +143,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.headers["accept-ranges"], "bytes")
         self.assertEqual(response.headers["content-range"], "bytes 10-19/2048")
 
+    def test_completed_job_can_be_rerun_and_old_output_directory_is_replaced(self):
+        job_id = "22222222-2222-4222-8222-222222222222"
+        video_id = "abcdefghijk"
+        with self.sessions() as db:
+            db.add(
+                models.Job(
+                    job_id=job_id,
+                    video_id=video_id,
+                    status="complete",
+                    attempt=3,
+                )
+            )
+            db.commit()
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory) / job_id
+            output_dir.mkdir(parents=True)
+            (output_dir / "tracks.jsonl").write_text("old", encoding="utf-8")
+            with (
+                patch.object(main.analysis_orchestrator, "output_base_dir", Path(directory)),
+                patch.object(main, "process_job") as worker,
+            ):
+                response = self.client.post(f"/api/jobs/{job_id}/retry")
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["status"], "queued")
+            self.assertEqual(body["attempt"], 4)
+            self.assertFalse(output_dir.exists())
+            worker.assert_called_once_with(job_id, f"https://www.youtube.com/watch?v={video_id}", False)
+
 
 if __name__ == "__main__":
     unittest.main()

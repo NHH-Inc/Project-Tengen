@@ -1,9 +1,19 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ingest.yolo_orchestrator import YoloAnalysisOrchestrator, match_events, phase_at
-from training.track_yolo import add_field_motion, contract_track_records, crop_box_to_source
+from training.track_yolo import (
+    AppearanceTrackMemory,
+    add_field_motion,
+    contract_track_records,
+    crop_box_to_source,
+    eligible_track_ids,
+    image_window_has_motion,
+    track_has_motion,
+)
 
 
 class YoloOrchestratorTests(unittest.TestCase):
@@ -39,6 +49,8 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertTrue(health["available"])
             self.assertEqual(health["tracker"], "bytetrack")
             self.assertEqual(adapter.model_version, "model+bytetrack")
+            self.assertEqual(health["reid_memory_seconds"], 5.0)
+            self.assertTrue(health["auto_homography"])
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
         box = crop_box_to_source((0.0, 0.0, 1.0, 1.0), (0.02, 0.035, 0.98, 0.66), 960, 625)
@@ -52,6 +64,7 @@ class YoloOrchestratorTests(unittest.TestCase):
             position_source="carpet_pose",
         )
         self.assertEqual(records[0]["position_source"], "carpet_pose")
+        self.assertEqual(records[0]["robot_name"], "robot3")
         self.assertEqual(records[0]["boxes"][0]["field_x"], 4.0)
 
     def test_field_motion_rejects_identity_swap_speed(self):
@@ -71,6 +84,124 @@ class YoloOrchestratorTests(unittest.TestCase):
         add_field_motion(second, Mapper(), (0.0, 0.0, 1.0, 1.0), 100, 100, history, 1.0)
         self.assertIn("field_x", second)
         self.assertNotIn("speed_ftps", second)
+
+    def test_auto_homography_writes_a_carpet_calibration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            python = root / "python.exe"
+            model = root / "best.pt"
+            video = root / "match.mp4"
+            jobs = root / "jobs"
+            jobs.mkdir()
+            for path in (python, model, video):
+                path.write_bytes(b"")
+            adapter = YoloAnalysisOrchestrator(
+                repo_root=Path.cwd(),
+                python_path=python,
+                model_path=model,
+                output_base_dir=jobs,
+            )
+            calibration_result = {
+                "mapping_source": "carpet_pose",
+                "tags_used": [1, 2, 3, 4, 5, 6],
+                "point_count": 6,
+                "points": [],
+                "matrix": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                "pose": {"reprojection_px": 0.5},
+                "solution": {"trustworthy": True, "has_redundancy": False},
+            }
+            with patch("ingest.collection.calibrate.calibrate", return_value=calibration_result):
+                path = adapter._job_homography(video, jobs)
+            self.assertIsNotNone(path)
+            document = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(document["mapping_source"], "carpet_pose")
+            self.assertTrue(document["trustworthy"])
+
+
+class StationaryNeutralFilterTests(unittest.TestCase):
+    def test_stationary_colorless_track_is_not_published(self):
+        boxes = [
+            {"t": i / 10, "x": 0.20 + (i % 2) * 0.001, "y": 0.30,
+             "w": 0.10, "h": 0.14}
+            for i in range(20)
+        ]
+        self.assertFalse(track_has_motion(boxes))
+        self.assertEqual(eligible_track_ids({1: boxes}, {1: None}), set())
+        self.assertEqual(contract_track_records({1: boxes}, 10.0, {1: None}), [])
+
+    def test_coloured_stationary_robot_is_kept(self):
+        boxes = [{"t": i / 10, "x": 0.20, "y": 0.30, "w": 0.10, "h": 0.14}
+                 for i in range(10)]
+        self.assertEqual(eligible_track_ids({1: boxes}, {1: "red"}), {1})
+
+    def test_moving_colorless_robot_is_kept(self):
+        boxes = [{"t": i / 10, "x": 0.20 + i * 0.01, "y": 0.30,
+                  "w": 0.10, "h": 0.14} for i in range(10)]
+        self.assertTrue(track_has_motion(boxes))
+        self.assertEqual(eligible_track_ids({1: boxes}, {1: None}), {1})
+
+    def test_stationary_timer_ignores_one_bad_box(self):
+        boxes = [
+            {"t": i / 10, "x": 0.20, "y": 0.30, "w": 0.10, "h": 0.14}
+            for i in range(12)
+        ]
+        boxes[5]["x"] = 0.24
+        self.assertFalse(image_window_has_motion(boxes))
+
+    def test_stationary_timer_sees_sustained_motion(self):
+        boxes = [
+            {"t": i / 10, "x": 0.20 + i * 0.01, "y": 0.30, "w": 0.10, "h": 0.14}
+            for i in range(12)
+        ]
+        self.assertTrue(image_window_has_motion(boxes))
+
+    def test_suppressed_stationary_false_positive_stays_hidden(self):
+        boxes = [{"t": i / 10, "x": 0.96, "y": 0.30, "w": 0.04, "h": 0.14}
+                 for i in range(80)]
+        self.assertEqual(
+            eligible_track_ids({1: boxes}, {1: "red"}, suppressed_track_ids={1}),
+            set(),
+        )
+        self.assertEqual(
+            contract_track_records(
+                {1: boxes}, 10.0, {1: "red"}, visible_track_ids=set()
+            ),
+            [],
+        )
+
+
+class AppearanceMemoryTests(unittest.TestCase):
+    def test_new_raw_id_reuses_recent_matching_appearance(self):
+        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
+        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
+        second = memory.resolve(99, 1.0, [0.98, 0.02], (0.25, 0.5), "red", set(), {99})
+        self.assertEqual(second, first)
+
+    def test_same_colour_reuses_identity_even_when_appearance_changes(self):
+        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
+        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
+        second = memory.resolve(99, 1.0, [0.0, 1.0], (0.25, 0.5), "red", set(), {99})
+        self.assertEqual(second, first)
+
+    def test_unambiguous_same_colour_handoff_can_cross_the_distance_gate(self):
+        memory = AppearanceTrackMemory(
+            memory_seconds=2.0, appearance_threshold=0.8, max_center_distance=0.2
+        )
+        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.1, 0.5), "red", set(), {10})
+        second = memory.resolve(99, 1.0, [0.0, 1.0], (0.9, 0.5), "red", set(), {99})
+        self.assertEqual(second, first)
+
+    def test_opposite_alliance_never_reuses_identity(self):
+        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
+        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
+        second = memory.resolve(99, 1.0, [1.0, 0.0], (0.25, 0.5), "blue", set(), {99})
+        self.assertNotEqual(second, first)
+
+    def test_match_expires_after_memory_window(self):
+        memory = AppearanceTrackMemory(memory_seconds=1.0, appearance_threshold=0.8)
+        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), None, set(), {10})
+        second = memory.resolve(99, 1.5, [1.0, 0.0], (0.25, 0.5), None, set(), {99})
+        self.assertNotEqual(second, first)
 
 
 if __name__ == "__main__":

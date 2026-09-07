@@ -85,7 +85,8 @@ python -m ingest.collection.calibrate `
   --out analysis\config\homography.<venue>.json `
   --region 0.0 0.68 `
   --method pose `
-  --hfov-deg 70
+  --hfov-deg 70 `
+  --optimize-hfov
 ```
 
 `--hfov-deg` is the horizontal field of view of the source camera. Use the camera specification or
@@ -94,6 +95,12 @@ calibration stores the assumption and its pixel reprojection error in the JSON. 
 is impossible, add hand-read carpet points with `--extra-points` (the template explains the
 format). `--method plane` remains available as a legacy fallback, but its coordinates are on the
 AprilTag plane, not the carpet.
+
+The YOLO service performs this pose calibration automatically for every job by default, including
+fitting the missing focal length from the non-coplanar tags. It writes both
+`homography.diagnostics.json` and, when the fit passes its checks, `homography.json` in the job
+directory. Set `FRC_AUTO_HOMOGRAPHY=0` to disable it. An explicit `FRC_HOMOGRAPHY_CONFIG` always
+takes precedence.
 
 `--region` restricts the search to a band of the frame, given as fractions of its height. **Use it
 whenever a broadcast stacks two camera views**, which the 2026 ones do: the same physical tag
@@ -221,7 +228,7 @@ Open <http://localhost:5173>.
 
 You get the golden fixture match: a real 152-second video with boxes drawn over it, 224 events,
 working corrections, timeline, team stats, heat map, export panel. Three jobs in the queue,
-including a deliberately failed one so the retry path is reachable.
+including a deliberately failed one so the retry/re-run path is reachable.
 
 Nothing is faked — it serves the real fixture files through the same interface the HTTP client
 uses, so anything that renders here renders against the real backend.
@@ -285,6 +292,15 @@ path when it is available, or `native` to force the C++ RF-DETR path. Annotated 
 by default because the web app draws the stored tracks and an annotated 1080p60 copy is large;
 set `FRC_YOLO_SAVE_ANNOTATED=1` when a rendered video is needed.
 
+On top of ByteTrack, the runner keeps a lightweight appearance signature for five seconds. If a
+robot is briefly occluded or leaves the edge and ByteTrack assigns a new raw ID, a matching bumper
+colour is the primary handoff signal; appearance and position break ties. When only one remembered
+robot has that colour, the handoff can survive even a large re-entry distance. Configure the window
+with `FRC_YOLO_REID_MEMORY_SECONDS`; the similarity and distance gates are exposed as
+`FRC_YOLO_REID_APPEARANCE_THRESHOLD` and `FRC_YOLO_REID_MAX_DISTANCE`. Stationary tracks that
+remain still for five seconds are omitted from both Contract D and rendered overlays, including
+if the detector later rediscovers them.
+
 For a configured homography, point the same runner at the calibration JSON:
 
 ```powershell
@@ -299,7 +315,8 @@ C:\yolo11-venv\Scripts\python.exe -m training.track_yolo `
 Each box can then contain `field_x`, `field_y`, `velocity_x_ftps`, `velocity_y_ftps`,
 `speed_ftps`, and `motion_heading_rad`. The first valid sample, samples after a tracking gap, and
 off-field mappings leave velocity null. Motion heading is the direction the robot travelled; it is
-not the robot's body orientation.
+not the robot's body orientation. The web heat map accumulates these carpet positions as dwell
+time and draws a path per stable robot ID on the 2-D field.
 
 The local YOLO runner reads an MP4 lazily: it opens the file, crops each frame as the detector
 requests it, and begins inference on the first decoded frame. It no longer writes a complete

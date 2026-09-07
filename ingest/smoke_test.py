@@ -42,7 +42,14 @@ for _credential in ("SHEETS_SPREADSHEET_ID", "GOOGLE_APPLICATION_CREDENTIALS",
 from fastapi.testclient import TestClient  # noqa: E402
 
 from ingest import database, models  # noqa: E402
+from ingest import main as main_module  # noqa: E402
 from ingest.main import app  # noqa: E402
+
+# The retry endpoint schedules its worker after returning the response. This smoke test verifies
+# the retry state transition, not YouTube or whichever production analyzer happens to be configured
+# in ingest/.env; letting that background task run makes an offline contract test download and
+# analyze a real match. Keep the documented no-network boundary explicit.
+main_module.process_job = lambda *_args, **_kwargs: None
 
 MATCH = "2026casf_qm42"
 NO_TBA_MATCH = "2026casf_qm43"

@@ -371,7 +371,12 @@ export default function App() {
               />
             )}
             {analysisComplete && tab === 'heatmap' && (
-              <HeatMap season={season} events={match.events} selectedTeam={selectedTeam} />
+              <HeatMap
+                season={season}
+                tracks={overlayTracks}
+                selectedTeam={selectedTeam}
+                currentTime={currentTime}
+              />
             )}
             {analysisComplete && tab === 'accuracy' && (
               <AccuracyPanel accuracy={match.accuracy} season={season} fromRaw />

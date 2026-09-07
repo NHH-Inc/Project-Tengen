@@ -1,0 +1,9 @@
+# Local FRC defaults. Keep lost tracks alive long enough for the appearance memory to bridge a
+# robot leaving the camera for roughly one to five seconds.
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 300
+match_thresh: 0.8
+fuse_score: True

@@ -48,8 +48,8 @@ export interface ScoutingApi {
   createJob(input: CreateJobInput): Promise<Parsed<Job>>;
   deleteJob(jobId: string): Promise<void>;
   /**
-   * Doc 0: retry "reuses the job id... Creating a new job would orphan the failed one's
-   * history." Resets status to queued, clears error_code/error, increments attempt.
+   * Reuses the job id for both failed retries and completed-job re-runs. Resets status to queued,
+   * clears error_code/error, increments attempt, and replaces the raw result on success.
    */
   retryJob(jobId: string): Promise<Parsed<Job>>;
   /** Contract D's result.json, including box_sample_rate and the frame counts. */

@@ -85,6 +85,14 @@ def test_re_importing_does_not_duplicate_events(db, job, tmp_path):
     assert db.query(models.Event).count() == 1
 
 
+def test_a_second_run_replaces_old_events(db, job, tmp_path):
+    main.import_results(db, job, write_output(tmp_path, TRACKS, EVENTS))
+    replacement = [dict(EVENTS[0], event_id="e2", event_type="match_end")]
+    main.import_results(db, job, write_output(tmp_path, TRACKS, replacement))
+    rows = db.query(models.Event).all()
+    assert [(row.event_id, row.event_type) for row in rows] == [("e2", "match_end")]
+
+
 def test_a_second_run_supersedes_the_first(db, job, tmp_path):
     # A better detector re-run must not leave the old attribution behind next to the new one.
     main.import_results(db, job, write_output(tmp_path, TRACKS, EVENTS))

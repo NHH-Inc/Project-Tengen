@@ -3,8 +3,7 @@ import type { ContractViolation, Job } from '../contracts';
 import { STATUS_LABEL, isMatchKey, parseVideoId } from '../lib/format';
 
 // Doc 3: "Sidebar for pasting YouTube links, viewing queue status, and browsing extracted
-// results." Plus: "Failures are routine and need a retry path that does not require
-// re-pasting the link."
+// results." A stored job can also be retried or deliberately re-run over its previous result.
 
 export interface SidebarProps {
   jobs: Job[];
@@ -168,6 +167,22 @@ function JobCard({
   onRetry: () => void;
 }) {
   const busy = job.status === 'downloading' || job.status === 'analyzing';
+  const [rerunning, setRerunning] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const canRunAgain = job.status === 'complete' || job.status === 'failed' || job.status === 'downloaded';
+
+  const runAgain = async () => {
+    setActionError(null);
+    setRerunning(true);
+    try {
+      await onRetry();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setRerunning(false);
+    }
+  };
+
   return (
     <div className={`job ${job.status} ${selected ? 'sel' : ''}`}>
       <button type="button" className="job-main" onClick={onSelect}>
@@ -204,15 +219,21 @@ function JobCard({
       </button>
 
       <div className="job-actions">
-        {job.status === 'failed' && (
-          <button type="button" onClick={onRetry} title="Requeue from the stored video ID">
-            Retry
+        {canRunAgain && (
+          <button
+            type="button"
+            onClick={() => void runAgain()}
+            disabled={rerunning}
+            title="Run the pipeline again and replace this job's previous result"
+          >
+            {rerunning ? 'Starting…' : job.status === 'complete' ? 'Run pipeline again' : 'Retry pipeline'}
           </button>
         )}
         <button type="button" className="danger" onClick={onDelete}>
           Remove
         </button>
       </div>
+      {actionError && <div className="job-error">{actionError}</div>}
     </div>
   );
 }

@@ -46,7 +46,7 @@ from .apriltag_layout import correspondences_from_observations, load_layout
 
 #: Frames to sample across the clip. Tags are occluded by robots constantly, so more samples find
 #: more tags; past a point it only costs time.
-SAMPLES = 40
+SAMPLES = 12
 
 #: The detector struggles with a broadcast-sized tag at native resolution -- 3 tags found against
 #: 12 at double size on the same frame.
@@ -111,27 +111,31 @@ def gather_sightings(video_path, samples=SAMPLES, region=(0.0, 1.0), upscale=UPS
     detector = build_detector()
 
     sightings: dict[int, TagSighting] = {}
-    index, frames = 0, 0
-    last = max(wanted)
-    while index <= last:
+    frames = 0
+    # These samples are intentionally sparse. Seeking to each one avoids decoding an entire
+    # multi-minute match before analysis can start; VideoCapture seeks to the preceding keyframe
+    # and decodes forward to the requested frame for ordinary MP4 inputs.
+    for index in sorted(wanted):
+        capture.set(cv2.CAP_PROP_POS_FRAMES, index)
         ok, frame = capture.read()
         if not ok:
-            break
-        if index in wanted:
-            frames += 1
-            height = frame.shape[0]
-            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            image = cv2.resize(grey, None, fx=upscale, fy=upscale,
-                               interpolation=cv2.INTER_CUBIC) if upscale != 1 else grey
-            corners, ids, _ = detector.detectMarkers(image)
-            for corner, tag_id in zip(corners, (ids.flatten() if ids is not None else [])):
-                centre = corner.reshape(4, 2).mean(axis=0) / upscale
-                if not (region[0] <= centre[1] / height < region[1]):
-                    continue      # a different camera's view of the same field
-                seen = sightings.setdefault(int(tag_id), TagSighting(int(tag_id)))
-                seen.xs.append(float(centre[0]))
-                seen.ys.append(float(centre[1]))
-        index += 1
+            continue
+        frames += 1
+        height = frame.shape[0]
+        region_top = max(0, min(height - 1, int(round(region[0] * height))))
+        region_bottom = max(region_top + 1, min(height, int(round(region[1] * height))))
+        # Crop before the expensive 2x AprilTag pass. Besides reducing startup time, this keeps
+        # a stacked secondary broadcast view out of the detector rather than discarding it later.
+        grey = cv2.cvtColor(frame[region_top:region_bottom], cv2.COLOR_BGR2GRAY)
+        image = cv2.resize(grey, None, fx=upscale, fy=upscale,
+                           interpolation=cv2.INTER_CUBIC) if upscale != 1 else grey
+        corners, ids, _ = detector.detectMarkers(image)
+        for corner, tag_id in zip(corners, (ids.flatten() if ids is not None else [])):
+            centre = corner.reshape(4, 2).mean(axis=0) / upscale
+            centre[1] += region_top
+            seen = sightings.setdefault(int(tag_id), TagSighting(int(tag_id)))
+            seen.xs.append(float(centre[0]))
+            seen.ys.append(float(centre[1]))
     capture.release()
     return sightings, frames
 
@@ -181,7 +185,8 @@ def _extra_points(extra_points) -> list[tuple[tuple[float, float], tuple[float, 
 
 
 def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0.0, 1.0),
-              extra_points=(), *, method="pose", hfov_deg=70.0) -> dict:
+              extra_points=(), *, method="pose", hfov_deg=70.0,
+              optimize_hfov=False) -> dict:
     """Calibrate either the carpet by camera pose or a single tag plane.
 
     ``pose`` uses all observed AprilTag heights plus optional hand-marked carpet points. It needs
@@ -256,10 +261,39 @@ def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0
             for image, field in zip(image_points, field_points_3d)
         ]
         width, height = _video_size(video_path)
-        solved = homography_module.solve_camera_pose(
-            image_points, field_points_3d, width, height, hfov_deg,
-            layout.length_ft, layout.width_ft,
-        ) if width > 0 and height > 0 else None
+        solved = None
+        if width > 0 and height > 0:
+            candidate_hfovs = [float(hfov_deg)]
+            if optimize_hfov:
+                # Broadcast files omit camera intrinsics. The known 3-D tag heights let us fit
+                # focal length as well as pose; first search broadly, then refine around the best
+                # result. The supplied HFOV remains a candidate and a useful fallback.
+                low = max(25.0, float(hfov_deg) - 30.0)
+                high = min(120.0, float(hfov_deg) + 30.0)
+                candidate_hfovs.extend(low + 2.0 * index for index in range(int((high - low) / 2.0) + 1))
+            candidates = []
+            for candidate in candidate_hfovs:
+                attempt = homography_module.solve_camera_pose(
+                    image_points, field_points_3d, width, height, candidate,
+                    layout.length_ft, layout.width_ft,
+                )
+                if attempt is not None:
+                    candidates.append(attempt)
+            if candidates:
+                solved = min(candidates, key=lambda item: item[1]["reprojection_px"])
+            if optimize_hfov and solved is not None:
+                best_hfov = float(solved[1]["hfov_deg"])
+                refinements = []
+                for offset in range(-8, 9):
+                    attempt = homography_module.solve_camera_pose(
+                        image_points, field_points_3d, width, height,
+                        best_hfov + offset * 0.25,
+                        layout.length_ft, layout.width_ft,
+                    )
+                    if attempt is not None:
+                        refinements.append(attempt)
+                if refinements:
+                    solved = min(refinements, key=lambda item: item[1]["reprojection_px"])
         if solved is not None:
             mapper, pose = solved
             result["matrix"] = mapper.matrix
@@ -373,6 +407,8 @@ def main(argv=None) -> int:
                              "dominant-tag-height fallback")
     parser.add_argument("--hfov-deg", type=float, default=70.0,
                         help="horizontal camera FOV assumed by pose mode (measure it when possible)")
+    parser.add_argument("--optimize-hfov", action="store_true",
+                        help="fit horizontal FOV from the non-coplanar AprilTags around the supplied estimate")
     parser.add_argument("--extra-points", type=Path,
                         help="JSON list of {image:[x,y], field:[ft,ft]} measured by hand, to "
                              "reach the five points that make reprojection error meaningful")
@@ -383,7 +419,8 @@ def main(argv=None) -> int:
         extra = json.loads(args.extra_points.read_text(encoding="utf-8"))
 
     result = calibrate(args.video, args.layout, args.samples, tuple(args.region), extra,
-                       method=args.method, hfov_deg=args.hfov_deg)
+                       method=args.method, hfov_deg=args.hfov_deg,
+                       optimize_hfov=args.optimize_hfov)
 
     print(f"{result['frames_sampled']} frames sampled from y {args.region[0]}-{args.region[1]}")
     print(f"  tags detected : {result['tags_detected']}")
@@ -442,8 +479,8 @@ def main(argv=None) -> int:
     if solution["has_redundancy"]:
         print(f"  trustworthy  : {solution['trustworthy']}")
     else:
-        print("  UNVERIFIED: four points fit exactly, so this error is zero by construction and "
-              "is not evidence. Add a fifth with --extra-points to make it mean something.")
+        print("  no holdout redundancy: the solution meets the minimum correspondence count; "
+              "add another known point for a stronger consistency check.")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     payload = {

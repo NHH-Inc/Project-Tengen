@@ -18,6 +18,7 @@ from typing import Callable
 
 ProgressCallback = Callable[[float | None, str], None]
 MODEL_CROP = (0.02, 0.035, 0.98, 0.66)
+AUTO_HOMOGRAPHY_REGION = (0.0, 0.68)
 
 
 def utc_now() -> str:
@@ -93,6 +94,11 @@ class YoloAnalysisOrchestrator:
         save_annotated: bool = False,
         snapshot_interval: float = 5.0,
         homography_path: str | Path | None = None,
+        reid_memory_seconds: float = 5.0,
+        reid_appearance_threshold: float = 0.60,
+        reid_max_distance: float = 0.60,
+        auto_homography: bool = True,
+        homography_hfov_deg: float = 70.0,
     ):
         self.repo_root = Path(repo_root).resolve()
         self.python_path = self._resolve_optional(python_path)
@@ -104,6 +110,11 @@ class YoloAnalysisOrchestrator:
         self.device = device
         self.save_annotated = save_annotated
         self.snapshot_interval = snapshot_interval
+        self.reid_memory_seconds = reid_memory_seconds
+        self.reid_appearance_threshold = reid_appearance_threshold
+        self.reid_max_distance = reid_max_distance
+        self.auto_homography = auto_homography
+        self.homography_hfov_deg = homography_hfov_deg
         self.homography_path = self._resolve_optional(
             homography_path if homography_path is not None else os.environ.get("FRC_HOMOGRAPHY_CONFIG")
         )
@@ -134,8 +145,13 @@ class YoloAnalysisOrchestrator:
             "image_size": self.image_size,
             "device": self.device,
             "snapshot_interval": self.snapshot_interval,
+            "reid_memory_seconds": self.reid_memory_seconds,
+            "reid_appearance_threshold": self.reid_appearance_threshold,
+            "reid_max_distance": self.reid_max_distance,
             "homography": str(self.homography_path) if self.homography_path else None,
             "homography_available": bool(self.homography_path and self.homography_path.is_file()),
+            "auto_homography": self.auto_homography,
+            "homography_hfov_deg": self.homography_hfov_deg,
             "model_crop": {
                 "left": MODEL_CROP[0],
                 "top": MODEL_CROP[1],
@@ -169,6 +185,61 @@ class YoloAnalysisOrchestrator:
         duration = (frames - 1) / fps if frames > 1 and fps > 0 else fallback_duration
         return frames, fps, max(0.0, duration)
 
+    def _job_homography(self, video_path: Path, job_dir: Path) -> Path | None:
+        """Use an explicit calibration, or derive one from steady AprilTags in this clip."""
+
+        if self.homography_path and self.homography_path.is_file():
+            return self.homography_path
+        if not self.auto_homography:
+            return None
+
+        from .collection.apriltag_layout import load_layout
+        from .collection.calibrate import DEFAULT_LAYOUT, calibrate
+
+        layout_path = DEFAULT_LAYOUT if DEFAULT_LAYOUT.is_absolute() else self.repo_root / DEFAULT_LAYOUT
+
+        try:
+            result = calibrate(
+                video_path,
+                layout_path,
+                region=AUTO_HOMOGRAPHY_REGION,
+                method="pose",
+                hfov_deg=self.homography_hfov_deg,
+                optimize_hfov=True,
+            )
+        except Exception as exc:
+            (job_dir / "homography.diagnostics.json").write_text(
+                json.dumps({"error": str(exc)}, indent=2) + "\n", encoding="utf-8"
+            )
+            return None
+
+        diagnostics_path = job_dir / "homography.diagnostics.json"
+        diagnostics_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        solution = result.get("solution")
+        if not isinstance(solution, dict) or not solution.get("trustworthy") or not result.get("matrix"):
+            return None
+
+        layout = load_layout(layout_path)
+        calibration = {
+            "_comment": (
+                f"Auto-calibrated from {video_path.name} using AprilTags {result.get('tags_used', [])}. "
+                "Valid for this fixed camera pose only."
+            ),
+            "mapping_source": "carpet_pose",
+            "field_length_ft": layout.length_ft,
+            "field_width_ft": layout.width_ft,
+            "plane_height_ft": 0.0,
+            "point_count": int(result.get("point_count", 0)),
+            "has_redundancy": bool(solution.get("has_redundancy")),
+            "trustworthy": True,
+            "points": result.get("points", []),
+            "matrix": result["matrix"],
+            "pose": result.get("pose"),
+        }
+        path = job_dir / "homography.json"
+        path.write_text(json.dumps(calibration, indent=2) + "\n", encoding="utf-8")
+        return path
+
     def run_job(self, job_data: dict, season_path: str, on_progress=None) -> dict:
         if not self.available:
             raise RuntimeError(
@@ -184,6 +255,12 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_CONFIDENCE must be between 0 and 1")
         if self.image_size <= 0 or self.image_size % 32:
             raise RuntimeError("FRC_YOLO_IMAGE_SIZE must be a positive multiple of 32")
+        if self.reid_memory_seconds <= 0:
+            raise RuntimeError("FRC_YOLO_REID_MEMORY_SECONDS must be greater than zero")
+        if not 0.0 <= self.reid_appearance_threshold <= 1.0:
+            raise RuntimeError("FRC_YOLO_REID_APPEARANCE_THRESHOLD must be between zero and one")
+        if self.reid_max_distance <= 0:
+            raise RuntimeError("FRC_YOLO_REID_MAX_DISTANCE must be greater than zero")
 
         job_id = str(job_data["job_id"])
         job_dir = self.output_base_dir / job_id
@@ -194,6 +271,7 @@ class YoloAnalysisOrchestrator:
         result_path = job_dir / "result.json"
         if tracks_path.exists() or events_path.exists() or result_path.exists():
             raise RuntimeError(f"Refusing to overwrite existing YOLO output: {job_dir}")
+        job_homography = self._job_homography(video_path, job_dir)
 
         annotated_path = job_dir / "annotated.mp4" if self.save_annotated else None
         video_label = "".join(
@@ -219,8 +297,13 @@ class YoloAnalysisOrchestrator:
             str(self.image_size),
             "--device",
             self.device,
-            *( ["--homography", str(self.homography_path)]
-               if self.homography_path and self.homography_path.is_file() else [] ),
+            "--reid-memory-seconds",
+            str(self.reid_memory_seconds),
+            "--reid-appearance-threshold",
+            str(self.reid_appearance_threshold),
+            "--reid-max-distance",
+            str(self.reid_max_distance),
+            *(["--homography", str(job_homography)] if job_homography else []),
             "--snapshot-dir",
             str(snapshot_dir),
             "--snapshot-interval",
@@ -296,9 +379,9 @@ class YoloAnalysisOrchestrator:
         events = match_events(job_data, duration, season)
         _write_jsonl(events_path, events)
         mapping_source = None
-        if self.homography_path and self.homography_path.is_file():
+        if job_homography and job_homography.is_file():
             try:
-                document = json.loads(self.homography_path.read_text(encoding="utf-8"))
+                document = json.loads(job_homography.read_text(encoding="utf-8"))
                 mapping_source = document.get("mapping_source", "tag_plane")
             except (OSError, json.JSONDecodeError):
                 mapping_source = None
@@ -309,6 +392,9 @@ class YoloAnalysisOrchestrator:
             "box_sample_rate": fps,
             "homography_ok": bool(mapping_source),
             "homography_source": mapping_source,
+            "homography_path": str(job_homography) if job_homography else None,
+            "homography_diagnostics": str(job_dir / "homography.diagnostics.json")
+            if (job_dir / "homography.diagnostics.json").is_file() else None,
             "frames_total": frames_total,
             "frames_analyzed": frames_total,
             "frames_skipped_shot_change": 0,

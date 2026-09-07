@@ -79,7 +79,7 @@ export function useJobs(pollMs = 1500) {
     [load]
   );
 
-  /** Doc 3: retry "does not require re-pasting the link" -- the job record already has it. */
+  /** Re-run the stored video without creating a second job or requiring the link again. */
   const retryJob = useCallback(
     async (job: Job) => {
       const api = await getApi();

@@ -101,13 +101,13 @@ export function legalGoals(cfg: SeasonConfig): ReadonlySet<string> {
   return new Set(cfg.goals);
 }
 
-/** Field extents in feet. Origin is field centre, so these are symmetric. */
+/** Field extents in feet, matching WPILib/AprilTag coordinates from one field corner. */
 export function fieldExtents(cfg: SeasonConfig) {
   return {
-    minX: -cfg.fieldLengthFt / 2,
-    maxX: cfg.fieldLengthFt / 2,
-    minY: -cfg.fieldWidthFt / 2,
-    maxY: cfg.fieldWidthFt / 2,
+    minX: 0,
+    maxX: cfg.fieldLengthFt,
+    minY: 0,
+    maxY: cfg.fieldWidthFt,
     lengthFt: cfg.fieldLengthFt,
     widthFt: cfg.fieldWidthFt,
   };

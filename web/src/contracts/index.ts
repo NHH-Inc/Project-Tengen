@@ -129,6 +129,8 @@ export interface WireGap { start: number; end: number; reason: string }
 export interface WireTrack {
   schema_version: number;
   track_id: number;
+  /** Stable, job-local display name. Older jobs may omit it and get a UI fallback. */
+  robot_name?: string | null;
   team: number | null;
   alliance: string | null;
   team_confidence: number | null;
@@ -225,6 +227,8 @@ export interface Gap {
 
 export interface Track {
   trackId: number;
+  /** Stable display name such as robot1. Optional for pre-name persisted jobs. */
+  robotName: string | null;
   team: number | null;
   alliance: Alliance | null;
   positionSource: string | null;
@@ -390,6 +394,7 @@ export function parseTrack(raw: WireTrack, log: ViolationLog): Track | null {
   }
   return {
     trackId: raw.track_id,
+    robotName: raw.robot_name ?? null,
     team: raw.team ?? null,
     alliance,
     positionSource: raw.position_source ?? null,

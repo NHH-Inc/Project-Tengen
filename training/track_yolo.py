@@ -18,6 +18,316 @@ DEFAULT_CROP = (0.02, 0.035, 0.98, 0.66)  # left, top, right, bottom
 # A sudden identity swap or bad calibration can manufacture an impossible velocity. Keep that
 # out of scouting metrics instead of presenting it as a very fast robot.
 MAX_PLAUSIBLE_FTPS = 20.0
+# A detection has to move farther than detector jitter before it is allowed into the public
+# track stream. The separate five-second timer removes detections that later become stationary.
+STATIONARY_CENTER_THRESHOLD = 0.018
+# A stationary false positive is allowed a short grace period because detector startup can
+# produce a few duplicate boxes.  Once it has been still this long, it is suppressed for the
+# rest of the match instead of being rediscovered every frame.
+STATIONARY_SUPPRESSION_SECONDS = 5.0
+# ByteTrack is deliberately motion-first.  This lightweight appearance memory sits after it and
+# stitches a newly-issued raw id back onto a recently-lost robot when the crop still looks alike.
+# Keep this longer than the requested one-second dropout: the detector can miss several frames at
+# an edge and the new raw id may not arrive until the object is fully back in view.
+DEFAULT_REID_MEMORY_SECONDS = 5.0
+DEFAULT_REID_APPEARANCE_THRESHOLD = 0.60
+DEFAULT_REID_MAX_CENTER_DISTANCE = 0.60
+REID_MIN_CONTINUITY_SIMILARITY = 0.32
+
+
+def track_has_motion(
+    boxes: list[dict[str, object]],
+    minimum_displacement: float = STATIONARY_CENTER_THRESHOLD,
+) -> bool:
+    """Return whether a track moved farther than normal detector-box jitter.
+
+    The fallback is image space because homography is optional.  Scale the threshold by the
+    object's own box size so tiny confidence jitter on a large static field prop is not mistaken
+    for robot travel.
+    """
+
+    if any(
+        isinstance(box.get("speed_ftps"), (int, float))
+        and float(box["speed_ftps"]) >= 0.5
+        for box in boxes
+    ):
+        return True
+    if len(boxes) < 2:
+        return False
+    centres = [
+        (float(box["x"]) + float(box["w"]) / 2.0,
+         float(box["y"]) + float(box["h"]) / 2.0)
+        for box in boxes
+    ]
+    widths = sorted(float(box["w"]) for box in boxes)
+    heights = sorted(float(box["h"]) for box in boxes)
+    middle = len(boxes) // 2
+    box_diagonal = math.hypot(widths[middle], heights[middle])
+    required = max(minimum_displacement, box_diagonal * 0.18)
+    span = math.hypot(
+        max(point[0] for point in centres) - min(point[0] for point in centres),
+        max(point[1] for point in centres) - min(point[1] for point in centres),
+    )
+    return span >= required
+
+
+def image_window_has_motion(
+    boxes: list[dict[str, object]],
+    minimum_displacement: float = 0.012,
+) -> bool:
+    """Detect real image-space travel while ignoring one-frame box jitter.
+
+    A max/min span is useful for deciding whether a complete track ever moved, but it is too
+    sensitive for a five-second stationary timer: one bad detector box would reset that timer.
+    Compare the median centre of the first and second half of a short window instead.
+    """
+
+    if len(boxes) < 4:
+        return False
+
+    def median(values: list[float]) -> float:
+        ordered = sorted(values)
+        middle = len(ordered) // 2
+        if len(ordered) % 2:
+            return ordered[middle]
+        return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+    midpoint = len(boxes) // 2
+    first = boxes[:midpoint]
+    second = boxes[midpoint:]
+    first_center = (
+        median([float(box["x"]) + float(box["w"]) / 2.0 for box in first]),
+        median([float(box["y"]) + float(box["h"]) / 2.0 for box in first]),
+    )
+    second_center = (
+        median([float(box["x"]) + float(box["w"]) / 2.0 for box in second]),
+        median([float(box["y"]) + float(box["h"]) / 2.0 for box in second]),
+    )
+    widths = sorted(float(box["w"]) for box in boxes)
+    heights = sorted(float(box["h"]) for box in boxes)
+    middle = len(boxes) // 2
+    box_diagonal = math.hypot(widths[middle], heights[middle])
+    required = max(minimum_displacement, box_diagonal * 0.10)
+    return math.hypot(
+        second_center[0] - first_center[0],
+        second_center[1] - first_center[1],
+    ) >= required
+
+
+def eligible_track_ids(
+    tracks: dict[int, list[dict[str, object]]],
+    alliances: dict[int, str | None] | None,
+    suppressed_track_ids: set[int] | None = None,
+) -> set[int]:
+    """Tracks allowed into video overlays and Contract C output.
+
+    A stationary detection is usually field hardware, signage, or another persistent false
+    positive. The runner suppresses it after five seconds, and the explicit set keeps it hidden
+    even if the detector later rediscovers the same object. A genuinely moving robot remains
+    visible even when its bumper colour is temporarily unreadable.
+    """
+
+    colours = alliances or {}
+    suppressed = suppressed_track_ids or set()
+    return {
+        track_id
+        for track_id, boxes in tracks.items()
+        if track_id not in suppressed
+        and (colours.get(track_id) in {"red", "blue"} or track_has_motion(boxes))
+    }
+
+
+def appearance_similarity(left: list[float], right: list[float]) -> float:
+    """Cosine similarity for two already-normalised appearance descriptors."""
+
+    if not left or len(left) != len(right):
+        return 0.0
+    numerator = sum(a * b for a, b in zip(left, right))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm <= 1e-12 or right_norm <= 1e-12:
+        return 0.0
+    return numerator / (left_norm * right_norm)
+
+
+def appearance_descriptor(image, raw_box: list[float]) -> list[float] | None:
+    """Build a compact colour/layout signature from one robot crop.
+
+    It intentionally uses no second neural model: the descriptor is a normalised HSV histogram
+    plus a coarse 2x2 colour layout, which is cheap enough to compute for every detection at 60
+    fps and still remembers bumper/body appearance across a brief disappearance.
+    """
+
+    import cv2
+    import numpy as np
+
+    height, width = image.shape[:2]
+    left, top, right, bottom = (int(round(value)) for value in raw_box)
+    left = max(0, min(width - 1, left))
+    right = max(left + 1, min(width, right))
+    top = max(0, min(height - 1, top))
+    bottom = max(top + 1, min(height, bottom))
+    crop = image[top:bottom, left:right]
+    if crop.size == 0:
+        return None
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    histogram = cv2.calcHist([hsv], [0, 1], None, [18, 4], [0, 180, 0, 256]).reshape(-1)
+    histogram = histogram.astype(np.float32)
+    if float(np.linalg.norm(histogram)) <= 1e-12:
+        return None
+    histogram /= np.linalg.norm(histogram)
+
+    resized = cv2.resize(hsv, (16, 16), interpolation=cv2.INTER_AREA)
+    layout = []
+    for y0, y1 in ((0, 8), (8, 16)):
+        for x0, x1 in ((0, 8), (8, 16)):
+            mean = resized[y0:y1, x0:x1].mean(axis=(0, 1))
+            layout.extend((float(mean[0]) / 180.0, float(mean[1]) / 255.0,
+                           float(mean[2]) / 255.0))
+    descriptor = np.concatenate((histogram, np.asarray(layout, dtype=np.float32) * 0.35))
+    descriptor /= max(float(np.linalg.norm(descriptor)), 1e-12)
+    return descriptor.astype(float).tolist()
+
+
+class AppearanceTrackMemory:
+    """Map short-lived tracker ids onto stable appearance-backed robot ids."""
+
+    def __init__(
+        self,
+        memory_seconds: float = DEFAULT_REID_MEMORY_SECONDS,
+        appearance_threshold: float = DEFAULT_REID_APPEARANCE_THRESHOLD,
+        max_center_distance: float = DEFAULT_REID_MAX_CENTER_DISTANCE,
+    ):
+        self.memory_seconds = memory_seconds
+        self.appearance_threshold = appearance_threshold
+        self.max_center_distance = max_center_distance
+        self.raw_to_stable: dict[int, int] = {}
+        self.states: dict[int, dict[str, object]] = {}
+        self.next_stable_id = 1
+
+    def resolve(
+        self,
+        raw_track_id: int,
+        timestamp: float,
+        descriptor: list[float] | None,
+        center: tuple[float, float],
+        alliance: str | None,
+        used_stable_ids: set[int] | None = None,
+        present_raw_ids: set[int] | None = None,
+    ) -> int:
+        """Return a stable id, even when ByteTrack issues a new raw id after a dropout.
+
+        Raw ids are a useful fast path, not an identity.  They can be recycled after a lost
+        track is removed, so stale raw-to-stable entries are expired and revalidated against the
+        appearance memory instead of being trusted forever.
+        """
+
+        used = used_stable_ids or set()
+        present = present_raw_ids or set()
+        stable_id = self.raw_to_stable.get(raw_track_id)
+        if stable_id is not None:
+            state = self.states.get(stable_id)
+            if state is None or timestamp - float(state["last_seen"]) > self.memory_seconds:
+                self.raw_to_stable.pop(raw_track_id, None)
+                stable_id = None
+            else:
+                previous_alliance = state.get("alliance")
+                previous_descriptor = state.get("descriptor")
+                similarity = (
+                    appearance_similarity(descriptor, previous_descriptor)
+                    if descriptor is not None and isinstance(previous_descriptor, list)
+                    else 1.0
+                )
+                if similarity < REID_MIN_CONTINUITY_SIMILARITY:
+                    # The detector reused a raw id for a different object. Let the normal
+                    # appearance search below assign the new object a new stable id.
+                    self.raw_to_stable.pop(raw_track_id, None)
+                    stable_id = None
+
+        if stable_id is None:
+            # A returned robot with the same resolved alliance is the strongest handoff signal.
+            # Appearance is still useful for colourless/ambiguous detections, but it should not
+            # split a red robot into a new identity merely because its crop changed at the edge.
+            candidates: list[tuple[int, float, float, int]] = []
+            same_colour_outside_distance: list[tuple[float, int]] = []
+            for candidate_id, state in self.states.items():
+                if candidate_id in used:
+                    continue
+                if any(
+                    mapped == candidate_id and raw_id in present
+                    for raw_id, mapped in self.raw_to_stable.items()
+                ):
+                    continue
+                gap = timestamp - float(state["last_seen"])
+                if gap <= 0.0 or gap > self.memory_seconds:
+                    continue
+                previous_alliance = state.get("alliance")
+                if alliance and previous_alliance and alliance != previous_alliance:
+                    continue
+                same_colour = bool(alliance and previous_alliance == alliance)
+                previous_center = state["center"]
+                distance = math.hypot(
+                    center[0] - float(previous_center[0]),
+                    center[1] - float(previous_center[1]),
+                )
+                if distance > self.max_center_distance:
+                    # A robot can re-enter on the other side of the camera after crossing an
+                    # occlusion. If it is the only remembered robot of this colour, colour is a
+                    # stronger identity signal than a stale image-space distance.
+                    if same_colour:
+                        same_colour_outside_distance.append((-distance, candidate_id))
+                    continue
+                previous_descriptor = state.get("descriptor")
+                similarity = (
+                    appearance_similarity(descriptor, previous_descriptor)
+                    if descriptor is not None and isinstance(previous_descriptor, list)
+                    else 0.0
+                )
+                # A descriptor is normally available. If the crop is temporarily unusable,
+                # only fall back to nearest position when this is the sole compatible candidate.
+                if same_colour:
+                    candidates.append((1, similarity, -distance, candidate_id))
+                elif similarity >= self.appearance_threshold:
+                    candidates.append((0, similarity, -distance, candidate_id))
+                elif descriptor is None or not isinstance(previous_descriptor, list):
+                    candidates.append((0, 0.0, -distance, candidate_id))
+            if candidates:
+                # Colour is primary by design; appearance and then distance break ties between
+                # multiple robots on the same alliance.
+                stable_id = max(candidates)[3]
+            elif len(same_colour_outside_distance) == 1:
+                # Honour the requested colour handoff when there is no competing same-colour
+                # memory to make the assignment ambiguous.
+                stable_id = same_colour_outside_distance[0][1]
+            else:
+                stable_id = self.next_stable_id
+                self.next_stable_id += 1
+            self.raw_to_stable[raw_track_id] = stable_id
+
+        state = self.states.get(stable_id)
+        if state is None:
+            state = {
+                "last_seen": timestamp,
+                "center": center,
+                "descriptor": descriptor,
+                "alliance": alliance,
+            }
+            self.states[stable_id] = state
+            return stable_id
+
+        previous_descriptor = state.get("descriptor")
+        if descriptor is not None:
+            if isinstance(previous_descriptor, list) and len(previous_descriptor) == len(descriptor):
+                blended = [0.8 * old + 0.2 * new for old, new in zip(previous_descriptor, descriptor)]
+                norm = math.sqrt(sum(value * value for value in blended))
+                state["descriptor"] = [value / norm for value in blended] if norm > 1e-12 else descriptor
+            else:
+                state["descriptor"] = descriptor
+        state["last_seen"] = timestamp
+        state["center"] = center
+        if state.get("alliance") is None and alliance is not None:
+            state["alliance"] = alliance
+        return stable_id
 
 
 def contract_track_records(
@@ -25,23 +335,38 @@ def contract_track_records(
     fps: float,
     alliances: dict[int, str | None] | None = None,
     position_source: str | None = None,
+    visible_track_ids: set[int] | None = None,
 ) -> list[dict[str, object]]:
     if fps <= 0:
         raise ValueError("fps must be positive")
     frame_interval = 1.0 / fps
     records = []
+    visible = visible_track_ids if visible_track_ids is not None else eligible_track_ids(tracks, alliances)
     for track_id, boxes in sorted(tracks.items()):
+        if track_id not in visible:
+            continue
         gaps = []
         for previous, current in zip(boxes, boxes[1:]):
             if current["t"] - previous["t"] > frame_interval * 1.5:
+                near_edge = (
+                    float(previous["x"]) <= 0.03
+                    or float(previous["x"]) + float(previous["w"]) >= 0.97
+                    or float(previous["y"]) <= 0.03
+                    or float(previous["y"]) + float(previous["h"]) >= 0.97
+                    or float(current["x"]) <= 0.03
+                    or float(current["x"]) + float(current["w"]) >= 0.97
+                    or float(current["y"]) <= 0.03
+                    or float(current["y"]) + float(current["h"]) >= 0.97
+                )
                 gaps.append({
                     "start": round(previous["t"] + frame_interval, 6),
                     "end": round(current["t"] - frame_interval, 6),
-                    "reason": "detection_lost",
+                    "reason": "out_of_frame" if near_edge else "occlusion",
                 })
         record: dict[str, object] = {
             "schema_version": 3,
             "track_id": track_id,
+            "robot_name": f"robot{track_id}",
             "team": None,
             "alliance": (alliances or {}).get(track_id),
             "team_confidence": None,
@@ -60,12 +385,15 @@ def write_track_records(
     fps: float,
     alliances: dict[int, str | None] | None = None,
     position_source: str | None = None,
+    visible_track_ids: set[int] | None = None,
 ) -> None:
     """Atomically publish the tracks accumulated so far for the live UI overlay."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp")
     with temporary.open("w", encoding="utf-8") as handle:
-        for record in contract_track_records(tracks, fps, alliances, position_source):
+        for record in contract_track_records(
+            tracks, fps, alliances, position_source, visible_track_ids
+        ):
             handle.write(json.dumps(record, sort_keys=True) + "\n")
     # The browser polls the partial file while the worker is writing it. Windows can briefly
     # keep that read handle open, so retry the atomic swap instead of aborting the whole run.
@@ -87,7 +415,13 @@ def bumper_color(image, raw_box: list[float]) -> str | None:
     left, top, right, bottom = (int(round(value)) for value in raw_box)
     left = max(0, min(width - 1, left))
     right = max(left + 1, min(width, right))
-    top = max(0, min(height - 1, top + int((bottom - top) * 0.55)))
+    # Use the central lower bumper, not the full width of the box.  At the edge of a broadcast
+    # crop a laptop, scoreboard, or field hardware can otherwise borrow red/blue pixels from the
+    # adjacent overlay and be mistaken for a coloured robot.
+    horizontal_margin = int((right - left) * 0.15)
+    left = min(right - 1, left + horizontal_margin)
+    right = max(left + 1, right - horizontal_margin)
+    top = max(0, min(height - 1, top + int((bottom - top) * 0.60)))
     bottom = max(top + 1, min(height, bottom))
     region = image[top:bottom, left:right]
     if region.size == 0:
@@ -333,8 +667,8 @@ def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
             raise RuntimeError(f"yt-dlp stream failed: {yt_stderr.strip()[-1000:]}")
 
 
-def colored_detections(result):
-    """Draw every YOLO robot detection using its inferred bumper color or neutral gray."""
+def colored_detections(result, stable_ids=None, visible_track_ids: set[int] | None = None):
+    """Draw only public detections, using stable ids and inferred bumper colours."""
     import cv2
 
     source_image = result.orig_img
@@ -347,19 +681,25 @@ def colored_detections(result):
         result.boxes.id.detach().cpu().tolist()
         if result.boxes.id is not None else [None] * len(boxes)
     )
+    if stable_ids is not None:
+        identifiers = stable_ids
     palette = {
         "red": (55, 75, 225),
         "blue": (225, 120, 55),
         None: (155, 155, 155),
     }
     for raw_box, confidence, identifier in zip(boxes, confidences, identifiers):
+        if identifier is None:
+            continue
+        stable_id = int(identifier)
+        if visible_track_ids is not None and stable_id not in visible_track_ids:
+            continue
         left, top, right, bottom = (int(round(value)) for value in raw_box)
         alliance = bumper_color(source_image, raw_box)
         colour = palette[alliance]
         cv2.rectangle(image, (left, top), (right, bottom), colour, 3)
         label = "robot"
-        if identifier is not None:
-            label += f" id:{int(identifier)}"
+        label += f" id:{stable_id}"
         label += f" {float(confidence):.2f}"
         (text_width, text_height), baseline = cv2.getTextSize(
             label, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2
@@ -385,8 +725,12 @@ def colored_detections(result):
     return image
 
 
-def detection_records(result) -> list[dict[str, object]]:
-    """Return box metadata for one clean source frame without drawing on the frame."""
+def detection_records(
+    result,
+    stable_ids=None,
+    visible_track_ids: set[int] | None = None,
+) -> list[dict[str, object]]:
+    """Return metadata for public detections on one clean source frame."""
     if result.boxes is None:
         return []
     image = result.orig_img
@@ -397,13 +741,20 @@ def detection_records(result) -> list[dict[str, object]]:
         result.boxes.id.detach().cpu().tolist()
         if result.boxes.id is not None else [None] * len(boxes)
     )
+    if stable_ids is not None:
+        identifiers = stable_ids
     records: list[dict[str, object]] = []
     for raw_box, confidence, identifier in zip(boxes, confidences, identifiers):
+        if identifier is None:
+            continue
+        stable_id = int(identifier)
+        if visible_track_ids is not None and stable_id not in visible_track_ids:
+            continue
         left, top, right, bottom = (float(value) for value in raw_box)
         alliance = bumper_color(image, raw_box)
         records.append({
             "label": "robot",
-            "track_id": int(identifier) if identifier is not None else None,
+            "track_id": stable_id,
             "confidence": round(float(confidence), 6),
             "alliance": alliance,
             "bbox_xyxy": [
@@ -431,6 +782,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--confidence", type=float, default=0.20)
     parser.add_argument("--image-size", type=int, default=960)
     parser.add_argument("--device", default="0")
+    parser.add_argument(
+        "--reid-memory-seconds",
+        type=float,
+        default=DEFAULT_REID_MEMORY_SECONDS,
+        help="seconds a lost robot remains eligible for appearance re-identification",
+    )
+    parser.add_argument(
+        "--reid-appearance-threshold",
+        type=float,
+        default=DEFAULT_REID_APPEARANCE_THRESHOLD,
+        help="minimum cosine appearance similarity for stitching a new raw id",
+    )
+    parser.add_argument(
+        "--reid-max-distance",
+        type=float,
+        default=DEFAULT_REID_MAX_CENTER_DISTANCE,
+        help="maximum normalized image-centre travel during a re-identification gap",
+    )
     parser.add_argument("--annotated-output", help="optional MP4 preview")
     parser.add_argument(
         "--snapshot-dir",
@@ -476,6 +845,12 @@ def main() -> int:
         raise SystemExit("Install training/requirements-yolo.txt in the dedicated vision venv") from exc
     if args.snapshot_interval <= 0:
         raise SystemExit("--snapshot-interval must be greater than zero")
+    if args.reid_memory_seconds <= 0:
+        raise SystemExit("--reid-memory-seconds must be greater than zero")
+    if not 0.0 <= args.reid_appearance_threshold <= 1.0:
+        raise SystemExit("--reid-appearance-threshold must be between zero and one")
+    if args.reid_max_distance <= 0:
+        raise SystemExit("--reid-max-distance must be greater than zero")
     output.parent.mkdir(parents=True, exist_ok=True)
     mapper = None
     position_source = None
@@ -558,13 +933,24 @@ def main() -> int:
         fps = source_frames.fps
         total_frames = source_frames.total_frames
     model = YOLO(str(model_path))
+    tracker_config = Path(__file__).resolve().parent / "trackers" / f"{args.tracker}.yaml"
+    if not tracker_config.is_file():
+        raise SystemExit(f"Missing persistent tracker configuration: {tracker_config}")
     results = model.track(
-        source=source_frames, stream=True, persist=True, tracker=f"{args.tracker}.yaml",
+        source=source_frames, stream=True, persist=True, tracker=str(tracker_config),
         conf=args.confidence, imgsz=args.image_size, device=args.device, verbose=False,
     )
     tracks: dict[int, list[dict[str, object]]] = {}
     alliance_votes: dict[int, dict[str, int]] = {}
     motion_history: dict[int, list[tuple[float, float, float]]] = {}
+    image_motion_windows: dict[int, list[dict[str, object]]] = {}
+    last_motion_at: dict[int, float] = {}
+    suppressed_stationary_ids: set[int] = set()
+    track_memory = AppearanceTrackMemory(
+        memory_seconds=args.reid_memory_seconds,
+        appearance_threshold=args.reid_appearance_threshold,
+        max_center_distance=args.reid_max_distance,
+    )
     writer = None
     annotated_path = Path(args.annotated_output) if args.annotated_output else None
     if annotated_path:
@@ -581,6 +967,7 @@ def main() -> int:
     publish_interval = max(1, int(round(fps)))
     for frame_index, result in enumerate(results):
         timestamp = round(frame_index / fps, 6)
+        stable_ids: list[int | None] = []
         if result.boxes is not None:
             xyxy = result.boxes.xyxy.detach().cpu().tolist()
             identifiers = (
@@ -588,12 +975,31 @@ def main() -> int:
                 if result.boxes.id is not None else [None] * len(xyxy)
             )
             height, width = result.orig_img.shape[:2]
+            present_raw_ids = {
+                int(identifier) for identifier in identifiers if identifier is not None
+            }
+            used_stable_ids: set[int] = set()
             for raw_box, identifier in zip(xyxy, identifiers):
                 left, top, right, bottom = (float(value) for value in raw_box)
                 if identifier is None:
+                    stable_ids.append(None)
                     continue
-                track_id = int(identifier)
                 alliance = bumper_color(result.orig_img, raw_box)
+                center = (
+                    ((left + right) / 2.0) / width,
+                    ((top + bottom) / 2.0) / height,
+                )
+                track_id = track_memory.resolve(
+                    int(identifier),
+                    timestamp,
+                    appearance_descriptor(result.orig_img, raw_box),
+                    center,
+                    alliance,
+                    used_stable_ids,
+                    present_raw_ids,
+                )
+                stable_ids.append(track_id)
+                used_stable_ids.add(track_id)
                 if alliance:
                     counts = alliance_votes.setdefault(track_id, {"red": 0, "blue": 0})
                     counts[alliance] += 1
@@ -609,6 +1015,20 @@ def main() -> int:
                         "height": round((bottom - top) / height, 6),
                     },
                 }
+                motion_sample = {
+                    "x": sample["x"], "y": sample["y"],
+                    "w": sample["w"], "h": sample["h"],
+                }
+                motion_window = image_motion_windows.setdefault(track_id, [])
+                motion_window.append(motion_sample)
+                motion_window[:] = motion_window[-max(2, int(round(fps * 1.25))):]
+                last_motion_at.setdefault(track_id, timestamp)
+                if image_window_has_motion(motion_window):
+                    last_motion_at[track_id] = timestamp
+                if (
+                    timestamp - last_motion_at[track_id] >= STATIONARY_SUPPRESSION_SECONDS
+                ):
+                    suppressed_stationary_ids.add(track_id)
                 add_field_motion(
                     sample,
                     mapper,
@@ -621,6 +1041,8 @@ def main() -> int:
                 sample.pop("track_id", None)
                 sample.pop("bbox_normalized", None)
                 tracks.setdefault(track_id, []).append(sample)
+        alliances = resolved_alliances(alliance_votes)
+        visible_track_ids = eligible_track_ids(tracks, alliances, suppressed_stationary_ids)
         if snapshot_dir and timestamp + (0.5 / fps) >= next_snapshot:
             clean_frame = result.orig_img.copy()
             snapshot_name = f"snapshot_{int(round(next_snapshot)):06d}s.jpg"
@@ -633,11 +1055,11 @@ def main() -> int:
                 "frame_index": frame_index,
                 "width": int(clean_frame.shape[1]),
                 "height": int(clean_frame.shape[0]),
-                "boxes": detection_records(result),
+                "boxes": detection_records(result, stable_ids, visible_track_ids),
             })
             next_snapshot += args.snapshot_interval
         if annotated_path:
-            plotted = colored_detections(result)
+            plotted = colored_detections(result, stable_ids, visible_track_ids)
             if writer is None:
                 height, width = plotted.shape[:2]
                 writer = cv2.VideoWriter(
@@ -648,7 +1070,12 @@ def main() -> int:
             fraction = min(1.0, (frame_index + 1) / total_frames) if total_frames else None
             if partial_output:
                 write_track_records(
-                    partial_output, tracks, fps, resolved_alliances(alliance_votes), position_source
+                    partial_output,
+                    tracks,
+                    fps,
+                    alliances,
+                    position_source,
+                    visible_track_ids,
                 )
             print(json.dumps({
                 "progress": round(0.10 + fraction * 0.80, 6) if fraction is not None else None,
@@ -657,7 +1084,10 @@ def main() -> int:
     if writer is not None:
         writer.release()
     alliances = resolved_alliances(alliance_votes)
-    write_track_records(output, tracks, fps, alliances, position_source)
+    write_track_records(
+        output, tracks, fps, alliances, position_source,
+        eligible_track_ids(tracks, alliances, suppressed_stationary_ids)
+    )
     if snapshot_dir:
         (snapshot_dir / "annotations.json").write_text(
             json.dumps({

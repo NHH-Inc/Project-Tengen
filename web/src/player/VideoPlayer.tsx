@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlayableJob, Track } from '../contracts';
 import type { ViewEvent } from '../lib/corrections';
 import { EVENT_LABEL, fmtClock, fmtTime, youtubeUrlAt } from '../lib/format';
-import { visibleBoxes } from '../lib/tracks';
+import { robotName, visibleBoxes } from '../lib/tracks';
 import { phaseBounds, type SeasonConfig } from '../season';
 
 // requestVideoFrameCallback is what makes the overlay frame-accurate instead of merely
@@ -196,7 +196,10 @@ export function VideoPlayer({
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
 
-      const label = identified ? String(track.team) : `track ${track.trackId}`;
+      // Track ids are implementation details and can be large or change in older output. The
+      // runner now persists robot1/robot2/...; robotName supplies a deterministic fallback for
+      // already-saved jobs.
+      const label = robotName(track, s.tracks);
       ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
       const tw = ctx.measureText(label).width;
       const lh = 16;
@@ -396,21 +399,32 @@ export function VideoPlayer({
 
   // ---- scrub bar markers
 
+  // The range input covers the trimmed playback window, not the entire source duration. Using
+  // `seconds / duration` here made the white playhead drift from the native range thumb by the
+  // lead-in and tail trims, and could place event markers outside the visible bar.
+  const scrubSpan = playbackEnd - playbackStart;
+  const positionPct = (seconds: number) => (
+    scrubSpan > 0
+      ? Math.min(100, Math.max(0, ((seconds - playbackStart) / scrubSpan) * 100))
+      : 0
+  );
+
   const markers = useMemo(
     () =>
       events
         .filter((e) => e.eventType === 'shot_made' || e.eventType === 'shot_attempt' || e.eventType === 'foul')
         .map((e) => ({
           id: e.eventId,
-          left: (e.tSeconds / duration) * 100,
+          tSeconds: e.tSeconds,
+          left: positionPct(e.tSeconds),
           low: e.confidence < confidenceThreshold,
           type: e.eventType,
         })),
-    [events, duration, confidenceThreshold]
+    [events, playbackStart, playbackEnd, scrubSpan, confidenceThreshold]
   );
 
   const selected = events.find((e) => e.eventId === selectedEventId) ?? null;
-  const phasePct = (seconds: number) => Math.min(100, Math.max(0, (seconds / duration) * 100));
+  const phasePct = positionPct;
 
   const toggleFullscreen = async () => {
     try {
@@ -558,12 +572,15 @@ export function VideoPlayer({
               key={m.id}
               type="button"
               className={`scrub-marker ${m.type} ${m.low ? 'low' : ''} ${m.id === selectedEventId ? 'on' : ''}`}
-              style={{ left: `${m.left}%` }}
-              title={`${EVENT_LABEL[m.type as keyof typeof EVENT_LABEL]} @ ${fmtTime((m.left / 100) * duration)}`}
+              style={{ left: `clamp(1px, ${m.left}%, calc(100% - 2px))` }}
+              title={`${EVENT_LABEL[m.type as keyof typeof EVENT_LABEL]} @ ${fmtTime(m.tSeconds)}`}
               onClick={() => onSelectEvent(m.id)}
             />
           ))}
-          <div className="scrub-playhead" style={{ left: `${(time / duration) * 100}%` }} />
+          <div
+            className="scrub-playhead"
+            style={{ left: `clamp(1px, ${positionPct(time)}%, calc(100% - 1px))` }}
+          />
           <input
             className="scrub-input"
             type="range"

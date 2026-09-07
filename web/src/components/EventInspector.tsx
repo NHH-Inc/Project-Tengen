@@ -3,6 +3,7 @@ import { EVENT_TYPES, type EventType, type Job, type ScoutEvent, type Track } fr
 import type { SeasonConfig } from '../season';
 import type { ViewEvent } from '../lib/corrections';
 import { EVENT_LABEL, PHASE_LABEL, SOURCE_LABEL, fmtTime } from '../lib/format';
+import { robotName } from '../lib/tracks';
 
 // Doc 3: "Build this early. Users will find wrong calls, and a tool that cannot be corrected
 // will not be trusted." And: "Minimum useful version: scrub to an event, see what the
@@ -178,6 +179,7 @@ export function EventInspector(props: EventInspectorProps) {
           <EventRow
             key={e.eventId}
             e={e}
+            tracks={tracks}
             low={e.confidence < confidenceThreshold}
             selected={e.eventId === selectedEventId}
             onClick={() => {
@@ -191,6 +193,7 @@ export function EventInspector(props: EventInspectorProps) {
       {selected && (
         <EditPanel
           e={selected}
+          tracks={tracks}
           season={season}
           teams={allTeams}
           busy={busy}
@@ -226,11 +229,13 @@ export function EventInspector(props: EventInspectorProps) {
 
 function EventRow({
   e,
+  tracks,
   low,
   selected,
   onClick,
 }: {
   e: ViewEvent;
+  tracks: Track[];
   low: boolean;
   selected: boolean;
   onClick: () => void;
@@ -243,7 +248,12 @@ function EventRow({
     >
       <span className="t">{fmtTime(e.tSeconds)}</span>
       <span className={`team ${e.team == null ? 'none' : ''}`}>
-        {e.team ?? (e.trackId != null ? `tr${e.trackId}` : '--')}
+        {e.team ?? (e.trackId != null
+          ? (() => {
+              const track = tracks.find((candidate) => candidate.trackId === e.trackId);
+              return track ? robotName(track, tracks) : '--';
+            })()
+          : '--')}
       </span>
       <span className="type">{EVENT_LABEL[e.eventType]}</span>
       <span className="phase">{PHASE_LABEL[e.phase]}</span>
@@ -261,6 +271,7 @@ function EventRow({
 
 function EditPanel({
   e,
+  tracks,
   season,
   teams,
   busy,
@@ -269,6 +280,7 @@ function EditPanel({
   onSeek,
 }: {
   e: ViewEvent;
+  tracks: Track[];
   season: SeasonConfig;
   teams: number[];
   busy: boolean;
@@ -339,7 +351,14 @@ function EditPanel({
         )}
 
         <div className="edit-meta">
-          <span>track {e.trackId ?? '--'}</span>
+          <span>
+            {(() => {
+              const track = e.trackId == null
+                ? null
+                : tracks.find((candidate) => candidate.trackId === e.trackId);
+              return track ? robotName(track, tracks) : 'robot --';
+            })()}
+          </span>
           <span>{PHASE_LABEL[e.phase]}</span>
           <span>{SOURCE_LABEL[e.source]}</span>
           <span>
@@ -480,7 +499,7 @@ function TrackPanel({
   return (
     <details className="track-panel" open>
       <summary>
-        Re-attribute track <span className="muted">{ordered.length} tracked robots</span>
+        Re-attribute robot <span className="muted">{ordered.length} tracked robots</span>
       </summary>
       <p className="note">
         Fixes the track and every event on it in one action. Least-confident identifications
@@ -492,7 +511,7 @@ function TrackPanel({
           return (
             <div key={t.trackId} className={`track-row ${shaky ? 'shaky' : ''}`}>
               <span className={`chip ${t.alliance ?? ''}`}>
-                {t.team ?? `track ${t.trackId}`}
+                {robotName(t, tracks)}{t.team != null ? ` · ${t.team}` : ''}
               </span>
               <span className="muted tconf">
                 {t.teamConfidence != null ? `id ${t.teamConfidence.toFixed(2)}` : 'unidentified'}

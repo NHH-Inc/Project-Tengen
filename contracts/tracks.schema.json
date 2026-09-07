@@ -9,6 +9,7 @@
   "properties": {
     "schema_version": { "type": "integer", "const": 3 },
     "track_id": { "type": "integer", "description": "Unique within a job only." },
+    "robot_name": { "type": ["string", "null"], "description": "Stable job-local display name, e.g. robot1." },
     "team": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
     "alliance": { "type": ["string", "null"], "enum": ["red", "blue", null] },
     "position_source": { "type": ["string", "null"], "description": "Calibration source used for optional field positions." },
