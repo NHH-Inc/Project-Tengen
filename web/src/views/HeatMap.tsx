@@ -10,10 +10,9 @@ import { fieldExtents, type SeasonConfig } from '../season';
 const GRID_X = 72;
 const GRID_Y = 36;
 const SIGMA = 1.6; // grid cells
-// The generated AprilTag homography is calibrated from the broadcast frame itself. Its field X
-// already has the same left/right orientation as the video (blue on the left, red on the right),
-// so applying another mirror here would put red robots on the blue side.
-const MIRROR_FIELD_X_FOR_BROADCAST = false;
+// AprilTag field coordinates use the opposite X direction from this broadcast view. Keep the
+// display transform in one place so the field walls and robot positions share the same orientation.
+const MIRROR_FIELD_X_FOR_BROADCAST = true;
 
 export interface HeatMapProps {
   season: SeasonConfig;
@@ -132,7 +131,8 @@ export function HeatMap({
         ? FIELD.maxX - e.fieldX! + FIELD.minX
         : e.fieldX!;
       const gx = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * (GRID_X - 1);
-      const gy = ((e.fieldY! - FIELD.minY) / FIELD.widthFt) * (GRID_Y - 1);
+      const displayFieldY = FIELD.maxY - e.fieldY! + FIELD.minY;
+      const gy = ((displayFieldY - FIELD.minY) / FIELD.widthFt) * (GRID_Y - 1);
       const x0 = Math.max(0, Math.floor(gx - radius));
       const x1 = Math.min(GRID_X - 1, Math.ceil(gx + radius));
       const y0 = Math.max(0, Math.floor(gy - radius));
@@ -182,7 +182,8 @@ export function HeatMap({
           ? FIELD.maxX - path[i].fieldX + FIELD.minX
           : path[i].fieldX;
         const x = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
-        const y = ((path[i].fieldY - FIELD.minY) / FIELD.widthFt) * cssH;
+        const displayFieldY = FIELD.maxY - path[i].fieldY + FIELD.minY;
+        const y = ((displayFieldY - FIELD.minY) / FIELD.widthFt) * cssH;
         if (i === 0 || path[i].t - path[i - 1].t > 0.75) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -197,7 +198,8 @@ export function HeatMap({
         ? FIELD.maxX - box.fieldX! + FIELD.minX
         : box.fieldX!;
       const x = ((displayFieldX - FIELD.minX) / FIELD.lengthFt) * cssW;
-      const y = ((box.fieldY! - FIELD.minY) / FIELD.widthFt) * cssH;
+      const displayFieldY = FIELD.maxY - box.fieldY! + FIELD.minY;
+      const y = ((displayFieldY - FIELD.minY) / FIELD.widthFt) * cssH;
       const colour = track.alliance === 'red' ? '#ff6973' : track.alliance === 'blue' ? '#69a5ff' : '#f0f3f8';
       ctx.fillStyle = colour;
       ctx.strokeStyle = '#0d0f14';
