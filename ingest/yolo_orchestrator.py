@@ -105,6 +105,8 @@ class YoloAnalysisOrchestrator:
         reid_template_min_confidence: float = 0.50,
         reid_alliance_lock_seconds: float = 5.0,
         reid_alliance_lock_margin_seconds: float = 2.0,
+        startup_position_seconds: float = 2.0,
+        startup_split_x: float = 0.50,
         auto_homography: bool = True,
         homography_hfov_deg: float = 70.0,
     ):
@@ -129,6 +131,8 @@ class YoloAnalysisOrchestrator:
         self.reid_template_min_confidence = reid_template_min_confidence
         self.reid_alliance_lock_seconds = reid_alliance_lock_seconds
         self.reid_alliance_lock_margin_seconds = reid_alliance_lock_margin_seconds
+        self.startup_position_seconds = startup_position_seconds
+        self.startup_split_x = startup_split_x
         self.auto_homography = auto_homography
         self.homography_hfov_deg = homography_hfov_deg
         self.homography_path = self._resolve_optional(
@@ -172,6 +176,8 @@ class YoloAnalysisOrchestrator:
             "reid_template_min_confidence": self.reid_template_min_confidence,
             "reid_alliance_lock_seconds": self.reid_alliance_lock_seconds,
             "reid_alliance_lock_margin_seconds": self.reid_alliance_lock_margin_seconds,
+            "startup_position_seconds": self.startup_position_seconds,
+            "startup_split_x": self.startup_split_x,
             "homography": str(self.homography_path) if self.homography_path else None,
             "homography_available": bool(self.homography_path and self.homography_path.is_file()),
             "auto_homography": self.auto_homography,
@@ -305,6 +311,10 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_REID_ALLIANCE_LOCK_SECONDS must be greater than zero")
         if self.reid_alliance_lock_margin_seconds < 0:
             raise RuntimeError("FRC_YOLO_REID_ALLIANCE_LOCK_MARGIN_SECONDS cannot be negative")
+        if self.startup_position_seconds < 0:
+            raise RuntimeError("FRC_YOLO_STARTUP_POSITION_SECONDS cannot be negative")
+        if not 0.0 < self.startup_split_x < 1.0:
+            raise RuntimeError("FRC_YOLO_STARTUP_SPLIT_X must be between zero and one")
 
         job_id = str(job_data["job_id"])
         job_dir = self.output_base_dir / job_id
@@ -364,6 +374,10 @@ class YoloAnalysisOrchestrator:
             str(self.reid_alliance_lock_seconds),
             "--reid-alliance-lock-margin-seconds",
             str(self.reid_alliance_lock_margin_seconds),
+            "--startup-position-seconds",
+            str(self.startup_position_seconds),
+            "--startup-split-x",
+            str(self.startup_split_x),
             "--raw-output",
             str(raw_tracks_path),
             *(["--homography", str(job_homography)] if job_homography else []),

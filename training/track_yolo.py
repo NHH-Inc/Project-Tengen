@@ -44,6 +44,8 @@ DEFAULT_REID_TEMPLATE_MIN_CONFIDENCE = 0.50
 DEFAULT_REID_ALLIANCE_LOCK_SECONDS = 5.0
 DEFAULT_REID_ALLIANCE_LOCK_MARGIN_SECONDS = 2.0
 DEFAULT_REID_ALLIANCE_EVIDENCE_MAX_GAP_SECONDS = 0.25
+DEFAULT_STARTUP_POSITION_SECONDS = 2.0
+DEFAULT_STARTUP_SPLIT_X = 0.50
 MAX_ROBOTS = 6
 
 
@@ -81,6 +83,24 @@ def track_has_motion(
         max(point[1] for point in centres) - min(point[1] for point in centres),
     )
     return span >= required
+
+
+def startup_alliance(
+    detected_alliance: str | None,
+    center_x: float,
+    timestamp: float,
+    startup_seconds: float = DEFAULT_STARTUP_POSITION_SECONDS,
+    split_x: float = DEFAULT_STARTUP_SPLIT_X,
+) -> str | None:
+    """Apply the known broadcast orientation only during the opening position window.
+
+    The raw bumper-colour observation is preserved separately. Once the opening window ends,
+    alliance comes from visual evidence again because robots can cross the field midpoint.
+    """
+
+    if startup_seconds > 0.0 and 0.0 <= timestamp < startup_seconds:
+        return "blue" if center_x < split_x else "red"
+    return detected_alliance
 
 
 def image_window_has_motion(
@@ -274,6 +294,8 @@ class ReIDConfig:
     alliance_evidence_max_gap_seconds: float = DEFAULT_REID_ALLIANCE_EVIDENCE_MAX_GAP_SECONDS
     alliance_evidence_min_detection_confidence: float = 0.50
     alliance_evidence_min_assignment_score: float = 0.70
+    startup_position_seconds: float = DEFAULT_STARTUP_POSITION_SECONDS
+    startup_split_x: float = DEFAULT_STARTUP_SPLIT_X
 
 
 @dataclass(frozen=True)
@@ -285,6 +307,7 @@ class ReIDDetection:
     edge: str | None = None
     field_center: tuple[float, float] | None = None
     confidence: float = 1.0
+    alliance_is_authoritative: bool = False
 
 
 @dataclass
@@ -362,6 +385,9 @@ class AppearanceTrackMemory:
         """Accumulate trusted observation time, then permanently lock a clear alliance."""
 
         if state.alliance is not None or detection.alliance not in {"red", "blue"}:
+            return
+        if detection.alliance_is_authoritative:
+            state.alliance = detection.alliance
             return
         if detection.confidence < self.config.alliance_evidence_min_detection_confidence:
             return
@@ -504,9 +530,9 @@ class AppearanceTrackMemory:
             self.states[stable_id] = _IdentityState(
                 last_seen=timestamp,
                 center=detection.center,
-                # One bumper-colour read is provisional; sustained evidence below performs the
-                # irreversible alliance lock.
-                alliance=None,
+                # A known starting side is authoritative. Ordinary bumper-colour reads remain
+                # provisional until sustained evidence performs the irreversible lock.
+                alliance=(detection.alliance if detection.alliance_is_authoritative else None),
                 templates=[detection.descriptor] if detection.descriptor is not None else [],
                 last_raw_id=detection.raw_track_id,
                 last_edge=detection.edge or self._edge(detection.center),
@@ -1327,6 +1353,18 @@ def parse_args() -> argparse.Namespace:
         help="required evidence-time lead over the opposite alliance before locking",
     )
     parser.add_argument(
+        "--startup-position-seconds",
+        type=float,
+        default=DEFAULT_STARTUP_POSITION_SECONDS,
+        help="opening duration where left is blue and right is red; zero disables the prior",
+    )
+    parser.add_argument(
+        "--startup-split-x",
+        type=float,
+        default=DEFAULT_STARTUP_SPLIT_X,
+        help="normalized image x coordinate separating the blue-left and red-right starts",
+    )
+    parser.add_argument(
         "--raw-output",
         help="immutable raw tracker-tracklet JSONL (default: <output stem>.raw.jsonl)",
     )
@@ -1404,6 +1442,10 @@ def main() -> int:
         raise SystemExit("--reid-alliance-lock-seconds must be greater than zero")
     if args.reid_alliance_lock_margin_seconds < 0:
         raise SystemExit("--reid-alliance-lock-margin-seconds cannot be negative")
+    if args.startup_position_seconds < 0:
+        raise SystemExit("--startup-position-seconds cannot be negative")
+    if not 0.0 < args.startup_split_x < 1.0:
+        raise SystemExit("--startup-split-x must be between zero and one")
     output.parent.mkdir(parents=True, exist_ok=True)
     homography_path = args.homography
     if args.stream_url and args.auto_homography and not homography_path:
@@ -1533,6 +1575,8 @@ def main() -> int:
         template_min_detection_confidence=args.reid_template_min_confidence,
         alliance_lock_seconds=args.reid_alliance_lock_seconds,
         alliance_lock_margin_seconds=args.reid_alliance_lock_margin_seconds,
+        startup_position_seconds=args.startup_position_seconds,
+        startup_split_x=args.startup_split_x,
     )
     track_memory = AppearanceTrackMemory(config=reid_config)
     raw_tracklets: dict[int, dict[str, object]] = {}
@@ -1574,7 +1618,6 @@ def main() -> int:
                 left, top, right, bottom = (float(value) for value in raw_box)
                 if identifier is None:
                     continue
-                alliance = bumper_color(result.orig_img, raw_box)
                 normalized_box = (
                     left / width,
                     top / height,
@@ -1584,6 +1627,14 @@ def main() -> int:
                 center = (
                     ((left + right) / 2.0) / width,
                     ((top + bottom) / 2.0) / height,
+                )
+                detected_alliance = bumper_color(result.orig_img, raw_box)
+                alliance = startup_alliance(
+                    detected_alliance,
+                    center[0],
+                    timestamp,
+                    reid_config.startup_position_seconds,
+                    reid_config.startup_split_x,
                 )
                 raw_track_id = int(identifier)
                 detection_indices.append(detection_index)
@@ -1597,18 +1648,37 @@ def main() -> int:
                         normalized_box, mapper, tuple(args.crop), int(width), int(height)
                     ),
                     confidence=float(confidence),
+                    alliance_is_authoritative=(
+                        reid_config.startup_position_seconds > 0.0
+                        and 0.0 <= timestamp < reid_config.startup_position_seconds
+                    ),
                 ))
                 frame_metadata[detection_index] = (
-                    raw_track_id, alliance, float(confidence), left, top, right, bottom,
+                    raw_track_id,
+                    detected_alliance,
+                    alliance,
+                    float(confidence),
+                    left,
+                    top,
+                    right,
+                    bottom,
                     normalized_box,
                 )
 
             resolved_frame = track_memory.resolve_frame(timestamp, reid_detections)
             for detection_index, track_id in zip(detection_indices, resolved_frame):
                 stable_ids[detection_index] = track_id
-                raw_track_id, alliance, confidence, left, top, right, bottom, normalized_box = (
-                    frame_metadata[detection_index]
-                )
+                (
+                    raw_track_id,
+                    detected_alliance,
+                    alliance,
+                    confidence,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    normalized_box,
+                ) = frame_metadata[detection_index]
                 session = raw_sessions.get(raw_track_id)
                 if (
                     session is None
@@ -1633,7 +1703,8 @@ def main() -> int:
                     "w": round(normalized_box[2], 6),
                     "h": round(normalized_box[3], 6),
                     "confidence": round(confidence, 6),
-                    "alliance": alliance,
+                    "alliance": detected_alliance,
+                    "effective_alliance": alliance,
                     "stable_track_id": track_id,
                 })
                 if track_id is None:

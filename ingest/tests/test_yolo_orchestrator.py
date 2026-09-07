@@ -17,6 +17,7 @@ from training.track_yolo import (
     eligible_track_ids,
     image_window_has_motion,
     resolved_alliances,
+    startup_alliance,
     track_has_motion,
 )
 
@@ -78,6 +79,8 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertEqual(health["reid_memory_seconds"], 5.0)
             self.assertEqual(health["reid_alliance_lock_seconds"], 5.0)
             self.assertEqual(health["reid_alliance_lock_margin_seconds"], 2.0)
+            self.assertEqual(health["startup_position_seconds"], 2.0)
+            self.assertEqual(health["startup_split_x"], 0.5)
             self.assertTrue(health["auto_homography"])
 
     def test_stream_job_invokes_yolo_without_a_local_video(self):
@@ -136,11 +139,21 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertNotIn("--video", command)
             self.assertIn("--reid-alliance-lock-seconds", command)
             self.assertIn("--reid-alliance-lock-margin-seconds", command)
+            self.assertIn("--startup-position-seconds", command)
+            self.assertIn("--startup-split-x", command)
             self.assertEqual(result["result"]["duration"], 2.0)
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
         box = crop_box_to_source((0.0, 0.0, 1.0, 1.0), (0.02, 0.035, 0.98, 0.66), 960, 625)
         self.assertEqual(box, (0.02, 0.035, 0.96, 0.625))
+
+    def test_startup_position_overrides_bad_bumper_colour(self):
+        self.assertEqual(startup_alliance("red", 0.20, 0.0), "blue")
+        self.assertEqual(startup_alliance("blue", 0.80, 1.0), "red")
+
+    def test_startup_position_prior_expires_and_can_be_disabled(self):
+        self.assertEqual(startup_alliance("red", 0.20, 2.0), "red")
+        self.assertEqual(startup_alliance("red", 0.20, 0.0, startup_seconds=0.0), "red")
 
     def test_track_records_keep_position_fields_and_mapping_source(self):
         records = contract_track_records(
@@ -285,8 +298,17 @@ class StationaryNeutralFilterTests(unittest.TestCase):
 
 class AppearanceMemoryTests(unittest.TestCase):
     @staticmethod
-    def detection(raw_id, descriptor, center, alliance="red", edge=None):
-        return ReIDDetection(raw_id, descriptor, center, alliance, edge=edge)
+    def detection(
+        raw_id, descriptor, center, alliance="red", edge=None, alliance_is_authoritative=False
+    ):
+        return ReIDDetection(
+            raw_id,
+            descriptor,
+            center,
+            alliance,
+            edge=edge,
+            alliance_is_authoritative=alliance_is_authoritative,
+        )
 
     def memory(self, **changes):
         values = {
@@ -373,6 +395,23 @@ class AppearanceMemoryTests(unittest.TestCase):
             self.detection(10, [1.0, 0.0], (0.22, 0.5), "blue")
         ])
         self.assertEqual(memory.states[first].alliance, "blue")
+
+    def test_starting_side_immediately_locks_identity_alliance(self):
+        memory = self.memory()
+        first = memory.resolve_frame(0.0, [
+            self.detection(
+                10,
+                [1.0, 0.0],
+                (0.20, 0.5),
+                "blue",
+                alliance_is_authoritative=True,
+            )
+        ])[0]
+        self.assertEqual(memory.states[first].alliance, "blue")
+        conflicting = memory.resolve_frame(0.2, [
+            self.detection(99, [1.0, 0.0], (0.21, 0.5), "red")
+        ])[0]
+        self.assertNotEqual(conflicting, first)
 
     def test_two_same_colour_robots_returning_simultaneously_use_global_assignment(self):
         memory = self.memory()
