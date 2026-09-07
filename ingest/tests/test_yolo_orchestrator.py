@@ -448,6 +448,26 @@ class AppearanceMemoryTests(unittest.TestCase):
         )[0]
         self.assertNotEqual(returned, first)
 
+    def test_return_outside_edge_band_must_still_be_on_exit_side(self):
+        memory = self.memory(max_center_distance=1.0, max_normalized_speed=2.0)
+        first = memory.resolve_frame(
+            0.0, [self.detection(10, [1.0, 0.0], (0.04, 0.5), edge="left")]
+        )[0]
+        returned = memory.resolve_frame(
+            0.8, [self.detection(99, [1.0, 0.0], (0.70, 0.5))]
+        )[0]
+        self.assertNotEqual(returned, first)
+
+    def test_return_on_same_side_can_merge_outside_edge_band(self):
+        memory = self.memory(max_center_distance=1.0, max_normalized_speed=2.0)
+        first = memory.resolve_frame(
+            0.0, [self.detection(10, [1.0, 0.0], (0.04, 0.5), edge="left")]
+        )[0]
+        returned = memory.resolve_frame(
+            0.8, [self.detection(99, [1.0, 0.0], (0.35, 0.5))]
+        )[0]
+        self.assertEqual(returned, first)
+
     def test_impossible_speed_reappearance_does_not_merge(self):
         memory = self.memory(max_center_distance=0.6, max_normalized_speed=0.5)
         first = memory.resolve_frame(0.0, [self.detection(10, [1.0, 0.0], (0.10, 0.5))])[0]

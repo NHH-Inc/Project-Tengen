@@ -370,6 +370,18 @@ class AppearanceTrackMemory:
         edge, distance = min(distances.items(), key=lambda item: item[1])
         return edge if distance <= self.config.edge_threshold else None
 
+    @staticmethod
+    def _on_reentry_side(exit_edge: str, center: tuple[float, float]) -> bool:
+        """Return whether a detection is still on the half-frame of the recorded exit."""
+
+        x, y = center
+        return {
+            "left": x <= 0.5,
+            "right": x >= 0.5,
+            "top": y <= 0.5,
+            "bottom": y >= 0.5,
+        }.get(exit_edge, False)
+
     def _appearance(self, detection: ReIDDetection, state: _IdentityState) -> float | None:
         if detection.descriptor is None or not state.templates:
             return None
@@ -458,9 +470,13 @@ class AppearanceTrackMemory:
 
         current_edge = detection.edge or self._edge(detection.center)
         raw_continuity = self.raw_to_stable.get(detection.raw_track_id) == stable_id
-        if not raw_continuity and state.last_edge and current_edge and state.last_edge != current_edge:
-            # A robot that vanished through one boundary cannot make its first observation back at
-            # the opposite boundary without also violating the physical model in many wide shots.
+        if (
+            not raw_continuity
+            and state.last_edge
+            and not self._on_reentry_side(state.last_edge, detection.center)
+        ):
+            # The first detection can already be outside the narrow edge band, so comparing only
+            # edge labels is insufficient. Require it to remain on the half-frame it exited from.
             return None
         edge_score = (
             1.0
