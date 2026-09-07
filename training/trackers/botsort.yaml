@@ -10,5 +10,7 @@ fuse_score: True
 gmc_method: sparseOptFlow
 proximity_thresh: 0.5
 appearance_thresh: 0.8
-with_reid: False
+# Native BoT-SORT ReID improves the quality and length of raw tracklets. The frame-level custom
+# identity layer still validates motion, edge re-entry, alliance compatibility and ambiguity.
+with_reid: True
 model: auto

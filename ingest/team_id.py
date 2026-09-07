@@ -48,8 +48,10 @@ TARGET_HEIGHT = 96        #: px the digit strip is scaled to before reading
 BOX_MARGIN = 0.25         #: the detector box often clips the bumper, so widen before cropping
 
 MIN_SIMILARITY = 0.60     #: below this a read is not evidence for any candidate
+MIN_READ_MARGIN = 0.15    #: best roster candidate must clearly beat the runner-up
 MIN_VOTES = 2.0           #: total vote weight before a track may be attributed at all
 MIN_CONFIDENCE = 0.55     #: winning share below this is a coin toss, so the track stays null
+MIN_VOTE_MARGIN = 0.15    #: winning share must also clear second place by this much
 
 
 def tesseract_available() -> bool:
@@ -98,7 +100,7 @@ def score_read(read: str, candidates: list[int]) -> tuple[int, float] | None:
     ranked = sorted(((similarity(read, str(c)), c) for c in candidates), reverse=True)
     best_score, best = ranked[0]
     runner = ranked[1][0] if len(ranked) > 1 else 0.0
-    if best_score < MIN_SIMILARITY or best_score <= runner:
+    if best_score < MIN_SIMILARITY or best_score - runner < MIN_READ_MARGIN:
         return None
     return best, best_score
 
@@ -136,7 +138,9 @@ class TrackVote:
         ranked = sorted(self.tally.items(), key=lambda kv: -kv[1])
         team, weight = ranked[0]
         confidence = weight / self.total
-        if confidence < MIN_CONFIDENCE:
+        runner_weight = ranked[1][1] if len(ranked) > 1 else 0.0
+        vote_margin = (weight - runner_weight) / self.total
+        if confidence < MIN_CONFIDENCE or vote_margin < MIN_VOTE_MARGIN:
             return None, round(confidence, 3)
         return team, round(confidence, 3)
 

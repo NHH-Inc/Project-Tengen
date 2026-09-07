@@ -6,6 +6,7 @@ nothing downstream would notice. So the cases here are mostly about *refusing* t
 """
 
 from ingest.scoreboard import roster_from_counts
+from ingest.attribute_tracks import reconcile_ocr_fragments
 from ingest.team_id import (
     MIN_CONFIDENCE,
     TrackVote,
@@ -113,6 +114,12 @@ class TestTallyTrack:
         team, confidence = vote.resolve()
         assert team == 8242 and confidence == 0.75
 
+    def test_narrow_vote_margin_abstains_even_at_confidence_floor(self):
+        vote = TrackVote(alliance="red", tally={8242: 5.5, 10308: 4.5})
+        team, confidence = vote.resolve()
+        assert team is None
+        assert confidence == 0.55
+
 
 class TestRosterFromCounts:
     def test_the_persistent_numbers_are_the_roster(self):
@@ -131,3 +138,54 @@ class TestRosterFromCounts:
         # value reaches a majority. That is the whole trick.
         counts = {"red": {8242: 6, 12: 1, 24: 1, 47: 1, 63: 1, 98: 1}, "blue": {}}
         assert roster_from_counts(counts, 6)["red"] == [8242]
+
+
+class TestOcrFragmentReconciliation:
+    @staticmethod
+    def track(track_id, team, start, end, confidence=0.95, alliance="red"):
+        return {
+            "schema_version": 3,
+            "track_id": track_id,
+            "robot_name": f"robot{track_id}",
+            "team": team,
+            "alliance": alliance,
+            "team_confidence": confidence,
+            "boxes": [
+                {"t": start, "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.1},
+                {"t": end, "x": 0.2, "y": 0.2, "w": 0.1, "h": 0.1},
+            ],
+            "gaps": [],
+            "raw_track_ids": [track_id * 10],
+        }
+
+    def test_strong_non_overlapping_same_team_fragments_merge(self):
+        reconciled = reconcile_ocr_fragments([
+            self.track(1, 8242, 0.0, 2.0),
+            self.track(4, 8242, 4.0, 6.0),
+        ], fps=10.0)
+        assert len(reconciled) == 1
+        assert reconciled[0]["track_id"] == 1
+        assert reconciled[0]["merged_track_ids"] == [1, 4]
+        assert reconciled[0]["raw_track_ids"] == [10, 40]
+
+    def test_conflicting_team_number_ocr_never_merges_fragments(self):
+        reconciled = reconcile_ocr_fragments([
+            self.track(1, 8242, 0.0, 2.0),
+            self.track(2, 10308, 3.0, 5.0),
+        ])
+        assert len(reconciled) == 2
+        assert [track["team"] for track in reconciled] == [8242, 10308]
+        assert all("merged_track_ids" not in track for track in reconciled)
+
+    def test_overlapping_duplicate_ocr_is_flagged_for_review(self):
+        reconciled = reconcile_ocr_fragments([
+            self.track(1, 8242, 0.0, 4.0),
+            self.track(2, 8242, 2.0, 5.0),
+        ])
+        assert len(reconciled) == 2
+        assert all(track["team"] is None for track in reconciled)
+        assert all(track["identity_status"] == "review" for track in reconciled)
+        assert all(
+            "overlapping_duplicate_team_ocr" in track["identity_issues"]
+            for track in reconciled
+        )

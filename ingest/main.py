@@ -183,6 +183,18 @@ yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
         os.environ.get("FRC_YOLO_REID_APPEARANCE_THRESHOLD", "0.60")
     ),
     reid_max_distance=float(os.environ.get("FRC_YOLO_REID_MAX_DISTANCE", "0.60")),
+    reid_score_margin=float(os.environ.get("FRC_YOLO_REID_SCORE_MARGIN", "0.08")),
+    reid_max_speed=float(os.environ.get("FRC_YOLO_REID_MAX_SPEED", "0.75")),
+    reid_edge_threshold=float(os.environ.get("FRC_YOLO_REID_EDGE_THRESHOLD", "0.10")),
+    reid_template_gallery_size=int(
+        os.environ.get("FRC_YOLO_REID_TEMPLATE_GALLERY_SIZE", "5")
+    ),
+    reid_template_confirmation_frames=int(
+        os.environ.get("FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES", "3")
+    ),
+    reid_template_min_confidence=float(
+        os.environ.get("FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE", "0.50")
+    ),
     auto_homography=os.environ.get("FRC_AUTO_HOMOGRAPHY", "1").lower()
     in {"1", "true", "yes", "on"},
     homography_hfov_deg=float(os.environ.get("FRC_HOMOGRAPHY_HFOV_DEG", "70")),

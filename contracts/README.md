@@ -10,6 +10,7 @@ the other two.
 | `enums.md` | closed sets, identifiers, units | transcribed from doc 0 |
 | `job.schema.json` | A — job record | v2: season, attempt, error_code, progress/stage, timestamps |
 | `events.schema.json` | B — event record | v2: UUID event_id, nullable track_id, corrected/correction_id |
+| `raw-tracklets.schema.json` | Immutable raw tracker observations | v1: raw/recycled tracker ids plus nullable stable assignment |
 | `tracks.schema.json` | C — track record | v2: **required `gaps`**, `team_confidence` |
 | `correction.schema.json` | F — corrections | v2: `scope` (event/track), `target_id` |
 | `result.schema.json` | D — `result.json` metadata | key names now pinned by doc 0 |

@@ -97,6 +97,12 @@ class YoloAnalysisOrchestrator:
         reid_memory_seconds: float = 5.0,
         reid_appearance_threshold: float = 0.60,
         reid_max_distance: float = 0.60,
+        reid_score_margin: float = 0.08,
+        reid_max_speed: float = 0.75,
+        reid_edge_threshold: float = 0.10,
+        reid_template_gallery_size: int = 5,
+        reid_template_confirmation_frames: int = 3,
+        reid_template_min_confidence: float = 0.50,
         auto_homography: bool = True,
         homography_hfov_deg: float = 70.0,
     ):
@@ -113,6 +119,12 @@ class YoloAnalysisOrchestrator:
         self.reid_memory_seconds = reid_memory_seconds
         self.reid_appearance_threshold = reid_appearance_threshold
         self.reid_max_distance = reid_max_distance
+        self.reid_score_margin = reid_score_margin
+        self.reid_max_speed = reid_max_speed
+        self.reid_edge_threshold = reid_edge_threshold
+        self.reid_template_gallery_size = reid_template_gallery_size
+        self.reid_template_confirmation_frames = reid_template_confirmation_frames
+        self.reid_template_min_confidence = reid_template_min_confidence
         self.auto_homography = auto_homography
         self.homography_hfov_deg = homography_hfov_deg
         self.homography_path = self._resolve_optional(
@@ -148,6 +160,12 @@ class YoloAnalysisOrchestrator:
             "reid_memory_seconds": self.reid_memory_seconds,
             "reid_appearance_threshold": self.reid_appearance_threshold,
             "reid_max_distance": self.reid_max_distance,
+            "reid_score_margin": self.reid_score_margin,
+            "reid_max_speed": self.reid_max_speed,
+            "reid_edge_threshold": self.reid_edge_threshold,
+            "reid_template_gallery_size": self.reid_template_gallery_size,
+            "reid_template_confirmation_frames": self.reid_template_confirmation_frames,
+            "reid_template_min_confidence": self.reid_template_min_confidence,
             "homography": str(self.homography_path) if self.homography_path else None,
             "homography_available": bool(self.homography_path and self.homography_path.is_file()),
             "auto_homography": self.auto_homography,
@@ -265,11 +283,24 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_REID_APPEARANCE_THRESHOLD must be between zero and one")
         if self.reid_max_distance <= 0:
             raise RuntimeError("FRC_YOLO_REID_MAX_DISTANCE must be greater than zero")
+        if self.reid_score_margin < 0:
+            raise RuntimeError("FRC_YOLO_REID_SCORE_MARGIN cannot be negative")
+        if self.reid_max_speed <= 0:
+            raise RuntimeError("FRC_YOLO_REID_MAX_SPEED must be greater than zero")
+        if not 0.0 < self.reid_edge_threshold < 0.5:
+            raise RuntimeError("FRC_YOLO_REID_EDGE_THRESHOLD must be between zero and 0.5")
+        if self.reid_template_gallery_size <= 0:
+            raise RuntimeError("FRC_YOLO_REID_TEMPLATE_GALLERY_SIZE must be greater than zero")
+        if self.reid_template_confirmation_frames <= 0:
+            raise RuntimeError("FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES must be greater than zero")
+        if not 0.0 <= self.reid_template_min_confidence <= 1.0:
+            raise RuntimeError("FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE must be between zero and one")
 
         job_id = str(job_data["job_id"])
         job_dir = self.output_base_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
         tracks_path = job_dir / "tracks.jsonl"
+        raw_tracks_path = job_dir / "tracks.raw.jsonl"
         partial_tracks_path = job_dir / "tracks.partial.jsonl"
         events_path = job_dir / "events.jsonl"
         result_path = job_dir / "result.json"
@@ -307,6 +338,20 @@ class YoloAnalysisOrchestrator:
             str(self.reid_appearance_threshold),
             "--reid-max-distance",
             str(self.reid_max_distance),
+            "--reid-score-margin",
+            str(self.reid_score_margin),
+            "--reid-max-speed",
+            str(self.reid_max_speed),
+            "--reid-edge-threshold",
+            str(self.reid_edge_threshold),
+            "--reid-template-gallery-size",
+            str(self.reid_template_gallery_size),
+            "--reid-template-confirmation-frames",
+            str(self.reid_template_confirmation_frames),
+            "--reid-template-min-confidence",
+            str(self.reid_template_min_confidence),
+            "--raw-output",
+            str(raw_tracks_path),
             *(["--homography", str(job_homography)] if job_homography else []),
             "--snapshot-dir",
             str(snapshot_dir),
@@ -433,6 +478,7 @@ class YoloAnalysisOrchestrator:
             "snapshots_annotations": str(snapshot_dir / "annotations.json"),
             "snapshots_interval_seconds": self.snapshot_interval,
             "snapshots_count": len(list(snapshot_dir.glob("snapshot_*.jpg"))),
+            "raw_tracks_path": str(raw_tracks_path) if raw_tracks_path.is_file() else None,
             "model_crop": {
                 "left": MODEL_CROP[0],
                 "top": MODEL_CROP[1],
@@ -447,6 +493,7 @@ class YoloAnalysisOrchestrator:
         return {
             "events_path": str(events_path),
             "tracks_path": str(tracks_path),
+            "raw_tracks_path": str(raw_tracks_path) if raw_tracks_path.is_file() else None,
             "result_path": str(result_path),
             "result": result,
         }

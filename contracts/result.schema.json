@@ -26,6 +26,10 @@
     },
     "frames_total": { "type": "integer", "minimum": 0 },
     "frames_analyzed": { "type": "integer", "minimum": 0 },
+    "raw_tracks_path": {
+      "type": ["string", "null"],
+      "description": "Immutable raw tracker-tracklet sidecar used by the stable identity layer."
+    },
     "frames_skipped_shot_change": { "type": "integer", "minimum": 0 },
     "tracks_emitted": { "type": "integer", "minimum": 0 },
     "events_emitted": { "type": "integer", "minimum": 0 },

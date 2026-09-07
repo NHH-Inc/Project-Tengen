@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frc-video-scouting/contracts/raw-tracklets.schema.json",
+  "title": "Immutable raw tracker tracklet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fragment_id", "raw_track_id", "boxes"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "fragment_id": { "type": "integer", "minimum": 1 },
+    "raw_track_id": { "type": "integer" },
+    "boxes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["t", "x", "y", "w", "h", "confidence", "alliance", "stable_track_id"],
+        "properties": {
+          "t": { "type": "number", "minimum": 0 },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "w": { "type": "number", "exclusiveMinimum": 0 },
+          "h": { "type": "number", "exclusiveMinimum": 0 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "alliance": { "type": ["string", "null"], "enum": ["red", "blue", null] },
+          "stable_track_id": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Null means the identity layer deliberately abstained."
+          }
+        }
+      }
+    }
+  }
+}

@@ -123,6 +123,11 @@ fails.
 | `FRC_YOLO_TRACKER` | `bytetrack` |
 | `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `0` |
 | `FRC_YOLO_REID_MEMORY_SECONDS` | `5.0` — appearance-backed identity memory after a robot disappears |
+| `FRC_YOLO_REID_APPEARANCE_THRESHOLD` / `FRC_YOLO_REID_SCORE_MARGIN` | `0.60` / `0.08` — merge evidence and ambiguity gates |
+| `FRC_YOLO_REID_MAX_DISTANCE` / `FRC_YOLO_REID_MAX_SPEED` | `0.60` / `0.75` — normalized image-space motion gates when field calibration is unavailable |
+| `FRC_YOLO_REID_EDGE_THRESHOLD` | `0.10` — boundary band for edge-consistent re-entry |
+| `FRC_YOLO_REID_TEMPLATE_GALLERY_SIZE` / `FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES` | `5` / `3` — protected appearance gallery settings |
+| `FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE` | `0.50` — minimum detector confidence for a new gallery exemplar |
 | `FRC_AUTO_HOMOGRAPHY` | `1` — fit a carpet mapping from steady field AprilTags for each job |
 | `FRC_HOMOGRAPHY_CONFIG` | optional fixed camera calibration JSON; takes precedence over automatic calibration |
 | `FRC_DEFAULT_SEASON` | `2026` |

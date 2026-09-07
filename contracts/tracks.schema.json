@@ -10,6 +10,29 @@
     "schema_version": { "type": "integer", "const": 3 },
     "track_id": { "type": "integer", "description": "Unique within a job only." },
     "robot_name": { "type": ["string", "null"], "description": "Stable job-local display name, e.g. robot1." },
+    "raw_track_ids": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "uniqueItems": true,
+      "description": "Raw tracker ids contributing to this stable identity. Full per-frame provenance remains in tracks.raw.jsonl."
+    },
+    "merged_track_ids": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "uniqueItems": true,
+      "description": "Pre-reconciliation stable fragments merged by strong roster-constrained OCR evidence."
+    },
+    "identity_status": {
+      "type": "string",
+      "enum": ["ocr_reconciled", "review"],
+      "description": "Optional post-processing disposition; absence means the online identity was retained unchanged."
+    },
+    "identity_issues": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Machine-readable reasons an identity requires human review."
+    },
     "team": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
     "alliance": { "type": ["string", "null"], "enum": ["red", "blue", null] },
     "position_source": { "type": ["string", "null"], "description": "Calibration source used for optional field positions." },

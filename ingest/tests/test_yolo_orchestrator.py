@@ -8,6 +8,8 @@ from unittest.mock import patch
 from ingest.yolo_orchestrator import YoloAnalysisOrchestrator, match_events, phase_at
 from training.track_yolo import (
     AppearanceTrackMemory,
+    ReIDConfig,
+    ReIDDetection,
     add_field_motion,
     contract_track_records,
     crop_box_to_source,
@@ -124,6 +126,19 @@ class YoloOrchestratorTests(unittest.TestCase):
         self.assertEqual(records[0]["position_source"], "carpet_pose")
         self.assertEqual(records[0]["robot_name"], "robot3")
         self.assertEqual(records[0]["boxes"][0]["field_x"], 4.0)
+
+    def test_contract_exposes_only_robot1_through_robot6(self):
+        boxes = [{"t": 0.0, "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.2}]
+        records = contract_track_records(
+            {track_id: boxes for track_id in range(1, 8)},
+            30.0,
+            {track_id: "red" for track_id in range(1, 8)},
+            visible_track_ids=set(range(1, 8)),
+        )
+        self.assertEqual(
+            [record["robot_name"] for record in records],
+            ["robot1", "robot2", "robot3", "robot4", "robot5", "robot6"],
+        )
 
     def test_field_motion_rejects_identity_swap_speed(self):
         class Mapper:
@@ -243,37 +258,149 @@ class StationaryNeutralFilterTests(unittest.TestCase):
 
 
 class AppearanceMemoryTests(unittest.TestCase):
-    def test_new_raw_id_reuses_recent_matching_appearance(self):
-        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
-        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
-        second = memory.resolve(99, 1.0, [0.98, 0.02], (0.25, 0.5), "red", set(), {99})
-        self.assertEqual(second, first)
+    @staticmethod
+    def detection(raw_id, descriptor, center, alliance="red", edge=None):
+        return ReIDDetection(raw_id, descriptor, center, alliance, edge=edge)
 
-    def test_same_colour_reuses_identity_even_when_appearance_changes(self):
-        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
-        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
-        second = memory.resolve(99, 1.0, [0.0, 1.0], (0.25, 0.5), "red", set(), {99})
-        self.assertEqual(second, first)
+    def memory(self, **changes):
+        values = {
+            "memory_seconds": 2.0,
+            "appearance_threshold": 0.75,
+            "score_margin": 0.06,
+            "max_center_distance": 0.65,
+        }
+        values.update(changes)
+        return AppearanceTrackMemory(config=ReIDConfig(**values))
 
-    def test_unambiguous_same_colour_handoff_can_cross_the_distance_gate(self):
-        memory = AppearanceTrackMemory(
-            memory_seconds=2.0, appearance_threshold=0.8, max_center_distance=0.2
-        )
-        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.1, 0.5), "red", set(), {10})
-        second = memory.resolve(99, 1.0, [0.0, 1.0], (0.9, 0.5), "red", set(), {99})
-        self.assertEqual(second, first)
+    def test_one_robot_disappears_and_returns_with_new_raw_id(self):
+        memory = self.memory()
+        first = memory.resolve_frame(0.0, [self.detection(10, [1.0, 0.0], (0.20, 0.5))])[0]
+        memory.resolve_frame(0.2, [self.detection(10, [0.99, 0.01], (0.24, 0.5))])
+        returned = memory.resolve_frame(
+            1.0, [self.detection(99, [0.98, 0.02], (0.30, 0.5))]
+        )[0]
+        self.assertEqual(returned, first)
 
-    def test_opposite_alliance_never_reuses_identity(self):
-        memory = AppearanceTrackMemory(memory_seconds=2.0, appearance_threshold=0.8)
-        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), "red", set(), {10})
-        second = memory.resolve(99, 1.0, [1.0, 0.0], (0.25, 0.5), "blue", set(), {99})
-        self.assertNotEqual(second, first)
+    def test_two_same_colour_robots_do_not_merge_when_one_disappears(self):
+        memory = self.memory()
+        first, second = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5)),
+            self.detection(20, [0.0, 1.0], (0.75, 0.5)),
+        ])
+        memory.resolve_frame(0.2, [self.detection(20, [0.01, 0.99], (0.73, 0.5))])
+        returned = memory.resolve_frame(
+            1.0, [self.detection(99, [0.99, 0.01], (0.28, 0.5))]
+        )[0]
+        self.assertEqual(returned, first)
+        self.assertNotEqual(returned, second)
 
-    def test_match_expires_after_memory_window(self):
-        memory = AppearanceTrackMemory(memory_seconds=1.0, appearance_threshold=0.8)
-        first = memory.resolve(10, 0.0, [1.0, 0.0], (0.2, 0.5), None, set(), {10})
-        second = memory.resolve(99, 1.5, [1.0, 0.0], (0.25, 0.5), None, set(), {99})
-        self.assertNotEqual(second, first)
+    def test_alliance_colour_alone_is_not_identity_evidence(self):
+        memory = self.memory()
+        first = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5), "red")
+        ])[0]
+        returned = memory.resolve_frame(0.5, [
+            self.detection(99, [0.0, 1.0], (0.21, 0.5), "red")
+        ])[0]
+        self.assertNotEqual(returned, first)
+
+    def test_two_same_colour_robots_returning_simultaneously_use_global_assignment(self):
+        memory = self.memory()
+        first, second = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0, 0.0], (0.20, 0.5)),
+            self.detection(20, [0.0, 1.0, 0.0], (0.70, 0.5)),
+        ])
+        # Detector order is deliberately reversed.
+        resolved = memory.resolve_frame(0.8, [
+            self.detection(91, [0.02, 0.99, 0.0], (0.66, 0.5)),
+            self.detection(92, [0.99, 0.02, 0.0], (0.24, 0.5)),
+        ])
+        self.assertEqual(resolved, [second, first])
+
+    def test_crossing_robots_keep_identity_from_appearance_and_raw_continuity(self):
+        memory = self.memory()
+        first, second = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.30, 0.5)),
+            self.detection(20, [0.0, 1.0], (0.70, 0.5)),
+        ])
+        resolved = memory.resolve_frame(0.5, [
+            self.detection(10, [0.99, 0.01], (0.58, 0.5)),
+            self.detection(20, [0.01, 0.99], (0.42, 0.5)),
+        ])
+        self.assertEqual(resolved, [first, second])
+
+    def test_return_from_wrong_edge_does_not_merge(self):
+        memory = self.memory(max_center_distance=1.0, max_normalized_speed=2.0)
+        first = memory.resolve_frame(
+            0.0, [self.detection(10, [1.0, 0.0], (0.04, 0.5), edge="left")]
+        )[0]
+        returned = memory.resolve_frame(
+            0.8, [self.detection(99, [1.0, 0.0], (0.96, 0.5), edge="right")]
+        )[0]
+        self.assertNotEqual(returned, first)
+
+    def test_impossible_speed_reappearance_does_not_merge(self):
+        memory = self.memory(max_center_distance=0.6, max_normalized_speed=0.5)
+        first = memory.resolve_frame(0.0, [self.detection(10, [1.0, 0.0], (0.10, 0.5))])[0]
+        returned = memory.resolve_frame(
+            0.1, [self.detection(99, [1.0, 0.0], (0.90, 0.5))]
+        )[0]
+        self.assertNotEqual(returned, first)
+
+    def test_supplied_camera_motion_compensates_image_space_prediction(self):
+        memory = self.memory(max_normalized_speed=0.2)
+        first = memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.20, 0.5))
+        ])[0]
+        returned = memory.resolve_frame(
+            0.2,
+            [self.detection(99, [1.0, 0.0], (0.50, 0.5))],
+            camera_motion=(0.30, 0.0),
+        )[0]
+        self.assertEqual(returned, first)
+
+    def test_ambiguous_candidates_are_left_tentative(self):
+        memory = self.memory(score_margin=0.08)
+        memory.resolve_frame(0.0, [
+            self.detection(10, [1.0, 0.0], (0.30, 0.5)),
+            self.detection(20, [1.0, 0.0], (0.70, 0.5)),
+        ])
+        resolved = memory.resolve_frame(0.5, [
+            self.detection(91, [1.0, 0.0], (0.50, 0.5)),
+            self.detection(92, [1.0, 0.0], (0.50, 0.5)),
+        ])
+        self.assertEqual(resolved, [None, None])
+
+    def test_template_is_not_blended_and_new_view_requires_confirmation(self):
+        memory = self.memory(template_confirmation_frames=2)
+        first = memory.resolve_frame(
+            0.0, [self.detection(10, [1.0, 0.0], (0.20, 0.5))]
+        )[0]
+        original = list(memory.states[first].templates[0])
+        memory.resolve_frame(0.2, [self.detection(99, [0.8, 0.6], (0.21, 0.5))])
+        self.assertEqual(memory.states[first].templates, [original])
+        memory.resolve_frame(0.3, [self.detection(99, [0.8, 0.6], (0.22, 0.5))])
+        self.assertEqual(len(memory.states[first].templates), 2)
+        self.assertEqual(memory.states[first].templates[0], original)
+
+    def test_recycled_raw_tracker_id_is_revalidated(self):
+        memory = self.memory()
+        first = memory.resolve_frame(
+            0.0, [self.detection(10, [1.0, 0.0], (0.20, 0.5), "red")]
+        )[0]
+        recycled = memory.resolve_frame(
+            0.2, [self.detection(10, [0.0, 1.0], (0.22, 0.5), "red")]
+        )[0]
+        self.assertNotEqual(recycled, first)
+
+    def test_public_identity_pool_is_capped_at_six(self):
+        memory = self.memory(max_robots=12)
+        resolved = memory.resolve_frame(0.0, [
+            self.detection(raw_id, [float(raw_id), 1.0], (0.1 * raw_id, 0.5), None)
+            for raw_id in range(1, 8)
+        ])
+        self.assertEqual(resolved[:6], [1, 2, 3, 4, 5, 6])
+        self.assertIsNone(resolved[6])
 
 
 if __name__ == "__main__":

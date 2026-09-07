@@ -286,20 +286,27 @@ FRC_ANALYSIS_BACKEND=yolo
 FRC_YOLO_TRACKER=bytetrack
 ```
 
-The API then invokes `training\track_yolo.py`, which writes Contract D `tracks.jsonl` and the
+The API then invokes `training\track_yolo.py`, which writes Contract D `tracks.jsonl`, preserves
+the tracker observations in `tracks.raw.jsonl`, and the
 database receives those persistent track IDs. Use `FRC_ANALYSIS_BACKEND=auto` to prefer this
 path when it is available, or `native` to force the C++ RF-DETR path. Annotated MP4 output is off
 by default because the web app draws the stored tracks and an annotated 1080p60 copy is large;
 set `FRC_YOLO_SAVE_ANNOTATED=1` when a rendered video is needed.
 
-On top of ByteTrack, the runner keeps a lightweight appearance signature for five seconds. If a
-robot is briefly occluded or leaves the edge and ByteTrack assigns a new raw ID, a matching bumper
-colour is the primary handoff signal; appearance and position break ties. When only one remembered
-robot has that colour, the handoff can survive even a large re-entry distance. Configure the window
-with `FRC_YOLO_REID_MEMORY_SECONDS`; the similarity and distance gates are exposed as
-`FRC_YOLO_REID_APPEARANCE_THRESHOLD` and `FRC_YOLO_REID_MAX_DISTANCE`. Stationary tracks that
+On top of ByteTrack, the runner globally assigns each complete frame to a pool of six stable robot
+identities. Alliance colour rejects incompatible matches but never proves identity. A protected
+gallery of spatial colour-and-shape templates, predicted position, velocity, elapsed time, field
+coordinates when calibrated, and edge-consistent re-entry determine the score. Physically
+impossible, low-margin, and globally ambiguous associations remain null in `tracks.raw.jsonl`
+instead of corrupting an existing track. Configure the window with
+`FRC_YOLO_REID_MEMORY_SECONDS`; appearance, score-margin, distance, speed, edge, and gallery gates
+are exposed through the `FRC_YOLO_REID_*` variables listed in the root README. Stationary tracks that
 remain still for five seconds are omitted from both Contract D and rendered overlays, including
 if the detector later rediscovers them.
+
+BoT-SORT is optional (`FRC_YOLO_TRACKER=botsort`). Its profile enables native ReID and sparse
+optical-flow camera-motion compensation to improve raw tracklets; the same custom global identity
+layer still validates every stable assignment.
 
 For a configured homography, point the same runner at the calibration JSON:
 
