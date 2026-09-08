@@ -13,13 +13,19 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
 #include "../src/RobotDetector.h"
 
+namespace fs = std::filesystem;
+
 using frc::vision::Detection;
 using frc::vision::DetectorConfig;
+using frc::vision::load_detector_config;
 using frc::vision::Letterbox;
 using frc::vision::clipped_by_tile;
 using frc::vision::decode_yolo;
@@ -368,6 +374,63 @@ void view_regions() {
           "a path without an extension does not confuse the lookup");
 }
 
+
+// --- config paths are relative to the config file -----------------------------------------------
+
+void relative_paths() {
+    std::printf("\npaths in a detector config, resolved from elsewhere\n");
+
+    const auto root = fs::temp_directory_path() / "tengen_cfg_test";
+    const auto nested = root / "config";
+    fs::remove_all(root);
+    fs::create_directories(nested);
+    fs::create_directories(root / "models");
+
+    // Stand-ins: load_detector_config only resolves and reads these, it does not parse them.
+    { std::ofstream f(root / "models" / "robot.onnx"); f << "not a real model"; }
+    { std::ofstream f(nested / "regions.json"); f << R"({"regions":{"clip_0_1":{"x":0,"y":0,"w":1,"h":0.7}}})"; }
+    { std::ofstream f(nested / "detector.json");
+      f << R"({"model_path":"../models/robot.onnx","family":"yolo","regions_path":"regions.json"})"; }
+
+    // The working directory is deliberately not the config's, which is the case that broke.
+    const auto previous = fs::current_path();
+    fs::current_path(fs::temp_directory_path());
+#ifdef _WIN32
+    _putenv_s("FRC_DETECTOR_CONFIG", (nested / "detector.json").string().c_str());
+#else
+    setenv("FRC_DETECTOR_CONFIG", (nested / "detector.json").string().c_str(), 1);
+#endif
+
+    bool threw = false;
+    DetectorConfig config;
+    try {
+        config = load_detector_config();
+    } catch (const std::exception& error) {
+        threw = true;
+        std::printf("  (threw: %s)\n", error.what());
+    }
+    fs::current_path(previous);
+
+    check(!threw, "a config with relative paths loads from an unrelated working directory");
+    check(fs::path(config.model_path).is_absolute(),
+          "model_path is resolved against the config file, not the caller's directory");
+    check(config.regions.size() == 1,
+          "regions_path is resolved the same way, so the regions actually load");
+    if (config.regions.count("clip_0_1")) {
+        check(near(config.regions.at("clip_0_1").h, 0.7),
+              "and the region it read is the one in the file");
+    } else {
+        check(false, "and the region it read is the one in the file");
+    }
+
+#ifdef _WIN32
+    _putenv_s("FRC_DETECTOR_CONFIG", "");
+#else
+    unsetenv("FRC_DETECTOR_CONFIG");
+#endif
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -382,6 +445,7 @@ int main() {
     tile_coordinates();
     tile_seams();
     view_regions();
+    relative_paths();
     std::printf("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

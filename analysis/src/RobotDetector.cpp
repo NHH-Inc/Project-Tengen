@@ -156,10 +156,14 @@ DetectorConfig load_detector_config() {
     // Either inline, or a path to the file calibrate_region writes -- which is the normal case,
     // since it is regenerated whenever the corpus grows and does not belong in a hand-edited file.
     if (value.contains("regions_path")) {
-        const auto path = value.at("regions_path").get<std::string>();
+        // Relative to the config file, like model_path -- so a config stays portable and does
+        // not silently depend on the directory the analyzer was launched from.
+        fs::path path(value.at("regions_path").get<std::string>());
+        if (path.is_relative()) path = config_path.parent_path() / path;
+        path = path.lexically_normal();
         std::ifstream regions_file(path);
         if (!regions_file) {
-            throw std::runtime_error("regions_path does not exist: " + path);
+            throw std::runtime_error("regions_path does not exist: " + path.string());
         }
         nlohmann::json regions_json;
         regions_file >> regions_json;
