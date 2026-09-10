@@ -31,10 +31,26 @@ export interface DirectedBoundary {
 
 export interface ShotGoal {
   id: string;
+  regionId: string;
   polygon: NormalizedPoint[] | null;
   entryDirection: NormalizedPoint;
   madeBoundary: DirectedBoundary | null;
   missBoundaries: DirectedBoundary[];
+  approachBoundary: DirectedBoundary | null;
+  confirmationPolygon: NormalizedPoint[] | null;
+}
+
+export interface GoalEntry {
+  entryId: string;
+  regionId: string;
+  goal: string;
+  tSeconds: number;
+  frameIndex: number;
+  shotId: string | null;
+  robotTrackId: number | null;
+  confidence: number;
+  association: string;
+  ballTrack: ShotTrackPoint[];
 }
 
 export interface ShotCounts {
@@ -48,6 +64,7 @@ export interface ShotResponse {
   shots: ShotRecord[];
   statistics: ShotCounts & { perRobot: Record<string, ShotCounts> };
   goals: ShotGoal[];
+  goalEntries: GoalEntry[];
 }
 
 interface WireShotPoint {
@@ -80,10 +97,26 @@ interface WireBoundary {
 
 interface WireGoal {
   id: string;
+  region_id?: string;
   polygon?: NormalizedPoint[];
   entry_direction: NormalizedPoint;
   made_boundary?: WireBoundary;
   miss_boundaries?: WireBoundary[];
+  approach_boundary?: WireBoundary;
+  confirmation_polygon?: NormalizedPoint[];
+}
+
+interface WireGoalEntry {
+  entry_id: string;
+  region_id: string;
+  goal: string;
+  t_seconds: number;
+  frame_index: number;
+  shot_id: string | null;
+  robot_track_id: number | null;
+  confidence: number;
+  association: string;
+  ball_track: WireShotPoint[];
 }
 
 interface WireCounts extends ShotCounts {
@@ -94,6 +127,7 @@ export interface WireShotResponse {
   shots: WireShot[];
   statistics: WireCounts;
   goals: WireGoal[];
+  goal_entries?: WireGoalEntry[];
 }
 
 const EMPTY_COUNTS = (): ShotCounts => ({ attempted: 0, made: 0, missed: 0, unknown: 0 });
@@ -102,6 +136,7 @@ export const EMPTY_SHOT_RESPONSE: ShotResponse = {
   shots: [],
   statistics: { ...EMPTY_COUNTS(), perRobot: {} },
   goals: [],
+  goalEntries: [],
 };
 
 function validPoint(value: unknown): value is NormalizedPoint {
@@ -115,6 +150,26 @@ function parseBoundary(raw: WireBoundary | undefined): DirectedBoundary | null {
     return null;
   }
   return { line: raw.line, direction: raw.direction };
+}
+
+function parsePoints(points: WireShotPoint[]): ShotTrackPoint[] {
+  return points.flatMap((p) => Number.isInteger(p.frame_index)
+    && [p.t_seconds, p.x, p.y, p.radius].every((v) => typeof v === 'number' && Number.isFinite(v))
+      ? [{ frameIndex: p.frame_index, tSeconds: p.t_seconds, x: p.x, y: p.y, radius: p.radius }]
+      : []);
+}
+
+/** Include legacy made shots, but never count a linked goal entry a second time. */
+export function scoringCountsAt(shots: ShotRecord[], entries: GoalEntry[], t = Infinity) {
+  const visible = entries.filter((entry) => entry.tSeconds <= t);
+  const linked = new Set(visible.map((entry) => entry.shotId));
+  const legacy = shots.filter((shot) => shot.outcome === 'made'
+    && shot.outcomeTSeconds != null && shot.outcomeTSeconds <= t && !linked.has(shot.shotId));
+  return {
+    made: visible.length + legacy.length,
+    unassigned: visible.filter((entry) => entry.robotTrackId == null).length
+      + legacy.filter((shot) => shot.robotTrackId == null).length,
+  };
 }
 
 export function parseShotResponse(raw: WireShotResponse): ShotResponse {
@@ -154,7 +209,7 @@ export function parseShotResponse(raw: WireShotResponse): ShotResponse {
       )),
     }];
   });
-  const goals = (raw.goals ?? []).flatMap((goal): ShotGoal[] => {
+  const goals = (raw.goals ?? []).flatMap((goal, index): ShotGoal[] => {
     if (typeof goal.id !== 'string' || !validPoint(goal.entry_direction)) return [];
     const madeBoundary = parseBoundary(goal.made_boundary);
     const polygon = Array.isArray(goal.polygon) && goal.polygon.every(validPoint)
@@ -163,9 +218,14 @@ export function parseShotResponse(raw: WireShotResponse): ShotResponse {
     if (!madeBoundary && (!polygon || polygon.length < 3)) return [];
     return [{
       id: goal.id,
+      regionId: goal.region_id ?? `${goal.id}_${index + 1}`,
       polygon,
       entryDirection: goal.entry_direction,
       madeBoundary,
+      approachBoundary: parseBoundary(goal.approach_boundary),
+      confirmationPolygon: Array.isArray(goal.confirmation_polygon)
+        && goal.confirmation_polygon.length >= 3 && goal.confirmation_polygon.every(validPoint)
+        ? goal.confirmation_polygon : null,
       missBoundaries: (goal.miss_boundaries ?? [])
         .map(parseBoundary)
         .filter((boundary): boundary is DirectedBoundary => boundary != null),
@@ -182,5 +242,18 @@ export function parseShotResponse(raw: WireShotResponse): ShotResponse {
       perRobot: counts.per_robot ?? {},
     },
     goals,
+    goalEntries: (raw.goal_entries ?? []).flatMap((entry): GoalEntry[] => {
+      if (typeof entry.entry_id !== 'string' || typeof entry.region_id !== 'string'
+          || typeof entry.goal !== 'string' || !Number.isFinite(entry.t_seconds)
+          || !Number.isInteger(entry.frame_index) || !Array.isArray(entry.ball_track)) return [];
+      return [{
+        entryId: entry.entry_id, regionId: entry.region_id, goal: entry.goal,
+        tSeconds: entry.t_seconds, frameIndex: entry.frame_index,
+        shotId: typeof entry.shot_id === 'string' ? entry.shot_id : null,
+        robotTrackId: Number.isInteger(entry.robot_track_id) ? entry.robot_track_id : null,
+        confidence: entry.confidence, association: entry.association,
+        ballTrack: parsePoints(entry.ball_track),
+      }];
+    }),
   };
 }

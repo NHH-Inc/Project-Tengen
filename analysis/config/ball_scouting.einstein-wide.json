@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "_comment": "Measured for the supplied Einstein Final 1 fixed wide view only, with crop [0.02,0.035,0.98,0.66]. Recalibrate for any other camera. Lines are inside the visible hub funnel, below the broadcast graphic; fully hidden entries remain uncounted.",
+  "detector": {
+    "hsv_lower": [
+      20,
+      90,
+      110
+    ],
+    "hsv_upper": [
+      38,
+      255,
+      255
+    ],
+    "blur_kernel": 3,
+    "morph_open_iterations": 0,
+    "morph_close_iterations": 0,
+    "min_area_px": 18,
+    "max_area_px": 2200,
+    "min_radius_px": 2,
+    "max_radius_px": 38,
+    "min_circularity": 0.28,
+    "min_fill_ratio": 0.35,
+    "min_aspect_ratio": 0.3,
+    "max_aspect_ratio": 3.3,
+    "split_touching": true,
+    "motion_blur_max_aspect": 9.0,
+    "motion_min_fraction": 0.25,
+    "motion_difference_threshold": 18
+  },
+  "tracking": {
+    "minimum_confirmed_hits": 2,
+    "maximum_missed_frames": 5,
+    "base_link_distance_ratio": 0.004,
+    "acceleration_allowance_ratio_per_second": 0.5,
+    "maximum_speed_ratio_per_second": 1.8,
+    "maximum_radius_ratio": 3.0,
+    "maximum_history_points": 180
+  },
+  "shot": {
+    "carry_confirmation_frames": 4,
+    "source_memory_frames": 8,
+    "robot_padding_ratio": 0.08,
+    "maximum_carried_relative_speed_ratio_per_second": 0.16,
+    "minimum_launch_relative_speed_ratio_per_second": 0.32,
+    "minimum_radial_speed_ratio_per_second": 0.12,
+    "minimum_departure_distance_ratio": 0.012,
+    "confirmation_frames": 3,
+    "maximum_candidate_frames": 14,
+    "minimum_direction_consistency": 0.62,
+    "edge_launch_max_distance_ratio": 0.025,
+    "edge_launch_max_track_points": 5,
+    "maximum_launch_distance_ratio": 0.045,
+    "maximum_launch_origin_y_ratio": 0.8,
+    "maximum_shot_track_seconds": 3.0,
+    "minimum_shot_track_speed_ratio_per_second": 0.035,
+    "maximum_shot_track_reversal_cosine": -0.15
+  },
+  "debug": {
+    "show_mask": false,
+    "trail_points": 24
+  },
+  "goals": [
+    {
+      "id": "high",
+      "region_id": "blue_hub",
+      "entry_direction": [
+        0,
+        1
+      ],
+      "approach_boundary": {
+        "line": [
+          [
+            0.227766,
+            0.257778
+          ],
+          [
+            0.283623,
+            0.257778
+          ]
+        ],
+        "direction": [
+          0,
+          1
+        ]
+      },
+      "made_boundary": {
+        "line": [
+          [
+            0.23102,
+            0.293333
+          ],
+          [
+            0.280369,
+            0.293333
+          ]
+        ],
+        "direction": [
+          0,
+          1
+        ]
+      },
+      "confirmation_polygon": [
+        [
+          0.227766,
+          0.257778
+        ],
+        [
+          0.283623,
+          0.257778
+        ],
+        [
+          0.280369,
+          0.317037
+        ],
+        [
+          0.23102,
+          0.317037
+        ]
+      ],
+      "confirmation_frames": 2,
+      "minimum_depth_radii": 0.35,
+      "maximum_gap_seconds": 0.07,
+      "maximum_confirmation_seconds": 0.25,
+      "miss_boundaries": []
+    },
+    {
+      "id": "high",
+      "region_id": "red_hub",
+      "entry_direction": [
+        0,
+        1
+      ],
+      "approach_boundary": {
+        "line": [
+          [
+            0.710412,
+            0.265185
+          ],
+          [
+            0.76898,
+            0.265185
+          ]
+        ],
+        "direction": [
+          0,
+          1
+        ]
+      },
+      "made_boundary": {
+        "line": [
+          [
+            0.713666,
+            0.303704
+          ],
+          [
+            0.765727,
+            0.303704
+          ]
+        ],
+        "direction": [
+          0,
+          1
+        ]
+      },
+      "confirmation_polygon": [
+        [
+          0.710412,
+          0.265185
+        ],
+        [
+          0.76898,
+          0.265185
+        ],
+        [
+          0.765727,
+          0.325926
+        ],
+        [
+          0.713666,
+          0.325926
+        ]
+      ],
+      "confirmation_frames": 2,
+      "minimum_depth_radii": 0.35,
+      "maximum_gap_seconds": 0.07,
+      "maximum_confirmation_seconds": 0.25,
+      "miss_boundaries": []
+    }
+  ],
+  "launch_signals": {
+    "enabled": true,
+    "short_track_minimum_hits": 2,
+    "maximum_observation_gap_seconds": 0.085,
+    "minimum_travel_radii": 1.25,
+    "gate_lifetime_seconds": 1.0,
+    "gate_separation_radii": 2.5,
+    "pulse_minimum_prominence": 0.16,
+    "pulse_relative_prominence": 0.22,
+    "maximum_transit_seconds": 0.16
+  }
+}

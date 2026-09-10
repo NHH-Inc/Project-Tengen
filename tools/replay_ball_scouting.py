@@ -21,6 +21,7 @@ from scipy.optimize import linear_sum_assignment
 from training.ball_scouting import (
     BallShotAnalyzer, RobotObservation, load_ball_scouting_config, shot_statistics, write_shot_records,
 )
+from training.goal_scoring import goal_statistics, write_goal_entries
 
 
 def match_shots(predictions, reference, tolerance=0.075):
@@ -90,6 +91,8 @@ def main():
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=False)
     analyzer = BallShotAnalyzer(load_ball_scouting_config(args.config))
+    (output / "ball_scouting.config.json").write_text(
+        Path(args.config).read_text(encoding="utf-8"), encoding="utf-8")
     robots = CachedRobots(args.robot_tracks)
     capture = cv2.VideoCapture(args.video)
     if not capture.isOpened():
@@ -134,10 +137,12 @@ def main():
             writer.release()
     elapsed = time.perf_counter() - started
     write_shot_records(output / "shots.jsonl", analyzer.shots)
+    write_goal_entries(output / "goal_entries.jsonl", analyzer.goal_entries)
     report = dict(video=args.video, robot_tracks=args.robot_tracks, source_fps=fps,
                   frames_analyzed=index, frame_stride=1, wall_seconds=elapsed,
                   processing_fps=index / max(elapsed, 1e-9), counts=shot_statistics(analyzer.shots),
                   methods=dict(Counter(analyzer.shot_methods.values())),
+                  goal_counts=goal_statistics(analyzer.goal_entries),
                   accuracy="unmeasured: no human-labelled reference supplied")
     (output / "shot_methods.json").write_text(json.dumps(analyzer.shot_methods, indent=2) + "\n",
                                              encoding="utf-8")

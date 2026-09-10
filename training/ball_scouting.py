@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from training.launch_signals import LaunchSignalConfig, LaunchSignalBank
+from training.goal_scoring import GoalEntryCounter, goal_statistics, trajectory_link_cost
 
 
 Point = tuple[float, float]
@@ -132,6 +133,13 @@ class GoalGeometry:
     entry_direction: Point
     made_line: DirectedBoundary | None = None
     miss_boundaries: tuple[DirectedBoundary, ...] = ()
+    region_id: str = ""
+    approach_line: DirectedBoundary | None = None
+    confirmation_polygon: tuple[Point, ...] | None = None
+    confirmation_frames: int = 1
+    minimum_depth_radii: float = 0.0
+    maximum_gap_seconds: float = 0.085
+    maximum_confirmation_seconds: float = 0.25
 
     @property
     def center(self) -> Point:
@@ -175,16 +183,26 @@ def _directed_boundary(value: object, name: str) -> DirectedBoundary:
     raw_line = value.get("line")
     if not isinstance(raw_line, list) or len(raw_line) != 2:
         raise ValueError(f"{name}.line must contain two normalized points")
-    return DirectedBoundary(
+    boundary = DirectedBoundary(
         line=(_point(raw_line[0], f"{name}.line[0]"), _point(raw_line[1], f"{name}.line[1]")),
         direction=_direction(value.get("direction"), f"{name}.direction"),
     )
+    a, b = boundary.line
+    if abs((b[0] - a[0]) * boundary.direction[1]
+           - (b[1] - a[1]) * boundary.direction[0]) < 1e-9:
+        raise ValueError(f"{name} needs a nonzero line and a direction crossing it")
+    return boundary
 
 
 def _goal(value: object, index: int) -> GoalGeometry:
     name = f"goals[{index}]"
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be an object")
+    allowed = {"id", "region_id", "polygon", "entry_direction", "made_boundary", "miss_boundaries",
+               "approach_boundary", "confirmation_polygon", "confirmation_frames", "minimum_depth_radii",
+               "maximum_gap_seconds", "maximum_confirmation_seconds", "_comment"}
+    if set(value) - allowed:
+        raise ValueError(f"{name} has unknown settings: {sorted(set(value) - allowed)}")
     goal_id = value.get("id")
     if not isinstance(goal_id, str) or not goal_id.strip():
         raise ValueError(f"{name}.id must be a non-empty string")
@@ -205,6 +223,14 @@ def _goal(value: object, index: int) -> GoalGeometry:
     raw_misses = value.get("miss_boundaries", [])
     if not isinstance(raw_misses, list):
         raise ValueError(f"{name}.miss_boundaries must be an array")
+    confirmation_polygon = value.get("confirmation_polygon")
+    if confirmation_polygon is not None:
+        if not isinstance(confirmation_polygon, list) or len(confirmation_polygon) < 3:
+            raise ValueError(f"{name}.confirmation_polygon needs at least three points")
+        confirmation_polygon = tuple(_point(p, f"{name}.confirmation_polygon") for p in confirmation_polygon)
+    region_id = value.get("region_id", f"{goal_id.strip()}_{index + 1}")
+    if not isinstance(region_id, str) or not region_id.strip():
+        raise ValueError(f"{name}.region_id must be a non-empty string")
     return GoalGeometry(
         goal_id=goal_id.strip(),
         polygon=polygon,
@@ -214,6 +240,15 @@ def _goal(value: object, index: int) -> GoalGeometry:
             _directed_boundary(boundary, f"{name}.miss_boundaries[{miss_index}]")
             for miss_index, boundary in enumerate(raw_misses)
         ),
+        region_id=region_id.strip(),
+        approach_line=(_directed_boundary(value["approach_boundary"], f"{name}.approach_boundary")
+                       if value.get("approach_boundary") is not None else None),
+        confirmation_polygon=confirmation_polygon,
+        confirmation_frames=_integer(value.get("confirmation_frames", 1), f"{name}.confirmation_frames", minimum=1),
+        minimum_depth_radii=_number(value.get("minimum_depth_radii", 0), f"{name}.minimum_depth_radii", minimum=0),
+        maximum_gap_seconds=_number(value.get("maximum_gap_seconds", .085), f"{name}.maximum_gap_seconds", minimum=.001),
+        maximum_confirmation_seconds=_number(value.get("maximum_confirmation_seconds", .25),
+                                            f"{name}.maximum_confirmation_seconds", minimum=.001),
     )
 
 
@@ -513,6 +548,8 @@ def load_ball_scouting_config(path: str | Path) -> BallScoutingConfig:
     if not isinstance(raw_goals, list):
         raise ValueError("goals must be an array")
     goals = tuple(_goal(value, index) for index, value in enumerate(raw_goals))
+    if len({goal.region_id for goal in goals}) != len(goals):
+        raise ValueError("goals.region_id must be unique for each physical goal")
     enabled = document.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
@@ -1073,6 +1110,11 @@ class BallShotAnalyzer:
         self._previous_time: float | None = None
         self._previous_frame: int | None = None
         self.shot_methods: dict[str, str] = {}
+        self.goal_counter = GoalEntryCounter(config.goals)
+
+    @property
+    def goal_entries(self):
+        return self.goal_counter.entries
 
     def _update_robots(
         self, observations: Sequence[RobotObservation], t_seconds: float
@@ -1119,6 +1161,7 @@ class BallShotAnalyzer:
             self._robot_history.clear()
             self._gray_history.clear()
             self.launch_signals = LaunchSignalBank(self.config.launch_signals)
+            self.goal_counter.reset_temporal(t_seconds)
         current_robots = self._update_robots(robots, t_seconds)
         self._robot_history.append((t_seconds, current_robots))
         self._gray_history.append((frame_index, self.detector.previous_gray))
@@ -1164,10 +1207,61 @@ class BallShotAnalyzer:
             )
             for pulse in pulses:
                 self._record_gate_pulse(pulse, current_robots, interval)
+        entries = self.goal_counter.observe(
+            list(self.tracker.active.values()), frame_index, t_seconds, self.frame_size,
+        )
+        self._associate_goal_entries(entries)
         for track in retired:
             if track.track_id not in self._shots_by_ball_track:
                 self.track_states.pop(track.track_id, None)
         return detections
+
+    def _associate_goal_entries(self, entries):
+        """Credit observed entries once; ambiguous or long missing flights stay unassigned."""
+        unmatched = []
+        for entry in entries:
+            shot = self._shots_by_ball_track.get(entry.ball_track_id)
+            if (shot is not None and shot.outcome == "unknown"
+                    and 0 <= entry.t_seconds - shot.launch_t_seconds
+                    <= self.config.shot.maximum_shot_track_seconds):
+                self._credit_goal_entry(entry, shot, "same_track", 1.0)
+            else:
+                unmatched.append(entry)
+        candidates = [shot for shot in self.shots if shot.outcome == "unknown"
+                      and shot.launch_t_seconds >= self.goal_counter.scene_start]
+        # Mutual uniqueness rejects intersecting lookalike paths. Select all links before
+        # mutating shots so iteration order cannot turn an ambiguous pair into a sure one.
+        links = []
+        for entry in unmatched:
+            for shot in candidates:
+                if not 0 < entry.t_seconds - shot.launch_t_seconds <= self.config.shot.maximum_shot_track_seconds:
+                    continue
+                cost = trajectory_link_cost(shot, entry, self.frame_size)
+                if cost is not None:
+                    links.append((cost, entry, shot))
+        accepted = []
+        for cost, entry, shot in links:
+            alternatives = [other_cost for other_cost, other_entry, other_shot in links
+                            if (other_entry is entry and other_shot is not shot)
+                            or (other_shot is shot and other_entry is not entry)]
+            if not alternatives or min(alternatives) - cost >= .25:
+                accepted.append((cost, entry, shot))
+        for cost, entry, shot in accepted:
+            self._credit_goal_entry(entry, shot, "trajectory_relink", max(.5, .9 - cost * .3))
+
+    def _credit_goal_entry(self, entry, shot, association, confidence):
+        entry.shot_id = shot.shot_id
+        entry.robot_track_id = shot.robot_track_id
+        entry.association = association
+        entry.association_confidence = min(confidence, shot.attribution_confidence)
+        shot.outcome, shot.goal = "made", entry.goal
+        shot.outcome_frame, shot.outcome_t_seconds = entry.frame_index, entry.t_seconds
+        evidence = {p["frame_index"]: p for p in shot.ball_track}
+        evidence.update({p["frame_index"]: p for p in entry.ball_track
+                         if p["frame_index"] >= shot.launch_frame})
+        shot.ball_track = [evidence[index] for index in sorted(evidence)]
+        self._shots_by_ball_track[entry.ball_track_id] = shot
+        self._closed_shot_track_ids.update((shot.ball_track_id, entry.ball_track_id))
 
     def _flow_agrees(self, first: BallTrackPoint, last: BallTrackPoint) -> bool | None:
         """Check the actual local pixels with bidirectional pyramidal optical flow.
@@ -1484,7 +1578,7 @@ class BallShotAnalyzer:
                     )
                 if (
                     existing_shot.outcome != "unknown"
-                    or self._shot_track_has_ended(existing_shot)
+                    or (not self.config.goals and self._shot_track_has_ended(existing_shot))
                 ):
                     self._closed_shot_track_ids.add(track.track_id)
             return
@@ -1806,30 +1900,13 @@ class BallShotAnalyzer:
     def _evaluate_outcome(
         self, shot: ShotRecord, previous_point: dict[str, object], current_point: dict[str, object]
     ) -> None:
+        if float(current_point["t_seconds"]) - float(previous_point["t_seconds"]) > .085:
+            return
         previous = (float(previous_point["x"]), float(previous_point["y"]))
         current = (float(current_point["x"]), float(current_point["y"]))
-        movement = current[0] - previous[0], current[1] - previous[1]
-        for goal in self.config.goals:
-            correct_direction = (
-                movement[0] * goal.entry_direction[0]
-                + movement[1] * goal.entry_direction[1]
-                > 0.0
-            )
-            made = False
-            if goal.made_line is not None:
-                made = crosses_directed_boundary(previous, current, goal.made_line)
-            elif goal.polygon is not None:
-                made = (
-                    not _point_in_polygon(previous, goal.polygon)
-                    and _point_in_polygon(current, goal.polygon)
-                    and correct_direction
-                )
-            if made:
-                shot.outcome = "made"
-                shot.goal = goal.goal_id
-                shot.outcome_frame = int(current_point["frame_index"])
-                shot.outcome_t_seconds = float(current_point["t_seconds"])
-                return
+        # Makes are evaluated independently for every ball by GoalEntryCounter, including
+        # tracks whose source robot was never visible. A line hit alone cannot bypass its
+        # approach/interior/depth checks here.
         # Misses are never inferred from disappearance or proximity.  They require a separate,
         # explicitly configured directed boundary and a visible crossing.
         for goal in self.config.goals:
@@ -1849,6 +1926,14 @@ class BallShotAnalyzer:
 
         height, width = frame.shape[:2]
         for goal in self.config.goals:
+            if goal.confirmation_polygon:
+                interior = np.array([(round(x * width), round(y * height))
+                                     for x, y in goal.confirmation_polygon])
+                cv2.polylines(frame, [interior], True, (90, 180, 90), 1)
+            if goal.approach_line:
+                first, second = goal.approach_line.line
+                cv2.line(frame, (round(first[0] * width), round(first[1] * height)),
+                         (round(second[0] * width), round(second[1] * height)), (220, 180, 40), 1)
             if goal.polygon:
                 polygon = [
                     (int(round(x * width)), int(round(y * height)))
@@ -1876,7 +1961,8 @@ class BallShotAnalyzer:
             label_point = goal.center
             cv2.putText(
                 frame,
-                goal.goal_id,
+                f"{goal.region_id or goal.goal_id}: "
+                f"{sum(e.region_id == (goal.region_id or goal.goal_id) for e in self.goal_entries)} made",
                 (int(label_point[0] * width), int(label_point[1] * height) - 6),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.45,
@@ -1928,10 +2014,23 @@ class BallShotAnalyzer:
             )
 
         statistics = shot_statistics(self.shots)
+        goals = goal_statistics(self.goal_entries)
         rows = [
             f"shots {statistics['attempted']}  made {statistics['made']}  "
             f"miss {statistics['missed']}  ? {statistics['unknown']}"
         ]
+        if self.config.goals:
+            rows.append(f"Goal entries: {goals['made']} made / {goals['unassigned']} source unknown")
+        else:
+            rows.append("Goals not calibrated: made count unavailable")
+        for entry in self.goal_entries:
+            if self._previous_time is None or self._previous_time - entry.t_seconds > .75:
+                continue
+            points = [(round(p['x'] * width), round(p['y'] * height)) for p in entry.ball_track]
+            if points:
+                cv2.polylines(frame, [np.array(points)], False, (60, 255, 100), 3)
+                cv2.putText(frame, "IN", points[-1], cv2.FONT_HERSHEY_SIMPLEX, .6,
+                            (60, 255, 100), 2, cv2.LINE_AA)
         for robot_id, values in sorted(statistics["per_robot"].items()):
             rows.append(
                 f"R{robot_id}: {values['attempted']} / {values['made']} / "

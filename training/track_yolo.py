@@ -1926,7 +1926,10 @@ def main() -> int:
     )
     write_raw_tracklets(raw_output, raw_tracklets)
     if shots_output is not None:
+        from training.goal_scoring import write_goal_entries
         write_shot_records(shots_output, ball_analyzer.shots if ball_analyzer else [])
+        write_goal_entries(shots_output.with_name("goal_entries.jsonl"),
+                           ball_analyzer.goal_entries if ball_analyzer else [])
     if snapshot_dir:
         (snapshot_dir / "annotations.json").write_text(
             json.dumps({

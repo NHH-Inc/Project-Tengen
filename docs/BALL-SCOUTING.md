@@ -91,6 +91,53 @@ configuration per camera/view.
 
 ## Goal geometry
 
+Goal counting runs independently of launch counting in `training/goal_scoring.py`. It can
+count a visible basket entry even when the launch was hidden or its ball track was lost.
+Each entry has its own evidence and a physical `region_id`, such as `blue_hub` or `red_hub`.
+An entry is credited to a shot and robot only through the same track or a unique short
+ballistic continuation. Relinking uses observed positions, fit residual, direction and a
+maximum 250 ms gap; competing matches stay unassigned. Predicted positions never count as
+goal observations. A shot is no longer closed at its apex when goals are configured.
+
+For an overhead basket, use an approach line, a deeper scoring line and an interior polygon:
+
+```json
+{
+  "id": "high",
+  "region_id": "blue_hub",
+  "entry_direction": [0, 1],
+  "approach_boundary": {"line": [[0.30, 0.40], [0.70, 0.40]], "direction": [0, 1]},
+  "made_boundary": {"line": [[0.32, 0.60], [0.68, 0.60]], "direction": [0, 1]},
+  "confirmation_polygon": [[0.30, 0.40], [0.70, 0.40], [0.68, 0.90], [0.32, 0.90]],
+  "confirmation_frames": 2,
+  "minimum_depth_radii": 0.5,
+  "maximum_gap_seconds": 0.085,
+  "maximum_confirmation_seconds": 0.25,
+  "miss_boundaries": []
+}
+```
+
+The ball must cross the approach line in order, move inward in the interior on at least two
+observations, cross the scoring line and reach the required depth below it. Put the scoring
+line inside the actual basket, below the rim where a visible crossing establishes an entry.
+Reversal, leaving the interior, stale evidence and long observation gaps cancel confirmation.
+Duplicate broadcast images preserve state but supply no additional inward-motion evidence.
+There is no goal-wide cooldown: different balls can score in the same frame. Overlapping
+evidence from duplicate tracks is fused. Confidence values are heuristic, not probabilities.
+
+`analysis/config/ball_scouting.einstein-wide.json` includes measured regions for the supplied
+Einstein Final 1 wide view with the default crop. Select it with `--ball-config` (or `--config`
+for replay), or set `FRC_BALL_SCOUTING_CONFIG` to that path and restart the ingest service for
+new runs of that view. It is **not a universal camera calibration**. The general example keeps
+goals empty; uncalibrated runs display an explicit notice instead of an apparent zero makes.
+Recalibrate after changing camera angle, crop or zoom. The scoreboard hides part of this
+sample's flight paths, so visible entries can be counted while their source remains unknown.
+
+For backward compatibility, simple line-only goals default to one inward observation and
+zero depth. Use the stronger configuration above for baskets; a simple line cannot reject
+every rim graze. A physical entry count is not an official point total or proof that a hub
+was active under the season rules.
+
 A made outcome may use a finite directed line:
 
 ```json
@@ -139,8 +186,20 @@ For jobs run through the service, `GET /api/jobs/{job_id}/shots` returns both th
 and counts for attempted, made, missed, and unknown shots, split by stable robot ID plus an
 `unassigned` bucket. These statistics are calculated from the shot rows on demand.
 
+`goal_entries.jsonl` (validated by `contracts/goal-entries.schema.json`) records independent
+confirmed entries, crossing and confirmation timestamps, physical region, observed ball path,
+source association method, and optional shot/robot IDs. The same API returns `goal_entries`
+and `goal_statistics` with made, attributed, unassigned, per-region and per-robot totals. These
+totals are separate from attempted-shot statistics: an unseen launch does not become a fake
+attempt. Old runs without the sidecar remain readable; reanalysis is required to add entries.
+
+The video player displays cumulative **Balls in**, source-unknown totals and per-goal counts
+at the current playback time. Confirmed paths flash green with an **IN** label. Counts rewind
+correctly when scrubbing, linked shots and entries count once, and long missing path sections
+are not drawn as observed flight. Robot-attributed makes also update existing shot statistics.
+
 The regular `events.jsonl` remains Contract B compatible: every confirmed launch adds one
-`shot_attempt`; only a made-boundary crossing adds `shot_made`. Unknown outcomes never become
+`shot_attempt`; a confirmed goal entry linked to that shot adds `shot_made`. Unknown outcomes never become
 misses, and unassigned shots keep `track_id: null`.
 
 ## Replay and measure accuracy

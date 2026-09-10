@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import tempfile
 import unittest
@@ -52,6 +53,31 @@ class ApiTests(unittest.TestCase):
             for table in reversed(models.Base.metadata.sorted_tables):
                 db.execute(table.delete())
             db.commit()
+
+    def test_goal_entries_api_keeps_unassigned_makes_and_legacy_jobs(self):
+        job_id = "33333333-3333-4333-8333-333333333333"
+        with self.sessions() as db:
+            db.add(models.Job(job_id=job_id, video_id="abcdefghijk", status="complete"))
+            db.commit()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            (folder / "shots.jsonl").write_text("")
+            with patch.object(main.analysis_orchestrator, "output_base_dir", Path(directory)):
+                legacy = self.client.get(f"/api/jobs/{job_id}/shots")
+                self.assertEqual(legacy.status_code, 200)
+                self.assertEqual(legacy.json()["goal_entries"], [])
+                (folder / "goal_entries.jsonl").write_text(json.dumps({
+                    "entry_id": "entry", "region_id": "blue_hub", "goal": "high",
+                    "robot_track_id": None, "t_seconds": 1.5,
+                }) + "\n")
+                result = self.client.get(f"/api/jobs/{job_id}/shots")
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual(result.json()["statistics"]["attempted"], 0)
+                self.assertEqual(result.json()["goal_statistics"]["made"], 1)
+                self.assertEqual(result.json()["goal_statistics"]["unassigned"], 1)
+                (folder / "goal_entries.jsonl").write_text("broken json")
+                self.assertEqual(self.client.get(f"/api/jobs/{job_id}/shots").status_code, 500)
 
     def test_create_job_preserves_youtube_timestamp(self):
         info = {

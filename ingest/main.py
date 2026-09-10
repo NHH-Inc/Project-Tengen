@@ -763,10 +763,19 @@ def get_job_shots(job_id: str, db: Session = Depends(get_db)):
         config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
     except (OSError, json.JSONDecodeError):
         config = {}
+    from training.goal_scoring import goal_statistics
+    entries_path = path.with_name("goal_entries.jsonl")
+    try:
+        entries = [json.loads(line) for line in entries_path.read_text(encoding="utf-8").splitlines()
+                   if line.strip()] if entries_path.is_file() else []
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read goal entries: {exc}")
     return {
         "shots": shots,
         "statistics": shot_statistics(shots),
         "goals": config.get("goals", []) if isinstance(config, dict) else [],
+        "goal_entries": entries,
+        "goal_statistics": goal_statistics(entries),
     }
 
 

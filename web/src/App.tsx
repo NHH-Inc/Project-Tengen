@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getApi } from './api';
+import { scoringCountsAt } from './api/shots';
 import { isPlayable } from './contracts';
 import { seasonConfig } from './season';
 import { EventInspector } from './components/EventInspector';
@@ -216,6 +217,7 @@ export default function App() {
               events={match.events}
               shots={shotState.shots}
               shotGoals={shotState.goals}
+              goalEntries={shotState.goalEntries}
               confidenceThreshold={confidenceThreshold}
               boxSampleRate={overlaySampleRate || job.fps || 30}
               selectedEventId={selectedEventId}
@@ -239,7 +241,7 @@ export default function App() {
                 <span className="tabs-meta muted">
                   {match.loading
                     ? 'loading…'
-                    : `${match.events.length} events · ${shotState.statistics.attempted} shots (${shotState.statistics.unknown} unknown) · ${overlayRobotLabels} robot labels · ${overlayTracks.length} track fragments · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
+                    : `${match.events.length} events · ${shotState.statistics.attempted} shots (${shotState.statistics.unknown} unknown) · ${shotState.goals.length ? `${scoringCountsAt(shotState.shots, shotState.goalEntries).made} balls in` : 'goals not calibrated'} · ${overlayRobotLabels} robot labels · ${overlayTracks.length} track fragments · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
                 </span>
               </nav>
             )}

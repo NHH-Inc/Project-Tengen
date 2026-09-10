@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlayableJob, Track } from '../contracts';
-import type { ShotGoal, ShotRecord } from '../api/shots';
+import { scoringCountsAt, type GoalEntry, type ShotGoal, type ShotRecord } from '../api/shots';
 import type { ViewEvent } from '../lib/corrections';
 import { EVENT_LABEL, fmtClock, fmtTime, youtubeUrlAt } from '../lib/format';
 import { robotName, visibleBoxes } from '../lib/tracks';
@@ -80,6 +80,7 @@ export interface VideoPlayerProps {
   events: ViewEvent[];
   shots: ShotRecord[];
   shotGoals: ShotGoal[];
+  goalEntries: GoalEntry[];
   /** Events below this are drawn as suspect. Doc 3: low confidence must be visually distinct. */
   confidenceThreshold: number;
   boxSampleRate: number;
@@ -103,6 +104,7 @@ export function VideoPlayer({
   events,
   shots,
   shotGoals,
+  goalEntries,
   confidenceThreshold,
   boxSampleRate,
   trim,
@@ -128,11 +130,11 @@ export function VideoPlayer({
 
   // The overlay redraws from whatever these hold, so the frame callback never re-subscribes.
   const drawState = useRef({
-    tracks, events, shots, shotGoals,
+    tracks, events, shots, shotGoals, goalEntries,
     confidenceThreshold, showBoxes, showShots, boxSampleRate,
   });
   drawState.current = {
-    tracks, events, shots, shotGoals,
+    tracks, events, shots, shotGoals, goalEntries,
     confidenceThreshold, showBoxes, showShots, boxSampleRate,
   };
 
@@ -192,6 +194,23 @@ export function VideoPlayer({
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       for (const goal of s.shotGoals) {
+        if (goal.confirmationPolygon) {
+          ctx.beginPath();
+          goal.confirmationPolygon.forEach(([x, y], i) => {
+            if (i === 0) ctx.moveTo(x * cssW, y * cssH);
+            else ctx.lineTo(x * cssW, y * cssH);
+          });
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(80, 220, 114, 0.10)';
+          ctx.fill();
+        }
+        const labelPoint = goal.madeBoundary?.line[0] ?? goal.polygon?.[0];
+        if (labelPoint) {
+          const made = s.goalEntries.filter((entry) => entry.regionId === goal.regionId && entry.tSeconds <= t).length;
+          ctx.fillStyle = '#50dc72';
+          ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+          ctx.fillText(`${goal.regionId.replaceAll('_', ' ')}: ${made} in`, labelPoint[0] * cssW, labelPoint[1] * cssH - 8);
+        }
         if (goal.polygon && goal.polygon.length >= 3) {
           ctx.beginPath();
           ctx.moveTo(goal.polygon[0][0] * cssW, goal.polygon[0][1] * cssH);
@@ -237,7 +256,11 @@ export function VideoPlayer({
         if (path.length >= 2) {
           ctx.beginPath();
           ctx.moveTo(path[0].x * cssW, path[0].y * cssH);
-          for (const point of path.slice(1)) ctx.lineTo(point.x * cssW, point.y * cssH);
+          for (let i = 1; i < path.length; i++) {
+            const point = path[i];
+            if (point.tSeconds - path[i - 1].tSeconds > .085) ctx.moveTo(point.x * cssW, point.y * cssH);
+            else ctx.lineTo(point.x * cssW, point.y * cssH);
+          }
           ctx.strokeStyle = colour;
           ctx.lineWidth = 2;
           ctx.stroke();
@@ -258,17 +281,38 @@ export function VideoPlayer({
         );
       }
 
+      for (const entry of s.goalEntries) {
+        if (t < entry.tSeconds || t > entry.tSeconds + .75 || entry.ballTrack.length === 0) continue;
+        ctx.beginPath();
+        entry.ballTrack.forEach((point, i) => {
+          if (i === 0 || point.tSeconds - entry.ballTrack[i - 1].tSeconds > .085)
+            ctx.moveTo(point.x * cssW, point.y * cssH);
+          else ctx.lineTo(point.x * cssW, point.y * cssH);
+        });
+        ctx.strokeStyle = '#50dc72';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        const last = entry.ballTrack[entry.ballTrack.length - 1];
+        ctx.fillStyle = '#50dc72';
+        ctx.font = '700 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillText(`IN · ${entry.robotTrackId == null ? 'source unknown' : `R${entry.robotTrackId}`}`,
+          last.x * cssW + 8, last.y * cssH);
+      }
+
       const shotsDetected = s.shots.filter(
         (shot) => shot.launchTSeconds <= t + 1e-3
       ).length;
-      const counter = `Shots detected: ${shotsDetected}`;
+      const made = scoringCountsAt(s.shots, s.goalEntries, t);
+      const rows = [`Shots detected: ${shotsDetected}`,
+        s.shotGoals.length > 0 ? `Balls in: ${made.made} · source unknown: ${made.unassigned}`
+          : 'Goal regions not configured'];
       ctx.font = '700 13px ui-monospace, SFMono-Regular, Menlo, monospace';
-      const panelWidth = ctx.measureText(counter).width + 18;
+      const panelWidth = Math.max(...rows.map((row) => ctx.measureText(row).width)) + 18;
       const panelX = cssW - panelWidth - 8;
       ctx.fillStyle = 'rgba(10, 12, 16, 0.82)';
-      ctx.fillRect(panelX, 8, panelWidth, 29);
+      ctx.fillRect(panelX, 8, panelWidth, 49);
       ctx.fillStyle = '#f2f3f5';
-      ctx.fillText(counter, panelX + 9, 27);
+      rows.forEach((row, i) => ctx.fillText(row, panelX + 9, 27 + i * 20));
       ctx.restore();
     }
 
@@ -392,7 +436,7 @@ export function VideoPlayer({
   useEffect(() => {
     if (!playing) draw(time);
   }, [
-    draw, playing, tracks, events, shots, shotGoals,
+    draw, playing, tracks, events, shots, shotGoals, goalEntries,
     confidenceThreshold, showBoxes, showShots, time,
   ]);
 
