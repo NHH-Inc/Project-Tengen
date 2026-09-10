@@ -9,9 +9,17 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+
+from training.ball_scouting import (
+    BallShotAnalyzer,
+    RobotObservation,
+    load_ball_scouting_config,
+    write_shot_records,
+)
 
 
 # Normalized coordinates of the yellow-marked upper broadcast panel in the supplied reference.
@@ -762,29 +770,35 @@ def write_track_records(
 ) -> None:
     """Atomically publish the tracks accumulated so far for the live UI overlay."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.tmp")
+    # A retry or a second API worker must never share the same temporary filename.  On Windows,
+    # that race can make one writer fail at replace() with PermissionError while the other keeps
+    # running. The per-job lock prevents normal duplicates; unique names keep this writer safe
+    # even if an old process is still winding down.
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     with temporary.open("w", encoding="utf-8") as handle:
         for record in contract_track_records(
             tracks, fps, alliances, position_source, visible_track_ids, raw_track_ids
         ):
             handle.write(json.dumps(record, sort_keys=True) + "\n")
-    # The browser polls the partial file while the worker is writing it. Windows can briefly
-    # keep that read handle open, so retry the atomic swap instead of aborting the whole run.
-    for attempt in range(30):
+    # The browser polls the partial file while the worker is writing it. Windows can keep a
+    # multi-megabyte read handle open while JSON is being parsed, so a three-second retry window
+    # is not enough under load. Wait up to thirty seconds before treating the publish as fatal;
+    # the analyzer can continue doing useful work while the reader releases its handle.
+    for attempt in range(120):
         try:
             temporary.replace(path)
             return
         except PermissionError:
-            if attempt == 29:
+            if attempt == 119:
                 raise
-            time.sleep(0.1)
+            time.sleep(0.25)
 
 
 def write_raw_tracklets(path: Path, raw_tracklets: dict[int, dict[str, object]]) -> None:
     """Atomically write the immutable tracker observations used by the identity layer."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.tmp")
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     with temporary.open("w", encoding="utf-8") as handle:
         for fragment_id in sorted(raw_tracklets):
             handle.write(json.dumps(raw_tracklets[fragment_id], sort_keys=True) + "\n")
@@ -1311,6 +1325,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-size", type=int, default=960)
     parser.add_argument("--device", default="0")
     parser.add_argument(
+        "--frame-stride",
+        type=int,
+        default=2,
+        help=(
+            "process every Nth source frame (default: 2); use 1 for full-frame-rate analysis"
+        ),
+    )
+    parser.add_argument(
         "--expected-duration",
         type=float,
         default=0.0,
@@ -1392,6 +1414,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--annotated-output", help="optional MP4 preview")
     parser.add_argument(
+        "--ball-config",
+        help=(
+            "optional HSV ball/shot/goal JSON configuration; ball analysis stays separate "
+            "from the YOLO robot detector"
+        ),
+    )
+    parser.add_argument(
+        "--shots-output",
+        help="reviewable shot JSONL sidecar (default with --ball-config: shots.jsonl beside tracks)",
+    )
+    parser.add_argument(
         "--snapshot-dir",
         help="directory for clean JPEG snapshots and one annotations.json file",
     )
@@ -1424,6 +1457,12 @@ def main() -> int:
         if args.raw_output
         else output.with_name(f"{output.stem}.raw.jsonl")
     )
+    ball_config_path = Path(args.ball_config) if args.ball_config else None
+    shots_output = (
+        Path(args.shots_output)
+        if args.shots_output
+        else (output.with_name("shots.jsonl") if ball_config_path else None)
+    )
     video_path = Path(args.video) if args.video else None
     if not model_path.is_file():
         raise SystemExit("--model must name an existing file")
@@ -1433,6 +1472,10 @@ def main() -> int:
         raise SystemExit(f"Refusing to overwrite track output: {output}")
     if raw_output.exists():
         raise SystemExit(f"Refusing to overwrite raw tracker output: {raw_output}")
+    if args.shots_output and ball_config_path is None:
+        raise SystemExit("--shots-output requires --ball-config")
+    if shots_output is not None and shots_output.exists():
+        raise SystemExit(f"Refusing to overwrite shot output: {shots_output}")
     try:
         import cv2
         from ultralytics import YOLO
@@ -1442,6 +1485,8 @@ def main() -> int:
         raise SystemExit("Install training/requirements-yolo.txt in the dedicated vision venv") from exc
     if args.snapshot_interval <= 0:
         raise SystemExit("--snapshot-interval must be greater than zero")
+    if args.frame_stride <= 0:
+        raise SystemExit("--frame-stride must be a positive integer")
     if args.expected_duration < 0:
         raise SystemExit("--expected-duration cannot be negative")
     if args.reid_memory_seconds <= 0:
@@ -1470,6 +1515,14 @@ def main() -> int:
         raise SystemExit("--startup-position-seconds cannot be negative")
     if not 0.0 < args.startup_split_x < 1.0:
         raise SystemExit("--startup-split-x must be between zero and one")
+    ball_analyzer = None
+    if ball_config_path is not None:
+        try:
+            ball_config = load_ball_scouting_config(ball_config_path)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if ball_config.enabled:
+            ball_analyzer = BallShotAnalyzer(ball_config)
     output.parent.mkdir(parents=True, exist_ok=True)
     homography_path = args.homography
     if args.stream_url and args.auto_homography and not homography_path:
@@ -1506,7 +1559,8 @@ def main() -> int:
         position_source = mapper.source
 
     if args.stream_url:
-        fps = stream_source_fps(args.stream_url)
+        source_fps = stream_source_fps(args.stream_url)
+        fps = source_fps / args.frame_stride
         total_frames = (
             max(1, int(round(args.expected_duration * fps)))
             if args.expected_duration > 0 and fps > 0
@@ -1517,11 +1571,13 @@ def main() -> int:
         class YtFrameLoader(LoadPilAndNumpy):
             """Ultralytics-compatible lazy loader around the yt-dlp/FFmpeg frame pipe."""
 
-            def __init__(self, frames):
+            def __init__(self, frames, stride):
                 self.frames = iter(frames)
+                self.stride = stride
                 self.mode = "stream"
                 self.bs = 1
                 self.count = 0
+                self.source_count = 0
                 self.source_type = SourceTypes(stream=True, screenshot=False, from_img=False, tensor=False)
 
             def __len__(self):
@@ -1531,11 +1587,18 @@ def main() -> int:
                 return self
 
             def __next__(self):
-                frame = next(self.frames)
+                while True:
+                    frame = next(self.frames)
+                    source_index = self.source_count
+                    self.source_count += 1
+                    if source_index % self.stride == 0:
+                        break
                 self.count += 1
-                return [f"youtube_stream_{self.count:08d}.jpg"], [frame], [""]
+                return [f"youtube_stream_{source_index:08d}.jpg"], [frame], [""]
 
-        source_frames = YtFrameLoader(stream_cropped_frames(args.stream_url, tuple(args.crop)))
+        source_frames = YtFrameLoader(
+            stream_cropped_frames(args.stream_url, tuple(args.crop)), args.frame_stride
+        )
     else:
         assert video_path is not None
         source_name = str(video_path)
@@ -1543,16 +1606,18 @@ def main() -> int:
         class LocalFrameLoader(LoadPilAndNumpy):
             """Lazy OpenCV source that crops each frame as YOLO requests it."""
 
-            def __init__(self, path: Path, crop):
+            def __init__(self, path: Path, crop, stride):
                 self.capture = cv2.VideoCapture(str(path))
                 if not self.capture.isOpened():
                     raise SystemExit(f"Could not open video: {path}")
-                self.fps = float(self.capture.get(cv2.CAP_PROP_FPS) or 30.0)
-                self.total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+                self.source_fps = float(self.capture.get(cv2.CAP_PROP_FPS) or 30.0)
+                self.source_total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
                 self.crop = tuple(crop)
+                self.stride = stride
                 self.mode = "stream"
                 self.bs = 1
                 self.count = 0
+                self.source_count = 0
                 self.source_type = SourceTypes(stream=True, screenshot=False, from_img=False, tensor=False)
 
             def __len__(self):
@@ -1562,21 +1627,29 @@ def main() -> int:
                 return self
 
             def __next__(self):
-                ok, frame = self.capture.read()
-                if not ok:
-                    self.capture.release()
-                    raise StopIteration
+                while True:
+                    ok, frame = self.capture.read()
+                    if not ok:
+                        self.capture.release()
+                        raise StopIteration
+                    source_index = self.source_count
+                    self.source_count += 1
+                    if source_index % self.stride == 0:
+                        break
                 height, width = frame.shape[:2]
                 x0, y0, x1, y1 = crop_bounds(width, height, self.crop)
                 self.count += 1
-                return [f"video_stream_{self.count:08d}.jpg"], [frame[y0:y1, x0:x1]], [""]
+                return [f"video_stream_{source_index:08d}.jpg"], [frame[y0:y1, x0:x1]], [""]
 
             def close(self):
                 self.capture.release()
 
-        source_frames = LocalFrameLoader(video_path, tuple(args.crop))
-        fps = source_frames.fps
-        total_frames = source_frames.total_frames
+        source_frames = LocalFrameLoader(video_path, tuple(args.crop), args.frame_stride)
+        fps = source_frames.source_fps / args.frame_stride
+        total_frames = (
+            max(1, (source_frames.source_total_frames + args.frame_stride - 1) // args.frame_stride)
+            if source_frames.source_total_frames > 0 else 0
+        )
     model = YOLO(str(model_path))
     tracker_config = Path(__file__).resolve().parent / "trackers" / f"{args.tracker}.yaml"
     if not tracker_config.is_file():
@@ -1626,7 +1699,11 @@ def main() -> int:
     # frame.
     publish_interval = max(1, int(round(fps)))
     for frame_index, result in enumerate(results):
+        # ``frame_index`` is the sampled-frame index; preserve the original video frame number
+        # in shot evidence and snapshot annotations for later review.
+        source_frame_index = frame_index * args.frame_stride
         timestamp = round(frame_index / fps, 6)
+        height, width = result.orig_img.shape[:2]
         stable_ids: list[int | None] = []
         if result.boxes is not None:
             xyxy = result.boxes.xyxy.detach().cpu().tolist()
@@ -1635,7 +1712,6 @@ def main() -> int:
                 if result.boxes.id is not None else [None] * len(xyxy)
             )
             confidences = result.boxes.conf.detach().cpu().tolist()
-            height, width = result.orig_img.shape[:2]
             stable_ids = [None] * len(xyxy)
             detection_indices: list[int] = []
             reid_detections: list[ReIDDetection] = []
@@ -1781,6 +1857,21 @@ def main() -> int:
                 tracks.setdefault(track_id, []).append(sample)
         alliances = resolved_alliances(alliance_votes)
         visible_track_ids = eligible_track_ids(tracks, alliances, suppressed_stationary_ids)
+        if ball_analyzer is not None:
+            robot_observations: list[RobotObservation] = []
+            if result.boxes is not None:
+                for raw_box, stable_id in zip(
+                    result.boxes.xyxy.detach().cpu().tolist(), stable_ids
+                ):
+                    if stable_id is None:
+                        continue
+                    robot_observations.append(RobotObservation(
+                        track_id=stable_id,
+                        bbox=tuple(float(value) for value in raw_box),
+                    ))
+            ball_analyzer.process_frame(
+                result.orig_img, source_frame_index, timestamp, robot_observations
+            )
         if snapshot_dir and timestamp + (0.5 / fps) >= next_snapshot:
             clean_frame = result.orig_img.copy()
             snapshot_name = f"snapshot_{int(round(next_snapshot)):06d}s.jpg"
@@ -1790,7 +1881,7 @@ def main() -> int:
             snapshot_annotations.append({
                 "image": snapshot_name,
                 "timestamp_seconds": round(next_snapshot, 3),
-                "frame_index": frame_index,
+                "frame_index": source_frame_index,
                 "width": int(clean_frame.shape[1]),
                 "height": int(clean_frame.shape[0]),
                 "boxes": detection_records(result, stable_ids, visible_track_ids),
@@ -1798,6 +1889,8 @@ def main() -> int:
             next_snapshot += args.snapshot_interval
         if annotated_path:
             plotted = colored_detections(result, stable_ids, visible_track_ids)
+            if ball_analyzer is not None:
+                ball_analyzer.draw_debug_overlay(plotted)
             if writer is None:
                 height, width = plotted.shape[:2]
                 writer = cv2.VideoWriter(
@@ -1829,6 +1922,8 @@ def main() -> int:
         stable_to_raw,
     )
     write_raw_tracklets(raw_output, raw_tracklets)
+    if shots_output is not None:
+        write_shot_records(shots_output, ball_analyzer.shots if ball_analyzer else [])
     if snapshot_dir:
         (snapshot_dir / "annotations.json").write_text(
             json.dumps({

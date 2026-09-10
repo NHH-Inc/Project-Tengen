@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -70,6 +71,74 @@ def match_events(job: dict, duration: float, season: dict) -> list[dict]:
     ]
 
 
+def shot_events(job: dict, shots: list[dict], tracks: list[dict], season: dict) -> list[dict]:
+    """Project detailed shot records onto the existing Contract B event vocabulary.
+
+    Every confirmed launch becomes one attempt.  Only an observed made-boundary crossing gets a
+    ``shot_made`` row; missed and unknown remain distinguishable in ``shots.jsonl`` rather than
+    inventing new values in Contract B's closed ``event_type`` set.
+    """
+
+    match_id = job.get("match_id")
+    if not match_id:
+        return []
+    legal_goals = set(season.get("goals") or [])
+    team_by_track = {
+        track.get("track_id"): track.get("team")
+        for track in tracks
+        if isinstance(track.get("track_id"), int)
+    }
+    events: list[dict] = []
+    for shot in shots:
+        robot_track_id = shot.get("robot_track_id")
+        if not isinstance(robot_track_id, int):
+            robot_track_id = None
+        outcome = shot.get("outcome")
+        goal = shot.get("goal") if outcome == "made" else None
+        if goal is not None and goal not in legal_goals:
+            raise RuntimeError(
+                f"Ball scouting goal {goal!r} is not legal for season {season.get('season')}"
+            )
+        launch_t = float(shot.get("launch_t_seconds") or 0.0)
+        common = {
+            "schema_version": 3,
+            "job_id": job["job_id"],
+            "match_id": match_id,
+            "team": team_by_track.get(robot_track_id),
+            "track_id": robot_track_id,
+            "confidence": float(shot.get("confidence") or 0.0),
+            "field_x": None,
+            "field_y": None,
+            "source": "model",
+            # Additive evidence fields survive JSONL review even though the current SQL event
+            # table intentionally stores only Contract B columns.
+            "shot_id": shot.get("shot_id"),
+            "ball_track_id": shot.get("ball_track_id"),
+            "launch_frame": shot.get("launch_frame"),
+            "outcome": outcome if outcome in {"made", "missed", "unknown"} else "unknown",
+        }
+        events.append({
+            **common,
+            "event_id": str(uuid.uuid4()),
+            "t_seconds": launch_t,
+            "phase": phase_at(launch_t, season),
+            "event_type": "shot_attempt",
+            "goal": goal,
+        })
+        if outcome == "made":
+            outcome_t = float(shot.get("outcome_t_seconds") or launch_t)
+            events.append({
+                **common,
+                "event_id": str(uuid.uuid4()),
+                "t_seconds": outcome_t,
+                "phase": phase_at(outcome_t, season),
+                "event_type": "shot_made",
+                "goal": goal,
+                "outcome_frame": shot.get("outcome_frame"),
+            })
+    return events
+
+
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text(
         "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
@@ -90,6 +159,7 @@ class YoloAnalysisOrchestrator:
         tracker: str = "bytetrack",
         confidence: float = 0.25,
         image_size: int = 960,
+        frame_stride: int = 2,
         device: str = "0",
         save_annotated: bool = False,
         snapshot_interval: float = 5.0,
@@ -107,6 +177,7 @@ class YoloAnalysisOrchestrator:
         reid_alliance_lock_margin_seconds: float = 2.0,
         startup_position_seconds: float = 2.0,
         startup_split_x: float = 0.50,
+        ball_config_path: str | Path | None = None,
         auto_homography: bool = True,
         homography_hfov_deg: float = 70.0,
     ):
@@ -117,6 +188,7 @@ class YoloAnalysisOrchestrator:
         self.tracker = tracker
         self.confidence = confidence
         self.image_size = image_size
+        self.frame_stride = frame_stride
         self.device = device
         self.save_annotated = save_annotated
         self.snapshot_interval = snapshot_interval
@@ -133,6 +205,7 @@ class YoloAnalysisOrchestrator:
         self.reid_alliance_lock_margin_seconds = reid_alliance_lock_margin_seconds
         self.startup_position_seconds = startup_position_seconds
         self.startup_split_x = startup_split_x
+        self.ball_config_path = self._resolve_optional(ball_config_path)
         self.auto_homography = auto_homography
         self.homography_hfov_deg = homography_hfov_deg
         self.homography_path = self._resolve_optional(
@@ -163,6 +236,7 @@ class YoloAnalysisOrchestrator:
             "tracker": self.tracker,
             "confidence": self.confidence,
             "image_size": self.image_size,
+            "frame_stride": self.frame_stride,
             "device": self.device,
             "snapshot_interval": self.snapshot_interval,
             "reid_memory_seconds": self.reid_memory_seconds,
@@ -178,6 +252,12 @@ class YoloAnalysisOrchestrator:
             "reid_alliance_lock_margin_seconds": self.reid_alliance_lock_margin_seconds,
             "startup_position_seconds": self.startup_position_seconds,
             "startup_split_x": self.startup_split_x,
+            "ball_scouting_config": (
+                str(self.ball_config_path) if self.ball_config_path else None
+            ),
+            "ball_scouting_configured": bool(
+                self.ball_config_path and self.ball_config_path.is_file()
+            ),
             "homography": str(self.homography_path) if self.homography_path else None,
             "homography_available": bool(self.homography_path and self.homography_path.is_file()),
             "auto_homography": self.auto_homography,
@@ -289,6 +369,8 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_CONFIDENCE must be between 0 and 1")
         if self.image_size <= 0 or self.image_size % 32:
             raise RuntimeError("FRC_YOLO_IMAGE_SIZE must be a positive multiple of 32")
+        if self.frame_stride <= 0:
+            raise RuntimeError("FRC_YOLO_FRAME_STRIDE must be a positive integer")
         if self.reid_memory_seconds <= 0:
             raise RuntimeError("FRC_YOLO_REID_MEMORY_SECONDS must be greater than zero")
         if not 0.0 <= self.reid_appearance_threshold <= 1.0:
@@ -315,6 +397,10 @@ class YoloAnalysisOrchestrator:
             raise RuntimeError("FRC_YOLO_STARTUP_POSITION_SECONDS cannot be negative")
         if not 0.0 < self.startup_split_x < 1.0:
             raise RuntimeError("FRC_YOLO_STARTUP_SPLIT_X must be between zero and one")
+        if self.ball_config_path is not None and not self.ball_config_path.is_file():
+            raise RuntimeError(
+                f"FRC_BALL_SCOUTING_CONFIG does not exist: {self.ball_config_path}"
+            )
 
         job_id = str(job_data["job_id"])
         job_dir = self.output_base_dir / job_id
@@ -323,10 +409,19 @@ class YoloAnalysisOrchestrator:
         raw_tracks_path = job_dir / "tracks.raw.jsonl"
         partial_tracks_path = job_dir / "tracks.partial.jsonl"
         events_path = job_dir / "events.jsonl"
+        shots_path = job_dir / "shots.jsonl" if self.ball_config_path else None
+        ball_config_snapshot = (
+            job_dir / "ball_scouting.config.json" if self.ball_config_path else None
+        )
         result_path = job_dir / "result.json"
-        if tracks_path.exists() or events_path.exists() or result_path.exists():
+        if (
+            tracks_path.exists() or events_path.exists() or result_path.exists()
+            or (shots_path is not None and shots_path.exists())
+        ):
             raise RuntimeError(f"Refusing to overwrite existing YOLO output: {job_dir}")
         job_homography = self._job_homography(video_path, job_dir)
+        if self.ball_config_path is not None and ball_config_snapshot is not None:
+            shutil.copyfile(self.ball_config_path, ball_config_snapshot)
 
         annotated_path = job_dir / "annotated.mp4" if self.save_annotated else None
         video_label = "".join(
@@ -350,6 +445,8 @@ class YoloAnalysisOrchestrator:
             str(self.confidence),
             "--image-size",
             str(self.image_size),
+            "--frame-stride",
+            str(self.frame_stride),
             "--device",
             self.device,
             *(
@@ -386,6 +483,13 @@ class YoloAnalysisOrchestrator:
             str(self.startup_split_x),
             "--raw-output",
             str(raw_tracks_path),
+            *(
+                [
+                    "--ball-config", str(ball_config_snapshot),
+                    "--shots-output", str(shots_path),
+                ]
+                if self.ball_config_path and shots_path else []
+            ),
             *(["--homography", str(job_homography)] if job_homography else []),
             "--snapshot-dir",
             str(snapshot_dir),
@@ -438,6 +542,8 @@ class YoloAnalysisOrchestrator:
             raise error
         if not tracks_path.is_file():
             raise RuntimeError(f"YOLO tracker completed without writing: {tracks_path}")
+        if shots_path is not None and not shots_path.is_file():
+            raise RuntimeError(f"YOLO tracker completed without writing: {shots_path}")
         partial_tracks_path.unlink(missing_ok=True)
 
         try:
@@ -448,6 +554,17 @@ class YoloAnalysisOrchestrator:
             ]
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Could not read YOLO tracks: {exc}") from exc
+        try:
+            shot_rows = (
+                [
+                    json.loads(line)
+                    for line in shots_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                if shots_path is not None else []
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Could not read ball shot records: {exc}") from exc
 
         # Stream calibration is performed inside the dedicated vision process so it can share
         # the yt-dlp/PyAV environment. Surface that generated calibration in the run result just
@@ -481,6 +598,8 @@ class YoloAnalysisOrchestrator:
                 duration = max(0.0, last_timestamp + 1.0 / fps)
                 frames_total = max(1, int(round(duration * fps)))
         events = match_events(job_data, duration, season)
+        events.extend(shot_events(job_data, shot_rows, track_rows, season))
+        events.sort(key=lambda event: (float(event["t_seconds"]), event["event_type"]))
         _write_jsonl(events_path, events)
         mapping_source = None
         if job_homography and job_homography.is_file():
@@ -505,6 +624,7 @@ class YoloAnalysisOrchestrator:
             "frames_skipped_shot_change": 0,
             "tracks_emitted": len(track_rows),
             "events_emitted": len(events),
+            "shots_emitted": len(shot_rows),
             "reconstructed_score": None,
             "started_at": started_at,
             "finished_at": utc_now(),
@@ -513,6 +633,7 @@ class YoloAnalysisOrchestrator:
             "snapshots_interval_seconds": self.snapshot_interval,
             "snapshots_count": len(list(snapshot_dir.glob("snapshot_*.jpg"))),
             "raw_tracks_path": str(raw_tracks_path) if raw_tracks_path.is_file() else None,
+            "shots_path": str(shots_path) if shots_path is not None else None,
             "model_crop": {
                 "left": MODEL_CROP[0],
                 "top": MODEL_CROP[1],
@@ -528,6 +649,7 @@ class YoloAnalysisOrchestrator:
             "events_path": str(events_path),
             "tracks_path": str(tracks_path),
             "raw_tracks_path": str(raw_tracks_path) if raw_tracks_path.is_file() else None,
+            "shots_path": str(shots_path) if shots_path is not None else None,
             "result_path": str(result_path),
             "result": result,
         }

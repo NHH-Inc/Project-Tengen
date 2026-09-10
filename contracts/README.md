@@ -11,6 +11,7 @@ the other two.
 | `job.schema.json` | A — job record | v2: season, attempt, error_code, progress/stage, timestamps |
 | `events.schema.json` | B — event record | v2: UUID event_id, nullable track_id, corrected/correction_id |
 | `raw-tracklets.schema.json` | Immutable raw tracker observations | v1: raw/recycled tracker ids plus nullable stable assignment |
+| `shots.schema.json` | Reviewable HSV ball/shot evidence sidecar | v1: launch, attribution, trajectory, and explicit made/missed/unknown outcome |
 | `tracks.schema.json` | C — track record | v2: **required `gaps`**, `team_confidence` |
 | `correction.schema.json` | F — corrections | v2: `scope` (event/track), `target_id` |
 | `result.schema.json` | D — `result.json` metadata | key names now pinned by doc 0 |

@@ -6,6 +6,7 @@
 
 import type { ContractViolation, Correction, Job, ScoutEvent, Track } from '../contracts';
 import type { Accuracy, ExportResult, RunResult, TeamStatsSummary } from './shapes';
+import type { ShotResponse } from './shots';
 
 export interface Parsed<T> {
   data: T;
@@ -54,6 +55,8 @@ export interface ScoutingApi {
   retryJob(jobId: string): Promise<Parsed<Job>>;
   /** Contract D's result.json, including box_sample_rate and the frame counts. */
   getResult(jobId: string): Promise<RunResult | null>;
+  /** Reviewable HSV shot trajectories and on-demand per-robot outcome counts. */
+  getShots(jobId: string): Promise<ShotResponse>;
 
   getEvents(matchId: string, query?: EventQuery): Promise<Parsed<ScoutEvent[]>>;
   getTracks(matchId: string, query?: EventQuery): Promise<Parsed<TracksResponse>>;

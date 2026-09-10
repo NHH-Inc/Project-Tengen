@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlayableJob, Track } from '../contracts';
+import type { ShotGoal, ShotRecord } from '../api/shots';
 import type { ViewEvent } from '../lib/corrections';
 import { EVENT_LABEL, fmtClock, fmtTime, youtubeUrlAt } from '../lib/format';
 import { robotName, visibleBoxes } from '../lib/tracks';
@@ -77,6 +78,8 @@ export interface VideoPlayerProps {
   mediaStartSeconds?: number;
   tracks: Track[];
   events: ViewEvent[];
+  shots: ShotRecord[];
+  shotGoals: ShotGoal[];
   /** Events below this are drawn as suspect. Doc 3: low confidence must be visually distinct. */
   confidenceThreshold: number;
   boxSampleRate: number;
@@ -98,6 +101,8 @@ export function VideoPlayer({
   mediaStartSeconds = 0,
   tracks,
   events,
+  shots,
+  shotGoals,
   confidenceThreshold,
   boxSampleRate,
   trim,
@@ -116,13 +121,20 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showBoxes, setShowBoxes] = useState(true);
+  const [showShots, setShowShots] = useState(true);
   const [ready, setReady] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null);
 
   // The overlay redraws from whatever these hold, so the frame callback never re-subscribes.
-  const drawState = useRef({ tracks, events, confidenceThreshold, showBoxes, boxSampleRate });
-  drawState.current = { tracks, events, confidenceThreshold, showBoxes, boxSampleRate };
+  const drawState = useRef({
+    tracks, events, shots, shotGoals,
+    confidenceThreshold, showBoxes, showShots, boxSampleRate,
+  });
+  drawState.current = {
+    tracks, events, shots, shotGoals,
+    confidenceThreshold, showBoxes, showShots, boxSampleRate,
+  };
 
   const duration = job.duration;
   // 15s auto + 135s teleop + 20s endgame for 2026. Read from the season config so the trim
@@ -173,6 +185,93 @@ export function VideoPlayer({
     ctx.clearRect(0, 0, cssW, cssH);
 
     const s = drawState.current;
+    if (!s.showBoxes && !s.showShots) return;
+
+    if (s.showShots) {
+      ctx.save();
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      for (const goal of s.shotGoals) {
+        if (goal.polygon && goal.polygon.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(goal.polygon[0][0] * cssW, goal.polygon[0][1] * cssH);
+          for (const point of goal.polygon.slice(1)) {
+            ctx.lineTo(point[0] * cssW, point[1] * cssH);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = '#50dc72';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        if (goal.madeBoundary) {
+          const [first, second] = goal.madeBoundary.line;
+          ctx.beginPath();
+          ctx.moveTo(first[0] * cssW, first[1] * cssH);
+          ctx.lineTo(second[0] * cssW, second[1] * cssH);
+          ctx.strokeStyle = '#50dc72';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+        for (const boundary of goal.missBoundaries) {
+          const [first, second] = boundary.line;
+          ctx.beginPath();
+          ctx.moveTo(first[0] * cssW, first[1] * cssH);
+          ctx.lineTo(second[0] * cssW, second[1] * cssH);
+          ctx.strokeStyle = '#ef5964';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      for (const shot of s.shots) {
+        const lastTime = shot.ballTrack.at(-1)?.tSeconds ?? shot.launchTSeconds;
+        if (t < shot.launchTSeconds - 0.2 || t > lastTime + 0.75) continue;
+        const path = shot.ballTrack.filter((point) => point.tSeconds <= t + 1e-3);
+        if (path.length === 0) continue;
+        const outcomeKnown = shot.outcomeTSeconds != null && t >= shot.outcomeTSeconds;
+        const colour = outcomeKnown && shot.outcome === 'made'
+          ? '#50dc72'
+          : outcomeKnown && shot.outcome === 'missed'
+            ? '#ef5964'
+            : '#4de4ee';
+        if (path.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(path[0].x * cssW, path[0].y * cssH);
+          for (const point of path.slice(1)) ctx.lineTo(point.x * cssW, point.y * cssH);
+          ctx.strokeStyle = colour;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        const current = path[path.length - 1];
+        const radius = Math.max(3, current.radius * Math.hypot(cssW, cssH));
+        ctx.beginPath();
+        ctx.arc(current.x * cssW, current.y * cssH, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillStyle = colour;
+        ctx.fillText(
+          `shot ${shot.shotId.slice(0, 4)} · ${shot.robotTrackId == null ? 'unassigned' : `R${shot.robotTrackId}`}`,
+          current.x * cssW + radius + 3,
+          current.y * cssH - radius,
+        );
+      }
+
+      const shotsDetected = s.shots.filter(
+        (shot) => shot.launchTSeconds <= t + 1e-3
+      ).length;
+      const counter = `Shots detected: ${shotsDetected}`;
+      ctx.font = '700 13px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const panelWidth = ctx.measureText(counter).width + 18;
+      const panelX = cssW - panelWidth - 8;
+      ctx.fillStyle = 'rgba(10, 12, 16, 0.82)';
+      ctx.fillRect(panelX, 8, panelWidth, 29);
+      ctx.fillStyle = '#f2f3f5';
+      ctx.fillText(counter, panelX + 9, 27);
+      ctx.restore();
+    }
+
     if (!s.showBoxes) return;
 
     // Hold a box for one sample period past its last sample so it does not strobe at the
@@ -292,7 +391,10 @@ export function VideoPlayer({
   // Paused frames still need redrawing when the caller changes filters or the box toggle.
   useEffect(() => {
     if (!playing) draw(time);
-  }, [draw, playing, tracks, events, confidenceThreshold, showBoxes, time]);
+  }, [
+    draw, playing, tracks, events, shots, shotGoals,
+    confidenceThreshold, showBoxes, showShots, time,
+  ]);
 
   // draw() bails when the canvas has no layout yet, and on first load the track data can
   // arrive before that happens -- leaving the overlay blank until the user hits play or
@@ -391,6 +493,8 @@ export function VideoPlayer({
         step(e.shiftKey ? job.fps : 1);
       } else if (e.key === 'b') {
         setShowBoxes((v) => !v);
+      } else if (e.key === 's') {
+        setShowShots((v) => !v);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -660,6 +764,11 @@ export function VideoPlayer({
         <label className="transport-toggle" title="Toggle overlay (B)">
           <input type="checkbox" checked={showBoxes} onChange={(e) => setShowBoxes(e.target.checked)} />
           Boxes
+        </label>
+
+        <label className="transport-toggle" title="Toggle shot tracks and goal geometry (S)">
+          <input type="checkbox" checked={showShots} onChange={(e) => setShowShots(e.target.checked)} />
+          Shots
         </label>
 
         <button type="button" onClick={() => void toggleFullscreen()} title="Fullscreen">

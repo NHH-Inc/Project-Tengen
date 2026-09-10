@@ -33,6 +33,15 @@
     "frames_skipped_shot_change": { "type": "integer", "minimum": 0 },
     "tracks_emitted": { "type": "integer", "minimum": 0 },
     "events_emitted": { "type": "integer", "minimum": 0 },
+    "shots_emitted": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional count of detailed colour-tracked shot records."
+    },
+    "shots_path": {
+      "type": ["string", "null"],
+      "description": "Reviewable shots.jsonl sidecar when ball scouting was configured."
+    },
     "reconstructed_score": {
       "description": "Null while the season's point values are placeholders.",
       "oneOf": [

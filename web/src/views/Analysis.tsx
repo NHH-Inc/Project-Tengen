@@ -43,6 +43,7 @@ export function AnalysisPanel({
           <Metric label="Frames sent to detector" value={`${result.framesAnalyzed.toLocaleString()} · ${analyzedPercent}%`} />
           <Metric label="Robot tracks" value={result.tracksEmitted.toLocaleString()} />
           <Metric label="Events emitted" value={result.eventsEmitted.toLocaleString()} />
+          <Metric label="Colour-tracked shots" value={result.shotsEmitted.toLocaleString()} />
           <Metric label="Box sample rate" value={`${result.boxSampleRate.toFixed(2)} Hz`} />
           <Metric label="Frames skipped at cuts" value={result.framesSkippedShotChange.toLocaleString()} />
           <Metric

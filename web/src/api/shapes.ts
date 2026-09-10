@@ -149,6 +149,7 @@ export interface WireRunResult {
   frames_skipped_shot_change: number;
   tracks_emitted: number;
   events_emitted: number;
+  shots_emitted?: number;
   reconstructed_score: ScoreBreakdown | null;
   started_at: string;
   finished_at: string;
@@ -165,6 +166,7 @@ export interface RunResult {
   framesSkippedShotChange: number;
   tracksEmitted: number;
   eventsEmitted: number;
+  shotsEmitted: number;
   reconstructedScore: ScoreBreakdown | null;
   startedAt: string;
   finishedAt: string;
@@ -182,6 +184,7 @@ export function parseRunResult(raw: WireRunResult): RunResult {
     framesSkippedShotChange: raw.frames_skipped_shot_change,
     tracksEmitted: raw.tracks_emitted,
     eventsEmitted: raw.events_emitted,
+    shotsEmitted: raw.shots_emitted ?? 0,
     reconstructedScore: raw.reconstructed_score ?? null,
     startedAt: raw.started_at,
     finishedAt: raw.finished_at,

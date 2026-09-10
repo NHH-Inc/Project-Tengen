@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frc-video-scouting/contracts/shots.schema.json",
+  "title": "Colour-tracked shot record (v1)",
+  "description": "Reviewable shot evidence written to shots.jsonl. This sidecar complements Contract B without expanding its closed event_type vocabulary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "shot_id",
+    "launch_frame",
+    "launch_t_seconds",
+    "robot_track_id",
+    "ball_track_id",
+    "confidence",
+    "attribution_confidence",
+    "outcome",
+    "goal",
+    "outcome_frame",
+    "outcome_t_seconds",
+    "coordinate_space",
+    "ball_track"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "shot_id": { "type": "string", "format": "uuid" },
+    "launch_frame": { "type": "integer", "minimum": 0 },
+    "launch_t_seconds": { "type": "number", "minimum": 0 },
+    "robot_track_id": {
+      "type": ["integer", "null"],
+      "description": "Stable job-local robot id; null when source attribution was ambiguous."
+    },
+    "ball_track_id": { "type": "integer", "minimum": 1 },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "attribution_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "outcome": { "type": "string", "enum": ["made", "missed", "unknown"] },
+    "goal": { "type": ["string", "null"] },
+    "outcome_frame": { "type": ["integer", "null"], "minimum": 0 },
+    "outcome_t_seconds": { "type": ["number", "null"], "minimum": 0 },
+    "coordinate_space": { "type": "string", "const": "model_crop_normalized" },
+    "ball_track": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame_index", "t_seconds", "x", "y", "radius", "observed"],
+        "properties": {
+          "frame_index": { "type": "integer", "minimum": 0 },
+          "t_seconds": { "type": "number", "minimum": 0 },
+          "x": { "type": "number", "minimum": 0, "maximum": 1 },
+          "y": { "type": "number", "minimum": 0, "maximum": 1 },
+          "radius": { "type": "number", "minimum": 0 },
+          "observed": { "type": "boolean", "const": true }
+        }
+      }
+    }
+  }
+}

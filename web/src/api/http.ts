@@ -48,6 +48,7 @@ import {
   type WireTeamStats,
   type WireTrackList,
 } from './shapes';
+import { EMPTY_SHOT_RESPONSE, parseShotResponse, type ShotResponse, type WireShotResponse } from './shots';
 
 export class HttpApi implements ScoutingApi {
   readonly mode = 'http' as const;
@@ -135,6 +136,17 @@ export class HttpApi implements ScoutingApi {
     } catch (e) {
       // A job that has not finished analysis has no result yet; that is not an error.
       if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async getShots(jobId: string): Promise<ShotResponse> {
+    try {
+      const raw = await this.request<WireShotResponse>(`/jobs/${encodeURIComponent(jobId)}/shots`);
+      return parseShotResponse(raw);
+    } catch (e) {
+      // Jobs analyzed before ball scouting was enabled have no sidecar.
+      if (e instanceof ApiError && e.status === 404) return EMPTY_SHOT_RESPONSE;
       throw e;
     }
   }

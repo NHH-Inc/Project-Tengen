@@ -10,6 +10,7 @@ import { useJobTracks } from './state/useJobTracks';
 import { useJobs } from './state/useJobs';
 import { useMatch } from './state/useMatch';
 import { useRunResult } from './state/useRunResult';
+import { useShots } from './state/useShots';
 import { AccuracyPanel } from './views/Accuracy';
 import { AnalysisPanel } from './views/Analysis';
 import { HeatMap } from './views/HeatMap';
@@ -66,8 +67,13 @@ export default function App() {
       return;
     }
     void getApi().then((api) => {
-      setStreamVideoSrc(api.streamVideoUrl(job));
-      setStreamAudioSrc(api.streamAudioUrl(job));
+      // A downloaded/local job must use the range-capable local endpoint.  Stream-only jobs
+      // still use the yt-dlp proxy and its separate DASH audio track.  Keeping this choice at
+      // the API boundary lets the player stay agnostic about where the media came from while
+      // keeping shot/ball overlay timestamps aligned to the analyzed segment.
+      const localMedia = Boolean(job.localPath);
+      setStreamVideoSrc(localMedia ? api.videoUrl(job) : api.streamVideoUrl(job));
+      setStreamAudioSrc(localMedia ? null : api.streamAudioUrl(job));
     });
   }, [job]);
 
@@ -76,6 +82,7 @@ export default function App() {
   const analysisComplete = job?.status === 'complete';
   const match = useMatch(job?.matchId ?? null, analysisComplete);
   const runResult = useRunResult(job?.jobId ?? null, Boolean(analysisComplete));
+  const shotState = useShots(job?.jobId ?? null, Boolean(analysisComplete));
 
   // A complete job whose media metadata never arrived cannot drive a player -- rather than
   // defaulting a duration and drawing a wrong scrub bar, the stage says so.
@@ -207,6 +214,8 @@ export default function App() {
               mediaStartSeconds={job.startOffset}
               tracks={overlayTracks}
               events={match.events}
+              shots={shotState.shots}
+              shotGoals={shotState.goals}
               confidenceThreshold={confidenceThreshold}
               boxSampleRate={overlaySampleRate || job.fps || 30}
               selectedEventId={selectedEventId}
@@ -230,7 +239,7 @@ export default function App() {
                 <span className="tabs-meta muted">
                   {match.loading
                     ? 'loading…'
-                    : `${match.events.length} events · ${overlayRobotLabels} robot labels · ${overlayTracks.length} track fragments · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
+                    : `${match.events.length} events · ${shotState.statistics.attempted} shots (${shotState.statistics.unknown} unknown) · ${overlayRobotLabels} robot labels · ${overlayTracks.length} track fragments · boxes @ ${(overlaySampleRate || job.fps || 0).toFixed(0)} Hz`}
                 </span>
               </nav>
             )}

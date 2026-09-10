@@ -44,6 +44,7 @@ import {
   type TeamStatsSummary,
   type WireRunResult,
 } from './shapes';
+import { EMPTY_SHOT_RESPONSE, type ShotResponse } from './shots';
 
 /** Vite serves /fixtures as its publicDir, so the golden set is at the site root. */
 const FIXTURE_DIRS = ['2026casf_qm42', '2026casf_qm43_no_tba', 'failed_download'];
@@ -267,6 +268,10 @@ export class FixtureApi implements ScoutingApi {
       if (bundle.job.jobId === jobId) return bundle.result;
     }
     return null;
+  }
+
+  async getShots(_jobId: string): Promise<ShotResponse> {
+    return EMPTY_SHOT_RESPONSE;
   }
 
   // ---- match data

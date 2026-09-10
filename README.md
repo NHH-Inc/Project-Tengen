@@ -121,7 +121,7 @@ fails.
 | `YOLO_PYTHON` | unset — dedicated Python executable containing Ultralytics, so native is used unless set |
 | `YOLO_MODEL_PATH` | trained YOLO `.pt` path; defaults to the local FRC robot checkpoint when present |
 | `FRC_YOLO_TRACKER` | `bytetrack` |
-| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `0` |
+| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_FRAME_STRIDE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `2` / `0`; set stride to `1` for every source frame |
 | `FRC_YOLO_REID_MEMORY_SECONDS` | `5.0` — appearance-backed identity memory after a robot disappears |
 | `FRC_YOLO_REID_APPEARANCE_THRESHOLD` / `FRC_YOLO_REID_SCORE_MARGIN` | `0.60` / `0.08` — merge evidence and ambiguity gates |
 | `FRC_YOLO_REID_MAX_DISTANCE` / `FRC_YOLO_REID_MAX_SPEED` | `0.60` / `0.75` — normalized image-space motion gates when field calibration is unavailable |
@@ -130,6 +130,7 @@ fails.
 | `FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE` | `0.50` — minimum detector confidence for a new gallery exemplar |
 | `FRC_YOLO_REID_ALLIANCE_LOCK_SECONDS` / `FRC_YOLO_REID_ALLIANCE_LOCK_MARGIN_SECONDS` | `5.0` / `2.0` — trusted observation time and evidence lead required before an identity's alliance becomes permanent |
 | `FRC_YOLO_STARTUP_POSITION_SECONDS` / `FRC_YOLO_STARTUP_SPLIT_X` | `2.0` / `0.50` — during the opening window, image-left authoritatively locks blue and image-right locks red; set seconds to `0` to disable |
+| `FRC_BALL_SCOUTING_CONFIG` | unset disables the separate HSV ball/shot pipeline; the checked-in `.env.example` enables it with the starter config, which can be replaced by a camera-specific file; see [docs/BALL-SCOUTING.md](docs/BALL-SCOUTING.md) |
 | `FRC_AUTO_HOMOGRAPHY` | `1` — fit a carpet mapping from steady field AprilTags for each job |
 | `FRC_HOMOGRAPHY_CONFIG` | optional fixed camera calibration JSON; takes precedence over automatic calibration |
 | `FRC_DEFAULT_SEASON` | `2026` |

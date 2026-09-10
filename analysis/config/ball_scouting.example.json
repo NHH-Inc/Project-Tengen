@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "_comment": "All coordinates are normalized to the YOLO model crop, not the uncropped broadcast frame. Start with goals empty to tune yellow detection and launch tracking, then add manually measured goal geometry.",
+  "detector": {
+    "hsv_lower": [20, 90, 110],
+    "hsv_upper": [38, 255, 255],
+    "blur_kernel": 3,
+    "morph_open_iterations": 1,
+    "morph_close_iterations": 1,
+    "min_area_px": 18,
+    "max_area_px": 2200,
+    "min_radius_px": 2,
+    "max_radius_px": 38,
+    "min_circularity": 0.28,
+    "min_fill_ratio": 0.35,
+    "min_aspect_ratio": 0.30,
+    "max_aspect_ratio": 3.30
+  },
+  "tracking": {
+    "minimum_confirmed_hits": 3,
+    "maximum_missed_frames": 5,
+    "base_link_distance_ratio": 0.004,
+    "acceleration_allowance_ratio_per_second": 0.50,
+    "maximum_speed_ratio_per_second": 1.8,
+    "maximum_radius_ratio": 3.0,
+    "maximum_history_points": 180
+  },
+  "shot": {
+    "carry_confirmation_frames": 4,
+    "source_memory_frames": 8,
+    "robot_padding_ratio": 0.08,
+    "maximum_carried_relative_speed_ratio_per_second": 0.16,
+    "minimum_launch_relative_speed_ratio_per_second": 0.32,
+    "minimum_radial_speed_ratio_per_second": 0.12,
+    "minimum_departure_distance_ratio": 0.012,
+    "confirmation_frames": 3,
+    "maximum_candidate_frames": 14,
+    "minimum_direction_consistency": 0.62,
+    "edge_launch_max_distance_ratio": 0.025,
+    "edge_launch_max_track_points": 5,
+    "maximum_launch_distance_ratio": 0.045,
+    "maximum_launch_origin_y_ratio": 0.80,
+    "maximum_shot_track_seconds": 3.0,
+    "minimum_shot_track_speed_ratio_per_second": 0.035,
+    "maximum_shot_track_reversal_cosine": -0.15
+  },
+  "debug": {
+    "show_mask": false,
+    "trail_points": 24
+  },
+  "goals": []
+}

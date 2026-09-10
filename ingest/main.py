@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -44,6 +45,7 @@ from .serializers import (
     track_to_dict,
     validate_event_fields,
 )
+from training.ball_scouting import shot_statistics
 
 app = FastAPI(title="FRC Auto-Scouting Ingest Service")
 
@@ -175,6 +177,7 @@ yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
     tracker=os.environ.get("FRC_YOLO_TRACKER", "bytetrack"),
     confidence=float(os.environ.get("FRC_YOLO_CONFIDENCE", "0.25")),
     image_size=int(os.environ.get("FRC_YOLO_IMAGE_SIZE", "960")),
+    frame_stride=int(os.environ.get("FRC_YOLO_FRAME_STRIDE", "2")),
     device=os.environ.get("FRC_YOLO_DEVICE", "0"),
     save_annotated=os.environ.get("FRC_YOLO_SAVE_ANNOTATED", "0").lower()
     in {"1", "true", "yes", "on"},
@@ -206,6 +209,7 @@ yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
         os.environ.get("FRC_YOLO_STARTUP_POSITION_SECONDS", "2.0")
     ),
     startup_split_x=float(os.environ.get("FRC_YOLO_STARTUP_SPLIT_X", "0.50")),
+    ball_config_path=os.environ.get("FRC_BALL_SCOUTING_CONFIG"),
     auto_homography=os.environ.get("FRC_AUTO_HOMOGRAPHY", "1").lower()
     in {"1", "true", "yes", "on"},
     homography_hfov_deg=float(os.environ.get("FRC_HOMOGRAPHY_HFOV_DEG", "70")),
@@ -249,6 +253,61 @@ def _analysis_stream_url(video_id: str, start_offset: float) -> str:
 
     suffix = f"&t={start_offset:g}s" if start_offset > 0 else ""
     return f"https://www.youtube.com/watch?v={video_id}{suffix}"
+
+
+@contextmanager
+def _job_run_lock(job_id: str):
+    """Allow only one analyzer process to own a job at a time.
+
+    The web server can have more than one worker, so an in-memory lock is not enough.  This
+    advisory OS lock is released automatically if a worker crashes, and the lock file lives
+    beside (rather than inside) the job output directory so a retry cannot delete it while a
+    stale analyzer still has the file open.
+    """
+
+    base = Path(analysis_orchestrator.output_base_dir)
+    base.mkdir(parents=True, exist_ok=True)
+    lock_path = base / f".{job_id}.run.lock"
+    descriptor = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+    handle = os.fdopen(descriptor, "r+b", buffering=0)
+    locked = False
+    try:
+        if os.fstat(descriptor).st_size == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except OSError:
+            # Another API worker already owns this job. Its progress/status is authoritative;
+            # silently dropping the duplicate background task is safer than sharing output files.
+            yield False
+            return
+
+        yield True
+    finally:
+        if locked:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    handle.seek(0)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            except OSError:
+                pass
+        handle.close()
 
 
 # ---------------------------------------------------------------- jobs
@@ -392,6 +451,13 @@ async def retry_job(
 
 
 def process_job(job_id: str, url: str, live_capture: bool = False):
+    with _job_run_lock(job_id) as acquired:
+        if not acquired:
+            return
+        return _process_job(job_id, url, live_capture)
+
+
+def _process_job(job_id: str, url: str, live_capture: bool = False):
     db = next(database.get_db())
     job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
     if job is None:
@@ -672,6 +738,36 @@ def get_job_result(job_id: str, db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(status_code=404, detail="No analysis result for that job yet")
     return result
+
+
+@app.get("/api/jobs/{job_id}/shots")
+def get_job_shots(job_id: str, db: Session = Depends(get_db)):
+    """Detailed launch/trajectory/outcome evidence and on-demand per-robot counts."""
+
+    job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = Path(analysis_orchestrator.output_base_dir) / job_id / "shots.jsonl"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No ball scouting result for that job")
+    try:
+        shots = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read shot records: {exc}")
+    config_path = path.with_name("ball_scouting.config.json")
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        config = {}
+    return {
+        "shots": shots,
+        "statistics": shot_statistics(shots),
+        "goals": config.get("goals", []) if isinstance(config, dict) else [],
+    }
 
 
 @app.get("/api/matches/{match_id}/corrections")
