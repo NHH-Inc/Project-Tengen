@@ -1,10 +1,45 @@
-# Colour-based ball and shot scouting
+# Rapid-fire ball and shot scouting
 
-The first ball pipeline runs beside the YOLO robot detector in `training/track_yolo.py`. It uses
+The ball pipeline runs beside the YOLO robot detector in `training/track_yolo.py`. It uses
 the same decoded model-crop frame and the same stable robot IDs, but ball detection itself is an
 independent OpenCV component in `training/ball_scouting.py`. A future learned ball detector only
 needs to supply the same centre/radius detections; launch, attribution, goal, and output logic can
-remain unchanged.
+remain unchanged. Launch counting combines short observed departures and robot-relative paired
+photogates in `training/launch_signals.py`. It does not require a complete flight track.
+
+Every source frame is analyzed by default. When `--ball-config` / `FRC_BALL_SCOUTING_CONFIG` is
+configured, stride is forced to **1**, including when an older environment requests a larger
+stride. Robot-only runs can still explicitly opt into sampling. Expect higher processing cost;
+the offline pipeline consumes all frames rather than dropping them to maintain playback speed.
+
+## How rapid-fire counting works
+
+1. The detector preserves native-resolution yellow cores and adds weaker yellow only where
+   there is temporal image change. Moving elongated blobs can survive the shape filter, while
+   a static yellow bar cannot use that exception. Distance-transform peaks separate touching
+   balls; a large uniform blob is never converted into an estimated number of shots.
+2. The ball tracker solves a global one-to-one assignment, with explicit unmatched options,
+   size consistency, local ballistic prediction and short occlusion coasting. New balls at the
+   shooter get a wider initial association gate. Flying tracks cannot use that gate to acquire
+   the next ball at the muzzle after an occlusion.
+3. A short departure can count after two observed frames, independently of the general track
+   confirmation setting. It must start within two ball radii of the robot edge, leave above the
+   configured floor-contact cutoff, and move fast and outward relative to the robot. The source
+   box is taken from the ball's birth frame. Newly occupied yellow pixels and bidirectional
+   pyramidal optical flow verify correspondence; low-novelty touching balls need longer motion
+   evidence. The old weaker edge heuristic cannot bypass these checks.
+4. A verified launch seeds two thin strips outside that robot's exit edge. The strips follow the
+   robot box and measure yellow occupancy at native resolution. Adaptive peak/valley hysteresis
+   can separate pulses even when the signal does not fall to zero between balls. A pulse must
+   travel from the inner gate to the outer gate at a plausible speed before it becomes a shot.
+   The gate expires without recent launch evidence and resets across missing/jumping boxes.
+5. Track and gate evidence are fused by crossing time and overlapping observed positions. There
+   is no robot-wide firing cooldown. Two matching observations are required to merge evidence
+   across separately learned gates; simultaneous balls and single-frame path intersections stay
+   distinct. Long tracks are used for visible scoring-boundary crossings when available.
+
+Camera cuts, image-size changes and timestamp gaps clear temporal associations. Unknown outcomes
+remain unknown. `confidence` values are heuristic evidence scores, not calibrated probabilities.
 
 ## Enable it
 
@@ -40,10 +75,12 @@ broadcast image.
 2. Tune blob linking. Orange trails and `b<ID>` labels should stay on one physical ball through
    ordinary motion. `maximum_missed_frames` permits a short occlusion; the tracker does not emit
    synthetic observations while coasting.
-3. Tune launch thresholds. A ball must first move with one robot for
-   `carry_confirmation_frames`, leave its padded box, move fast relative to that robot, increase
-   its distance from the robot, and maintain a sufficiently direct path over multiple frames.
-   Yellow that merely remains visible inside a moving robot cannot satisfy the exit condition.
+3. Tune launch thresholds and inspect the paired gate overlays (magenta inner, cyan outer).
+   `launch_signals.short_track_minimum_hits` defaults to 2; increasing it requires more evidence
+   at a recall cost. `maximum_observation_gap_seconds` limits short-track bridging.
+   `pulse_minimum_prominence` is an absolute occupancy change and `pulse_relative_prominence`
+   controls how deep a valley must be to separate adjacent peaks. Gate spacing is measured in
+   ball radii. The carried-ball state machine remains available for longer observed launches.
 4. Add goal geometry and tune it on visible crossings. Green boundaries are makes and red
    boundaries are explicit misses.
 
@@ -106,15 +143,50 @@ The regular `events.jsonl` remains Contract B compatible: every confirmed launch
 `shot_attempt`; only a made-boundary crossing adds `shot_made`. Unknown outcomes never become
 misses, and unassigned shots keep `track_id: null`.
 
-## Deliberately conservative behavior
+## Replay and measure accuracy
+
+Cached robot boxes let you tune the ball pipeline without rerunning YOLO:
+
+```powershell
+python -m tools.replay_ball_scouting `
+  --video data\segments\MATCH.mp4 `
+  --robot-tracks data\jobs\BALL_TEST\tracks.jsonl `
+  --config analysis\config\ball_scouting.my-camera.json `
+  --output-dir data\validation\ball-replay-001 `
+  --annotated
+```
+
+Use the exact original video and crop that produced the cached boxes. Only short gaps between
+cached robot observations are interpolated. Outputs include a full-rate annotated video,
+`shots.jsonl`, `shot_methods.json`, and `report.json` with frame counts and processing speed.
+For precision/recall, supply `--reference-shots labels.json`: a JSON array of independently
+labelled `{ "launch_t_seconds": 12.3, "robot_track_id": 1 }` records. Matching is one-to-one,
+checks robot attribution, and defaults to a 75 ms tolerance. Without labels, the report explicitly
+marks accuracy as unmeasured. A higher shot count by itself is not evidence of higher accuracy.
+
+Regression tests: `python -m pytest ingest/tests/test_ball_scouting.py ingest/tests/test_rapid_fire.py -q`.
+The synthetic suite includes same-lane bursts, touching balls, two-frame visibility, brief
+occlusions, duplicate 30 FPS images in a 60 FPS stream, camera cuts, moving carried balls, inbound
+throws, rejected optical flow, gate-only counting, and cross-method duplicate suppression.
+
+## Limits and conservative behavior
 
 - If two robot boxes contain the ball during the carry window, a later launch may be counted but
   remains unassigned.
-- Several visible balls inside one robot are separate blob tracks; none count until their own
-  track leaves and passes the relative-motion confirmation.
+- Several visible balls inside one robot do not count merely because they are yellow or moving.
+  A local departure or a verified outward pair of gate pulses is required.
 - A temporarily merged/occluded blob may coast for a few frames. No guessed coordinates are
   written to the evidence path.
-- Yellow field objects and stationary floor balls can be detected and tracked, but cannot become
-  shots without an observed robot-carry-to-departure transition.
-- If colour segmentation loses a fast or motion-blurred ball before multi-frame confirmation, the
-  system abstains. Lowering confirmation gates increases recall at the cost of false shot events.
+- Off-screen/inbound balls have no observed robot launch and are excluded from robot shot counts.
+  The system does not claim to identify an unseen human player.
+- Height, relative motion, pixel novelty and optical flow reduce floor-contact/decoration errors;
+  perspective and occlusion can still make the source ambiguous.
+- Completely hidden balls or an unresolved continuous yellow stream cannot be counted exactly
+  from pixels alone. A constant occupied gate is not expanded into an assumed firing cadence.
+  Better camera coverage, exposure, resolution or a trained ball detector may still be needed.
+- Paired gates learn their location from an observed departure, so a fully obscured burst onset
+  can be missed. A single gate lane can also merge simultaneous side-by-side launches; distinct
+  blob tracks can resolve them when visible. Camera-specific labelled validation is necessary.
+
+The global assignment uses [SciPy's linear assignment solver](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html).
+Blob separation uses [OpenCV distance-transform peaks](https://docs.opencv.org/4.x/d2/dbd/tutorial_distance_transform.html).

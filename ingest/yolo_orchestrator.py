@@ -159,7 +159,7 @@ class YoloAnalysisOrchestrator:
         tracker: str = "bytetrack",
         confidence: float = 0.25,
         image_size: int = 960,
-        frame_stride: int = 2,
+        frame_stride: int = 1,
         device: str = "0",
         save_annotated: bool = False,
         snapshot_interval: float = 5.0,
@@ -188,7 +188,7 @@ class YoloAnalysisOrchestrator:
         self.tracker = tracker
         self.confidence = confidence
         self.image_size = image_size
-        self.frame_stride = frame_stride
+        self.frame_stride = 1 if ball_config_path is not None and frame_stride > 0 else frame_stride
         self.device = device
         self.save_annotated = save_annotated
         self.snapshot_interval = snapshot_interval

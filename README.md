@@ -121,7 +121,7 @@ fails.
 | `YOLO_PYTHON` | unset — dedicated Python executable containing Ultralytics, so native is used unless set |
 | `YOLO_MODEL_PATH` | trained YOLO `.pt` path; defaults to the local FRC robot checkpoint when present |
 | `FRC_YOLO_TRACKER` | `bytetrack` |
-| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_FRAME_STRIDE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `2` / `0`; set stride to `1` for every source frame |
+| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_FRAME_STRIDE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `1` / `0`; every source frame by default, enforced when ball scouting is configured |
 | `FRC_YOLO_REID_MEMORY_SECONDS` | `5.0` — appearance-backed identity memory after a robot disappears |
 | `FRC_YOLO_REID_APPEARANCE_THRESHOLD` / `FRC_YOLO_REID_SCORE_MARGIN` | `0.60` / `0.08` — merge evidence and ambiguity gates |
 | `FRC_YOLO_REID_MAX_DISTANCE` / `FRC_YOLO_REID_MAX_SPEED` | `0.60` / `0.75` — normalized image-space motion gates when field calibration is unavailable |

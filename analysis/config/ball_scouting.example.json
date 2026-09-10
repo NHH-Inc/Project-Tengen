@@ -3,25 +3,37 @@
   "enabled": true,
   "_comment": "All coordinates are normalized to the YOLO model crop, not the uncropped broadcast frame. Start with goals empty to tune yellow detection and launch tracking, then add manually measured goal geometry.",
   "detector": {
-    "hsv_lower": [20, 90, 110],
-    "hsv_upper": [38, 255, 255],
+    "hsv_lower": [
+      20,
+      90,
+      110
+    ],
+    "hsv_upper": [
+      38,
+      255,
+      255
+    ],
     "blur_kernel": 3,
-    "morph_open_iterations": 1,
-    "morph_close_iterations": 1,
+    "morph_open_iterations": 0,
+    "morph_close_iterations": 0,
     "min_area_px": 18,
     "max_area_px": 2200,
     "min_radius_px": 2,
     "max_radius_px": 38,
     "min_circularity": 0.28,
     "min_fill_ratio": 0.35,
-    "min_aspect_ratio": 0.30,
-    "max_aspect_ratio": 3.30
+    "min_aspect_ratio": 0.3,
+    "max_aspect_ratio": 3.3,
+    "split_touching": true,
+    "motion_blur_max_aspect": 9.0,
+    "motion_min_fraction": 0.25,
+    "motion_difference_threshold": 18
   },
   "tracking": {
-    "minimum_confirmed_hits": 3,
+    "minimum_confirmed_hits": 2,
     "maximum_missed_frames": 5,
     "base_link_distance_ratio": 0.004,
-    "acceleration_allowance_ratio_per_second": 0.50,
+    "acceleration_allowance_ratio_per_second": 0.5,
     "maximum_speed_ratio_per_second": 1.8,
     "maximum_radius_ratio": 3.0,
     "maximum_history_points": 180
@@ -40,7 +52,7 @@
     "edge_launch_max_distance_ratio": 0.025,
     "edge_launch_max_track_points": 5,
     "maximum_launch_distance_ratio": 0.045,
-    "maximum_launch_origin_y_ratio": 0.80,
+    "maximum_launch_origin_y_ratio": 0.8,
     "maximum_shot_track_seconds": 3.0,
     "minimum_shot_track_speed_ratio_per_second": 0.035,
     "maximum_shot_track_reversal_cosine": -0.15
@@ -49,5 +61,16 @@
     "show_mask": false,
     "trail_points": 24
   },
-  "goals": []
+  "goals": [],
+  "launch_signals": {
+    "enabled": true,
+    "short_track_minimum_hits": 2,
+    "maximum_observation_gap_seconds": 0.085,
+    "minimum_travel_radii": 1.25,
+    "gate_lifetime_seconds": 1.0,
+    "gate_separation_radii": 2.5,
+    "pulse_minimum_prominence": 0.16,
+    "pulse_relative_prominence": 0.22,
+    "maximum_transit_seconds": 0.16
+  }
 }

@@ -378,6 +378,7 @@ class ShotEventProjectionTests(unittest.TestCase):
                 model_path=model,
                 output_base_dir=root / "jobs",
                 ball_config_path=config,
+                frame_stride=4,
                 auto_homography=False,
             )
             with patch("ingest.yolo_orchestrator.subprocess.Popen", FakeProcess):
@@ -395,6 +396,8 @@ class ShotEventProjectionTests(unittest.TestCase):
                 )
 
             command = commands[0]
+            self.assertEqual(command[command.index("--frame-stride") + 1], "1")
+            self.assertEqual(adapter.frame_stride, 1)
             snapshot = Path(command[command.index("--ball-config") + 1])
             self.assertEqual(snapshot.name, "ball_scouting.config.json")
             self.assertTrue(snapshot.is_file())

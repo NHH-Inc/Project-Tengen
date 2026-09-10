@@ -177,7 +177,7 @@ yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
     tracker=os.environ.get("FRC_YOLO_TRACKER", "bytetrack"),
     confidence=float(os.environ.get("FRC_YOLO_CONFIDENCE", "0.25")),
     image_size=int(os.environ.get("FRC_YOLO_IMAGE_SIZE", "960")),
-    frame_stride=int(os.environ.get("FRC_YOLO_FRAME_STRIDE", "2")),
+    frame_stride=int(os.environ.get("FRC_YOLO_FRAME_STRIDE", "1")),
     device=os.environ.get("FRC_YOLO_DEVICE", "0"),
     save_annotated=os.environ.get("FRC_YOLO_SAVE_ANNOTATED", "0").lower()
     in {"1", "true", "yes", "on"},

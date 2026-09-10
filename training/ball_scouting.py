@@ -1,4 +1,4 @@
-"""Colour-based game-piece tracking and conservative shot event extraction.
+"""Full-rate game-piece tracking and evidence-based rapid-fire launch extraction.
 
 This module deliberately knows nothing about YOLO.  Callers provide stable robot observations;
 the detector can therefore be replaced by a learned ball detector later without changing the
@@ -14,8 +14,11 @@ import json
 import math
 import uuid
 from dataclasses import dataclass, field
+from collections import deque
 from pathlib import Path
 from typing import Iterable, Sequence
+
+from training.launch_signals import LaunchSignalConfig, LaunchSignalBank
 
 
 Point = tuple[float, float]
@@ -62,8 +65,8 @@ class BallDetectorConfig:
     hsv_lower: tuple[int, int, int] = (20, 90, 110)
     hsv_upper: tuple[int, int, int] = (38, 255, 255)
     blur_kernel: int = 3
-    morph_open_iterations: int = 1
-    morph_close_iterations: int = 1
+    morph_open_iterations: int = 0
+    morph_close_iterations: int = 0
     min_area_px: float = 18.0
     max_area_px: float = 2200.0
     min_radius_px: float = 2.0
@@ -72,11 +75,15 @@ class BallDetectorConfig:
     min_fill_ratio: float = 0.35
     min_aspect_ratio: float = 0.30
     max_aspect_ratio: float = 3.30
+    split_touching: bool = True
+    motion_blur_max_aspect: float = 9.0
+    motion_min_fraction: float = 0.25
+    motion_difference_threshold: float = 18.0
 
 
 @dataclass(frozen=True)
 class BlobTrackingConfig:
-    minimum_confirmed_hits: int = 3
+    minimum_confirmed_hits: int = 2
     maximum_missed_frames: int = 5
     base_link_distance_ratio: float = 0.004
     acceleration_allowance_ratio_per_second: float = 0.50
@@ -146,6 +153,7 @@ class BallScoutingConfig:
     shot: ShotDetectionConfig = field(default_factory=ShotDetectionConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     goals: tuple[GoalGeometry, ...] = ()
+    launch_signals: LaunchSignalConfig = field(default_factory=LaunchSignalConfig)
 
 
 def _hsv_triplet(value: object, name: str) -> tuple[int, int, int]:
@@ -226,9 +234,10 @@ def load_ball_scouting_config(path: str | Path) -> BallScoutingConfig:
     tracking_raw = document.get("tracking") or {}
     shot_raw = document.get("shot") or {}
     debug_raw = document.get("debug") or {}
+    signal_raw = document.get("launch_signals") or {}
     for raw, name in (
         (detector_raw, "detector"), (tracking_raw, "tracking"),
-        (shot_raw, "shot"), (debug_raw, "debug"),
+        (shot_raw, "shot"), (debug_raw, "debug"), (signal_raw, "launch_signals"),
     ):
         if not isinstance(raw, dict):
             raise ValueError(f"{name} must be an object")
@@ -302,6 +311,43 @@ def load_ball_scouting_config(path: str | Path) -> BallScoutingConfig:
         raise ValueError("detector.min_aspect_ratio cannot exceed detector.max_aspect_ratio")
     if detector.min_circularity > 1 or detector.min_fill_ratio > 1:
         raise ValueError("detector circularity and fill thresholds cannot exceed one")
+    from dataclasses import replace
+
+    split_touching = detector_raw.get("split_touching", True)
+    if not isinstance(split_touching, bool):
+        raise ValueError("detector.split_touching must be a boolean")
+    detector = replace(
+        detector, split_touching=split_touching,
+        motion_blur_max_aspect=_number(detector_raw.get("motion_blur_max_aspect", 9.0),
+                                      "detector.motion_blur_max_aspect", minimum=1),
+        motion_min_fraction=_number(detector_raw.get("motion_min_fraction", 0.25),
+                                    "detector.motion_min_fraction", minimum=0),
+        motion_difference_threshold=_number(
+            detector_raw.get("motion_difference_threshold", 18.0),
+            "detector.motion_difference_threshold", minimum=1),
+    )
+    if detector.motion_min_fraction > 1 or detector.motion_difference_threshold > 255:
+        raise ValueError("detector motion thresholds exceed their valid range")
+
+    signal_defaults = LaunchSignalConfig()
+    signal_values = {}
+    unknown_signal_keys = set(signal_raw) - set(signal_defaults.__dataclass_fields__)
+    if unknown_signal_keys:
+        raise ValueError(f"unknown launch_signals settings: {sorted(unknown_signal_keys)}")
+    for name in signal_defaults.__dataclass_fields__:
+        default = getattr(signal_defaults, name)
+        value = signal_raw.get(name, default)
+        if isinstance(default, bool):
+            if not isinstance(value, bool):
+                raise ValueError(f"launch_signals.{name} must be a boolean")
+        elif isinstance(default, int):
+            value = _integer(value, f"launch_signals.{name}", minimum=2)
+        else:
+            value = _number(value, f"launch_signals.{name}", minimum=0.001)
+        signal_values[name] = value
+    signals = LaunchSignalConfig(**signal_values)
+    if signals.pulse_relative_prominence > 1:
+        raise ValueError("launch_signals.pulse_relative_prominence cannot exceed one")
 
     tracking_defaults = BlobTrackingConfig()
     tracking = BlobTrackingConfig(
@@ -470,7 +516,7 @@ def load_ball_scouting_config(path: str | Path) -> BallScoutingConfig:
     enabled = document.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
-    return BallScoutingConfig(enabled, detector, tracking, shot, debug, goals)
+    return BallScoutingConfig(enabled, detector, tracking, shot, debug, goals, signals)
 
 
 @dataclass(frozen=True)
@@ -480,20 +526,83 @@ class BallDetection:
     area: float
     circularity: float
     bbox: Box
+    novelty: float = 1.0
 
 
 class YellowBallDetector:
-    """HSV thresholding with morphology plus size and shape rejection."""
+    """Colour + temporal foreground, with distance-peak separation of touching balls."""
 
     def __init__(self, config: BallDetectorConfig):
         self.config = config
         self.last_mask = None
         self.last_detections: list[BallDetection] = []
+        self.previous_gray = None
+        self.scene_changed = False
+        self.previous_colour = None
+
+    def _split_contour(self, contour):
+        import cv2
+        import numpy as np
+
+        if not self.config.split_touching:
+            return [contour]
+        left, top, width, height = cv2.boundingRect(contour)
+        if width * height > self.config.max_area_px * 16:
+            return [contour]
+        local = np.zeros((height + 2, width + 2), dtype=np.uint8)
+        offset = np.array([[[left - 1, top - 1]]], dtype=np.int32)
+        cv2.drawContours(local, [contour - offset], -1, 255, -1)
+        distance = cv2.distanceTransform(local, cv2.DIST_L2, 5)
+        peak = float(distance.max())
+        size = max(3, int(self.config.min_radius_px * 2) + 1)
+        maxima = ((distance >= cv2.dilate(distance, np.ones((size, size), np.uint8)) - 1e-5)
+                  & (distance >= max(self.config.min_radius_px, peak * 0.45))).astype(np.uint8)
+        count, labels, stats, centers = cv2.connectedComponentsWithStats(maxima)
+        seeds = []
+        for label in range(1, count):
+            x, y = centers[label]
+            r = float(distance[int(round(y)), int(round(x))])
+            # A long flat ridge is a smear/rectangle, not many individual balls.
+            if stats[label, cv2.CC_STAT_AREA] > max(4, r * r):
+                continue
+            seeds.append((r, float(x), float(y)))
+        selected = []
+        for r, x, y in sorted(seeds, reverse=True):
+            if r > self.config.max_radius_px:
+                continue
+            if any(math.hypot(x - a, y - b) < 1.5 * max(r, other)
+                   for other, a, b in selected):
+                continue
+            selected.append((r, x, y))
+            if len(selected) >= 16:
+                break
+        if len(selected) < 2:
+            return [contour]
+        yy, xx = np.indices(local.shape)
+        partition = np.argmin(np.stack([
+            ((xx - x) ** 2 + (yy - y) ** 2) / max(r * r, 1)
+            for r, x, y in selected
+        ]), axis=0)
+        pieces = []
+        for index in range(len(selected)):
+            part = ((partition == index) & (local > 0)).astype(np.uint8) * 255
+            contours, _ = cv2.findContours(part, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                pieces.append(max(contours, key=cv2.contourArea) + offset)
+        return pieces or [contour]
 
     def detect(self, frame) -> list[BallDetection]:
         import cv2
         import numpy as np
 
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        moving = np.zeros_like(gray)
+        self.scene_changed = False
+        if self.previous_gray is not None and self.previous_gray.shape == gray.shape:
+            difference = cv2.absdiff(gray, self.previous_gray)
+            moving = (difference >= self.config.motion_difference_threshold).astype(np.uint8) * 255
+            self.scene_changed = float(difference.mean()) > 55 and float((moving > 0).mean()) > 0.65
+        self.previous_gray = gray
         source = frame
         if self.config.blur_kernel > 1:
             source = cv2.GaussianBlur(
@@ -505,6 +614,18 @@ class YellowBallDetector:
             np.array(self.config.hsv_lower, dtype=np.uint8),
             np.array(self.config.hsv_upper, dtype=np.uint8),
         )
+        # Preserve native-resolution colour cores that Gaussian blur/morphology can erase.
+        raw_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        raw_mask = cv2.inRange(raw_hsv, np.array(self.config.hsv_lower, np.uint8),
+                              np.array(self.config.hsv_upper, np.uint8))
+        previous_colour = self.previous_colour
+        self.previous_colour = raw_mask
+        lower = self.config.hsv_lower
+        weak = cv2.inRange(raw_hsv, np.array((max(0, lower[0] - 2), int(lower[1] * 0.55),
+                                            int(lower[2] * 0.65)), np.uint8),
+                           np.array((min(179, self.config.hsv_upper[0] + 2),
+                                     self.config.hsv_upper[1], self.config.hsv_upper[2]), np.uint8))
+        mask |= raw_mask | (weak & moving)
         kernel = np.ones((3, 3), dtype=np.uint8)
         if self.config.morph_open_iterations:
             mask = cv2.morphologyEx(
@@ -523,24 +644,37 @@ class YellowBallDetector:
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         detections: list[BallDetection] = []
-        for contour in contours:
+        pieces = [piece for contour in contours for piece in self._split_contour(contour)]
+        for contour in pieces:
             area = float(cv2.contourArea(contour))
-            if not self.config.min_area_px <= area <= self.config.max_area_px:
+            if area <= 0 or not self.config.min_area_px <= area <= self.config.max_area_px:
                 continue
             perimeter = float(cv2.arcLength(contour, True))
             if perimeter <= 1e-6:
                 continue
             circularity = 4.0 * math.pi * area / (perimeter * perimeter)
-            if circularity < self.config.min_circularity:
-                continue
             left, top, width, height = cv2.boundingRect(contour)
             aspect = width / max(1.0, float(height))
-            if not self.config.min_aspect_ratio <= aspect <= self.config.max_aspect_ratio:
-                continue
             fill_ratio = area / max(1.0, float(width * height))
             if fill_ratio < self.config.min_fill_ratio:
                 continue
-            (center_x, center_y), radius = cv2.minEnclosingCircle(contour)
+            circular = (circularity >= self.config.min_circularity
+                        and self.config.min_aspect_ratio <= aspect <= self.config.max_aspect_ratio)
+            foreground = moving[top:top + height, left:left + width]
+            coloured = mask[top:top + height, left:left + width] > 0
+            motion_fraction = float(((foreground > 0) & coloured).sum()) / max(1, int(coloured.sum()))
+            novelty = 0.0
+            if previous_colour is not None and previous_colour.shape == mask.shape:
+                old_colour = previous_colour[top:top + height, left:left + width] > 0
+                novelty = float((coloured & ~old_colour).sum()) / max(1, int(coloured.sum()))
+            elongated = max(aspect, 1 / max(aspect, 1e-6))
+            if not circular and not (motion_fraction >= self.config.motion_min_fraction
+                                     and elongated <= self.config.motion_blur_max_aspect):
+                continue
+            moments = cv2.moments(contour)
+            center_x, center_y = moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+            # Equivalent-area radius remains stable when the contour is a motion smear.
+            radius = math.sqrt(area / math.pi)
             if not self.config.min_radius_px <= radius <= self.config.max_radius_px:
                 continue
             detections.append(BallDetection(
@@ -549,6 +683,7 @@ class YellowBallDetector:
                 area=area,
                 circularity=min(1.0, circularity),
                 bbox=(float(left), float(top), float(left + width), float(top + height)),
+                novelty=novelty,
             ))
         detections.sort(key=lambda detection: (detection.center[0], detection.center[1]))
         self.last_mask = mask
@@ -564,6 +699,7 @@ class BallTrackPoint:
     radius: float
     area: float
     circularity: float
+    novelty: float = 1.0
 
 
 @dataclass
@@ -595,12 +731,27 @@ class BallTrack:
 
     def predicted_center(self, t_seconds: float) -> Point:
         elapsed = max(0.0, t_seconds - self.last.t_seconds)
+        if len(self.points) >= 4:
+            import numpy as np
+
+            recent = self.points[-5:]
+            times = np.array([p.t_seconds - recent[-1].t_seconds for p in recent])
+            scale = max(1e-6, -times[0])
+            matrix = np.stack([np.ones_like(times), times / scale, (times / scale) ** 2], axis=1)
+            positions = np.array([p.center for p in recent])
+            coefficients, *_ = np.linalg.lstsq(matrix, positions, rcond=None)
+            error = float(np.sqrt(np.mean((matrix @ coefficients - positions) ** 2)))
+            if error <= max(1.5, self.last.radius * 0.4) and elapsed <= scale:
+                # Local ballistic prediction; a poor fit falls back to the short velocity
+                # model, e.g. at the exact transition from carried to launched.
+                result = np.array([1, elapsed / scale, (elapsed / scale) ** 2]) @ coefficients
+                return float(result[0]), float(result[1])
         velocity = self.velocity
         return self.last.center[0] + velocity[0] * elapsed, self.last.center[1] + velocity[1] * elapsed
 
 
 class BallBlobTracker:
-    """Small constant-velocity nearest-neighbour tracker with short occlusion coast."""
+    """Global one-to-one assignment with ballistic prediction and occlusion coasting."""
 
     def __init__(self, config: BlobTrackingConfig):
         self.config = config
@@ -623,7 +774,8 @@ class BallBlobTracker:
             predicted = track.predicted_center(t_seconds)
             elapsed = max(0.0, t_seconds - track.last.t_seconds)
             observed_speed_ratio = math.hypot(*track.velocity) / max(diagonal, 1.0)
-            if wide_gate_track_ids and track_id in wide_gate_track_ids:
+            wide_gate = bool(wide_gate_track_ids and track_id in wide_gate_track_ids)
+            if wide_gate:
                 # A confirmed carried ball is the one place a sudden acceleration is expected.
                 # Keeping this wider gate away from ordinary floor/decor tracks prevents dense
                 # piles from being stitched into implausible zig-zags.
@@ -631,15 +783,20 @@ class BallBlobTracker:
             else:
                 gate_speed_ratio = min(
                     self.config.maximum_speed_ratio_per_second,
-                    max(
-                        self.config.acceleration_allowance_ratio_per_second,
-                        observed_speed_ratio * 1.75,
-                    ),
+                    self.config.acceleration_allowance_ratio_per_second,
                 )
             allowed = diagonal * (
                 self.config.base_link_distance_ratio
                 + gate_speed_ratio * elapsed
             )
+            allowed += track.last.radius * 0.6
+            if not wide_gate and track.hits >= 2 and observed_speed_ratio > .25:
+                # A coasting projectile must not latch onto the next ball at its old
+                # muzzle position just because elapsed time widened the uncertainty gate.
+                expected_travel = math.dist(predicted, track.last.center)
+                allowed = min(allowed, max(track.last.radius * 1.2,
+                                          diagonal * self.config.base_link_distance_ratio
+                                          + expected_travel * .6))
             for detection_index, detection in enumerate(detections):
                 radius_ratio = max(
                     detection.radius / max(track.last.radius, 1e-6),
@@ -652,21 +809,44 @@ class BallBlobTracker:
                 )
                 if distance > allowed:
                     continue
-                cost = distance / max(allowed, 1e-6) + 0.18 * abs(math.log(radius_ratio))
+                step = (detection.center[0] - track.last.center[0],
+                        detection.center[1] - track.last.center[1])
+                if math.hypot(*step) > diagonal * (
+                        self.config.maximum_speed_ratio_per_second * elapsed
+                        + self.config.base_link_distance_ratio):
+                    continue
+                velocity = track.velocity
+                step_length = math.hypot(*step)
+                cosine = sum(a * b for a, b in zip(step, velocity)) / max(
+                    step_length * math.hypot(*velocity), 1e-6)
+                if (not wide_gate and track.hits >= 3 and observed_speed_ratio > 0.25
+                        and step_length > track.last.radius and cosine < -0.2):
+                    continue
+                cost = (distance / max(allowed, 1e-6) + 0.18 * abs(math.log(radius_ratio))
+                        + 0.04 * track.missed_frames)
                 candidates.append((cost, track_id, detection_index))
-        candidates.sort()
 
         for track in self.active.values():
             track.matched_this_frame = False
         assignments: dict[int, int] = {}
-        used_tracks: set[int] = set()
         used_detections: set[int] = set()
-        for _cost, track_id, detection_index in candidates:
-            if track_id in used_tracks or detection_index in used_detections:
-                continue
-            assignments[track_id] = detection_index
-            used_tracks.add(track_id)
-            used_detections.add(detection_index)
+        if candidates:
+            import numpy as np
+            from scipy.optimize import linear_sum_assignment
+
+            ids = sorted({track_id for _, track_id, _ in candidates})
+            rows = {track_id: row for row, track_id in enumerate(ids)}
+            costs = np.full((len(ids), len(detections) + len(ids)), 1e6)
+            # Each track has its own explicit 'missed' option; an invalid match is never
+            # forced just to fill the assignment matrix.
+            for row in range(len(ids)):
+                costs[row, len(detections) + row] = 1.35
+            for cost, track_id, detection_index in candidates:
+                costs[rows[track_id], detection_index] = cost
+            for row, column in zip(*linear_sum_assignment(costs)):
+                if column < len(detections) and costs[row, column] < 1.35:
+                    assignments[ids[row]] = int(column)
+                    used_detections.add(int(column))
 
         retired_now: list[BallTrack] = []
         for track_id, track in list(self.active.items()):
@@ -688,6 +868,7 @@ class BallBlobTracker:
                 radius=detection.radius,
                 area=detection.area,
                 circularity=detection.circularity,
+                novelty=detection.novelty,
             ))
             track.points[:] = track.points[-self.config.maximum_history_points:]
             track.hits += 1
@@ -706,6 +887,7 @@ class BallBlobTracker:
                 radius=detection.radius,
                 area=detection.area,
                 circularity=detection.circularity,
+                novelty=detection.novelty,
             ))
             track.hits = 1
             track.matched_this_frame = True
@@ -885,6 +1067,12 @@ class BallShotAnalyzer:
         self._closed_shot_track_ids: set[int] = set()
         self.frame_size: tuple[int, int] = (1, 1)
         self._analysis_step = -1
+        self.launch_signals = LaunchSignalBank(config.launch_signals)
+        self._robot_history: deque = deque(maxlen=120)
+        self._gray_history: deque = deque(maxlen=8)
+        self._previous_time: float | None = None
+        self._previous_frame: int | None = None
+        self.shot_methods: dict[str, str] = {}
 
     def _update_robots(
         self, observations: Sequence[RobotObservation], t_seconds: float
@@ -911,17 +1099,50 @@ class BallShotAnalyzer:
         t_seconds: float,
         robots: Sequence[RobotObservation],
     ) -> list[BallDetection]:
+        if (not math.isfinite(t_seconds) or t_seconds < 0 or frame_index < 0
+                or (self._previous_time is not None and t_seconds <= self._previous_time)
+                or (self._previous_frame is not None and frame_index <= self._previous_frame)):
+            raise ValueError("ball analysis requires increasing source frame indices and timestamps")
         height, width = frame.shape[:2]
+        interval = t_seconds - self._previous_time if self._previous_time is not None else 0.0
+        discontinuity = (self._previous_time is not None and (
+            interval > 0.25 or self.frame_size != (width, height)))
+        self._previous_time, self._previous_frame = t_seconds, frame_index
         self.frame_size = (width, height)
         self._analysis_step += 1
-        current_robots = self._update_robots(robots, t_seconds)
         detections = self.detector.detect(frame)
+        if discontinuity or self.detector.scene_changed:
+            self._closed_shot_track_ids.update(self._shots_by_ball_track)
+            self.tracker.active.clear()
+            self.track_states.clear()
+            self.robot_motion.clear()
+            self._robot_history.clear()
+            self._gray_history.clear()
+            self.launch_signals = LaunchSignalBank(self.config.launch_signals)
+        current_robots = self._update_robots(robots, t_seconds)
+        self._robot_history.append((t_seconds, current_robots))
+        self._gray_history.append((frame_index, self.detector.previous_gray))
+        self.robot_motion = {key: value for key, value in self.robot_motion.items()
+                             if t_seconds - value.t_seconds <= 0.25}
         carried_track_ids = {
             track_id for track_id, state in self.track_states.items()
             if state.source_robot_ids
+            and track_id not in self._shots_by_ball_track
             and self._analysis_step - state.last_carried_step
             <= self.config.shot.source_memory_frames
         }
+        # The first visible ball of a burst has no velocity yet. It needs a full speed
+        # association gate at the shooter, otherwise it becomes a new ID every frame.
+        diagonal = math.hypot(width, height)
+        carried_track_ids.update(
+            track.track_id for track in self.tracker.active.values()
+            if track.hits < 2 and any(
+                _distance_to_box(track.last.center, robot.observation.bbox)
+                <= self.config.shot.edge_launch_max_distance_ratio * diagonal
+                and self._launch_height_is_plausible(track.last.center, robot.observation.bbox)
+                for robot in current_robots.values()
+            )
+        )
         matched, retired = self.tracker.update(
             detections,
             frame_index,
@@ -929,12 +1150,273 @@ class BallShotAnalyzer:
             self.frame_size,
             wide_gate_track_ids=carried_track_ids,
         )
-        for track in matched:
-            self._update_track(track, current_robots, frame_index, self._analysis_step)
+        for track in list(self.tracker.active.values()):
+            if not track.matched_this_frame:
+                continue
+            if self.config.launch_signals.enabled:
+                self._short_launch(track, current_robots, interval)
+            if track.hits >= self.config.tracking.minimum_confirmed_hits:
+                self._update_track(track, current_robots, frame_index, self._analysis_step)
+        if self.config.launch_signals.enabled:
+            pulses = self.launch_signals.update(
+                self.detector.last_mask, current_robots, frame_index, t_seconds,
+                self.config.shot.minimum_launch_relative_speed_ratio_per_second * diagonal,
+            )
+            for pulse in pulses:
+                self._record_gate_pulse(pulse, current_robots, interval)
         for track in retired:
             if track.track_id not in self._shots_by_ball_track:
                 self.track_states.pop(track.track_id, None)
         return detections
+
+    def _flow_agrees(self, first: BallTrackPoint, last: BallTrackPoint) -> bool | None:
+        """Check the actual local pixels with bidirectional pyramidal optical flow.
+
+        Matching yellow colour alone cannot distinguish neighbouring hopper balls. Flow
+        tests the short correspondence independently. An untrackable patch returns unknown,
+        not a fabricated displacement. The crop bounds the work even on 1080p video.
+        """
+        import cv2
+        import numpy as np
+
+        before = next((gray for index, gray in self._gray_history if index == first.frame_index), None)
+        after = next((gray for index, gray in self._gray_history if index == last.frame_index), None)
+        if before is None or after is None:
+            return None
+        radius = min(first.radius, last.radius)
+        pad = max(16, math.ceil(radius * 3))
+        x0 = max(0, math.floor(min(first.center[0], last.center[0]) - pad))
+        y0 = max(0, math.floor(min(first.center[1], last.center[1]) - pad))
+        x1 = min(before.shape[1], math.ceil(max(first.center[0], last.center[0]) + pad))
+        y1 = min(before.shape[0], math.ceil(max(first.center[1], last.center[1]) + pad))
+        old = before[y0:y1, x0:x1]
+        new = after[y0:y1, x0:x1]
+        origin = np.array(first.center, dtype=np.float32) - (x0, y0)
+        support = np.zeros(old.shape, np.uint8)
+        cv2.circle(support, tuple(np.round(origin).astype(int)), max(3, round(radius * 1.4)), 255, -1)
+        features = cv2.goodFeaturesToTrack(old, maxCorners=12, qualityLevel=.02,
+                                          minDistance=2, mask=support, blockSize=3)
+        if features is None or len(features) < 2:
+            return None
+        window = max(9, min(25, round(radius * 2) | 1))
+        moved, status, error = cv2.calcOpticalFlowPyrLK(
+            old, new, features, None, winSize=(window, window), maxLevel=3,
+            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 25, .01),
+        )
+        if moved is None:
+            return None
+        backward, back_status, _ = cv2.calcOpticalFlowPyrLK(
+            new, old, moved, None, winSize=(window, window), maxLevel=3,
+        )
+        if backward is None:
+            return None
+        round_trip = np.linalg.norm(backward[:, 0] - features[:, 0], axis=1)
+        good = (status[:, 0] > 0) & (back_status[:, 0] > 0) & (error[:, 0] < 30)
+        good &= round_trip < max(1.5, radius * .5)
+        if int(good.sum()) < 2:
+            return None
+        displacement = np.median(moved[good, 0] - features[good, 0], axis=0)
+        expected = np.array(last.center) - np.array(first.center)
+        return bool(np.linalg.norm(displacement - expected) <= max(2.5, radius * .9))
+
+    def _short_launch(self, track, robots, interval):
+        """Count a measured local departure without waiting for a long flight track."""
+        if track.track_id in self._shots_by_ball_track:
+            return
+        settings = self.config.launch_signals
+        points = track.points
+        if not settings.short_track_minimum_hits <= len(points) <= self.config.shot.edge_launch_max_track_points:
+            return
+        if any(b.t_seconds - a.t_seconds > settings.maximum_observation_gap_seconds
+               for a, b in zip(points, points[1:])):
+            return
+        first, last = points[0], points[-1]
+        # A two-point match between pre-existing yellow patches is not motion evidence.
+        # Require newly occupied yellow pixels at the destination, or a longer measured
+        # path; this prevents a hidden ball from jumping to a nearby hopper/floor ball.
+        if len(points) == 2 and last.novelty < self.config.detector.motion_min_fraction:
+            return
+        elapsed = last.t_seconds - first.t_seconds
+        origin_robots = next((value for timestamp, value in self._robot_history
+                              if abs(timestamp - first.t_seconds) < 1e-6), {})
+        diagonal = max(1.0, math.hypot(*self.frame_size))
+        radius = min(first.radius, last.radius)
+        possible = []
+        for robot_id, initial in origin_robots.items():
+            if robot_id not in robots:
+                continue
+            start_box = initial.observation.bbox
+            current_box = robots[robot_id].observation.bbox
+            if (_distance_to_box(first.center, start_box)
+                    > min(self.config.shot.edge_launch_max_distance_ratio * diagonal,
+                          max(3.0, radius * 2.0))
+                    or not self._launch_height_is_plausible(first.center, start_box)):
+                continue
+            if _inside_box(first.center, start_box, 0):
+                edge_distance = min(first.center[0] - start_box[0], start_box[2] - first.center[0],
+                                    first.center[1] - start_box[1])
+                if edge_distance > max(first.radius * 1.5, 2.0):
+                    continue
+            if _inside_box(last.center, current_box, self.config.shot.robot_padding_ratio):
+                continue
+            if any(other != robot_id and _inside_box(last.center, value.observation.bbox, 0)
+                   for other, value in robots.items()):
+                continue
+            left, top, right, bottom = start_box
+            x0, y0, x1, y1 = current_box
+            sx = (x1 - x0) / max(1.0, right - left)
+            sy = (y1 - y0) / max(1.0, bottom - top)
+            if not (0.75 <= sx <= 1.33 and 0.75 <= sy <= 1.33):
+                continue
+            # Compare in robot coordinates to reject carried yellow during pan/zoom and
+            # robot motion. Use the box at the ball's birth, not today's box at that point.
+            translated_first = (x0 + (first.center[0] - left) * sx,
+                                y0 + (first.center[1] - top) * sy)
+            movement = (last.center[0] - translated_first[0],
+                        last.center[1] - translated_first[1])
+            travel = math.hypot(*movement)
+            speed = travel / max(elapsed, 1e-6)
+            radial = (last.center[0] - (x0 + x1) / 2, last.center[1] - (y0 + y1) / 2)
+            outward = sum(a * b for a, b in zip(movement, radial)) / max(
+                math.hypot(*radial) * elapsed, 1e-6)
+            if (speed / diagonal < self.config.shot.minimum_launch_relative_speed_ratio_per_second
+                    or outward / diagonal < self.config.shot.minimum_radial_speed_ratio_per_second
+                    or travel < max(radius * settings.minimum_travel_radii, diagonal * 0.003)):
+                continue
+            path = sum(math.dist(a.center, b.center) for a, b in zip(points, points[1:]))
+            straightness = math.dist(first.center, last.center) / max(path, 1e-6)
+            if straightness < self.config.shot.minimum_direction_consistency:
+                continue
+            possible.append((robot_id, translated_first, movement, speed))
+        if not possible:
+            return
+        flow = self._flow_agrees(points[-2], last)
+        if flow is False:
+            return
+        if last.novelty < self.config.detector.motion_min_fraction and flow is not True:
+            return
+        if flow is None and len(points) == 2 and last.novelty < 0.65:
+            return
+        robot_id = possible[0][0] if len(possible) == 1 else None
+        # Timestamp the first observed point outside the source; hidden births at the edge
+        # retain their first observation, rather than backdating an unseen launch.
+        launch = first
+        if robot_id is not None:
+            for point in points:
+                frame_robots = next((value for timestamp, value in self._robot_history
+                                     if abs(timestamp - point.t_seconds) < 1e-6), {})
+                if robot_id in frame_robots and not _inside_box(
+                        point.center, frame_robots[robot_id].observation.bbox,
+                        self.config.shot.robot_padding_ratio):
+                    launch = point
+                    break
+        shot = ShotRecord(
+            str(uuid.uuid4()), launch.frame_index, launch.t_seconds, robot_id, track.track_id,
+            0.86 if len(points) == 2 else 0.92, 0.72 if robot_id is not None else 0.0,
+            ball_track=[self._serialized_point(p) for p in points],
+        )
+        existing = self._find_existing_launch(shot)
+        if existing is not None:
+            self._shots_by_ball_track[track.track_id] = existing
+            return
+        if robot_id is not None:
+            _, origin, movement, speed = possible[0]
+            port = self.launch_signals.seed(robot_id, robots[robot_id].observation.bbox,
+                origin, (origin[0] + movement[0], origin[1] + movement[1]),
+                radius, speed, last.t_seconds)
+            if port is not None:
+                existing = self.launch_signals.register_track(
+                    port, robots[robot_id].observation.bbox, points, shot, interval)
+                if existing is not None:
+                    self._shots_by_ball_track[track.track_id] = existing
+                    return
+        self.shots.append(shot)
+        self.shot_methods[shot.shot_id] = "short_track"
+        self._shots_by_ball_track[track.track_id] = shot
+        self.track_states.setdefault(track.track_id, _TrackState()).shot_id = shot.shot_id
+        for a, b in zip(shot.ball_track, shot.ball_track[1:]):
+            self._evaluate_outcome(shot, a, b)
+            if shot.outcome != "unknown":
+                break
+
+    def _record_gate_pulse(self, pulse, robots, interval):
+        robot = robots.get(pulse.robot_id)
+        if robot is None:
+            return
+        # Do not attribute occupancy shared by another robot's box.
+        if any(key != pulse.robot_id and _inside_box(pulse.inner.center, value.observation.bbox, 0)
+               for key, value in robots.items()):
+            return
+        evidence = [BallTrackPoint(s.frame_index, s.t_seconds, s.center, s.radius,
+                                   math.pi * s.radius ** 2, 1.0)
+                    for s in (pulse.inner, pulse.outer)]
+        shot = ShotRecord(
+            str(uuid.uuid4()), pulse.inner.frame_index, pulse.inner.t_seconds, pulse.robot_id,
+            self.tracker.next_track_id, 0.78, 0.65,
+            ball_track=[self._serialized_point(p) for p in evidence],
+        )
+        existing = self._find_existing_launch(shot)
+        registered = self.launch_signals.register_pulse(
+            pulse, robot.observation.bbox, existing or shot, interval)
+        existing = existing or registered
+        if existing is not None:
+            return
+        # Reserve a real, unique evidence ID even if segmentation never produced a blob.
+        self.tracker.next_track_id += 1
+        self.shots.append(shot)
+        self.shot_methods[shot.shot_id] = "paired_gate"
+        # Attach only to a geometrically matching unclaimed track. No guessed ball flight
+        # is generated when a gate pulse is the only available evidence.
+        matches = []
+        for track in self.tracker.active.values():
+            if track.track_id in self._shots_by_ball_track:
+                continue
+            point = next((p for p in track.points if p.frame_index == pulse.outer.frame_index), None)
+            if point is not None and math.dist(point.center, pulse.outer.center) <= pulse.outer.radius:
+                matches.append(track)
+        if len(matches) == 1:
+            shot.ball_track_id = matches[0].track_id
+            self._shots_by_ball_track[matches[0].track_id] = shot
+
+    def _find_existing_launch(self, proposed: ShotRecord) -> ShotRecord | None:
+        """Fuse overlapping observations across ports/track fragments, without a cooldown.
+
+        Two observations must agree in both time and position. Adjacent balls in the same
+        burst can therefore be counted even when their event timestamps are very close.
+        Single-frame intersections are insufficient to collapse two crossing trajectories.
+        """
+        width, height = self.frame_size
+        diagonal = math.hypot(width, height)
+        for existing in reversed(self.shots):
+            if (existing.robot_track_id != proposed.robot_track_id
+                    or abs(existing.launch_t_seconds - proposed.launch_t_seconds) > .35):
+                continue
+            old = [p for p in existing.ball_track if p["frame_index"] >= existing.launch_frame]
+            comparisons = 0
+            agreements = 0
+            for point in proposed.ball_track[:8]:
+                if point["frame_index"] < proposed.launch_frame:
+                    continue
+                match = next((p for p in old if p["frame_index"] == point["frame_index"]), None)
+                if match is None:
+                    for a, b in zip(old, old[1:]):
+                        dt = b["t_seconds"] - a["t_seconds"]
+                        if (a["t_seconds"] < point["t_seconds"] < b["t_seconds"]
+                                and 0 < dt <= self.config.launch_signals.maximum_observation_gap_seconds):
+                            fraction = (point["t_seconds"] - a["t_seconds"]) / dt
+                            match = {key: a[key] + fraction * (b[key] - a[key])
+                                     for key in ("x", "y", "radius")}
+                            break
+                if match is None:
+                    continue
+                comparisons += 1
+                distance = math.hypot((point["x"] - match["x"]) * width,
+                                      (point["y"] - match["y"]) * height)
+                tolerance = max(3.0, diagonal * min(point["radius"], match["radius"]) * 1.1)
+                agreements += int(distance <= tolerance)
+            if agreements >= 2 and agreements / comparisons >= .75:
+                return existing
+        return None
 
     def _relative_motion(
         self,
@@ -983,7 +1465,7 @@ class BallShotAnalyzer:
     ) -> None:
         existing_shot = self._shots_by_ball_track.get(track.track_id)
         if existing_shot is not None:
-            if track.track_id in self._closed_shot_track_ids:
+            if track.track_id in self._closed_shot_track_ids or existing_shot.outcome != "unknown":
                 return
             if (
                 track.last.t_seconds - existing_shot.launch_t_seconds
@@ -1043,6 +1525,9 @@ class BallShotAnalyzer:
             if state.ambiguous_streak >= self.config.shot.carry_confirmation_frames:
                 state.source_robot_ids = containing
                 state.last_carried_step = analysis_step
+        else:
+            state.owner_streak = 0
+            state.ambiguous_streak = 0
 
         # Rapid-fire shooters often hide the ball until it has already cleared the mechanism.
         # A newly confirmed track may therefore have no observations inside the robot at all.
@@ -1050,7 +1535,8 @@ class BallShotAnalyzer:
         # short observed path is already fast, outward, and geometrically consistent. Slow floor
         # balls and old tracks cannot enter through this path.
         if (
-            not state.source_robot_ids
+            not self.config.launch_signals.enabled
+            and not state.source_robot_ids
             and len(track.points) <= self.config.shot.edge_launch_max_track_points
         ):
             diagonal = math.hypot(*self.frame_size)
@@ -1172,6 +1658,9 @@ class BallShotAnalyzer:
             or consistency < self.config.shot.minimum_direction_consistency
         ):
             return
+        if (self.config.launch_signals.enabled
+                and self._flow_agrees(track.points[-2], track.points[-1]) is False):
+            return
 
         speed_score = min(
             1.0,
@@ -1204,7 +1693,33 @@ class BallShotAnalyzer:
                 if item.frame_index >= candidate.launch_frame
             ],
         )
+        existing = self._find_existing_launch(shot)
+        if existing is not None:
+            self._shots_by_ball_track[track.track_id] = existing
+            state.shot_id = existing.shot_id
+            return
+        if self.config.launch_signals.enabled and candidate.robot_track_id in robots:
+            source = robots[candidate.robot_track_id]
+            flight = [p for p in track.points if p.frame_index >= candidate.launch_frame]
+            if len(flight) >= 2:
+                a, b = flight[0], flight[-1]
+                duration = max(b.t_seconds - a.t_seconds, 1e-6)
+                port = self.launch_signals.seed(
+                    candidate.robot_track_id, source.observation.bbox, a.center, b.center,
+                    min(p.radius for p in flight), math.dist(a.center, b.center) / duration,
+                    b.t_seconds,
+                )
+                if port is not None:
+                    existing = self.launch_signals.register_track(
+                        port, source.observation.bbox, flight, shot,
+                        flight[-1].t_seconds - flight[-2].t_seconds,
+                    )
+                    if existing is not None:
+                        self._shots_by_ball_track[track.track_id] = existing
+                        state.shot_id = existing.shot_id
+                        return
         self.shots.append(shot)
+        self.shot_methods[shot.shot_id] = "trajectory"
         self._shots_by_ball_track[track.track_id] = shot
         state.shot_id = shot.shot_id
         for index in range(1, len(shot.ball_track)):
@@ -1369,6 +1884,16 @@ class BallShotAnalyzer:
                 1,
                 cv2.LINE_AA,
             )
+
+        for sample in self.launch_signals.last_samples:
+            cx, cy = sample["center"]
+            dx, dy = sample["direction"]
+            radius = sample["radius"]
+            color = (255, 80, 220) if sample["gate"] == 0 else (220, 220, 80)
+            cv2.line(frame, (round(cx - dy * radius * 2), round(cy + dx * radius * 2)),
+                     (round(cx + dy * radius * 2), round(cy - dx * radius * 2)), color, 2)
+            cv2.putText(frame, f"{sample['value']:.2f}", (round(cx + 3), round(cy - 3)),
+                        cv2.FONT_HERSHEY_SIMPLEX, .3, color, 1)
 
         for detection in self.detector.last_detections:
             cv2.circle(

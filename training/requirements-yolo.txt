@@ -8,5 +8,6 @@ av
 opencv-python
 pillow
 numpy
+scipy>=1.13
 tqdm
 PyYAML

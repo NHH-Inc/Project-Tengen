@@ -1327,9 +1327,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--frame-stride",
         type=int,
-        default=2,
+        default=1,
         help=(
-            "process every Nth source frame (default: 2); use 1 for full-frame-rate analysis"
+            "process every Nth source frame (default: 1, every frame); ball scouting always uses 1"
         ),
     )
     parser.add_argument(
@@ -1487,6 +1487,9 @@ def main() -> int:
         raise SystemExit("--snapshot-interval must be greater than zero")
     if args.frame_stride <= 0:
         raise SystemExit("--frame-stride must be a positive integer")
+    if ball_config_path is not None and args.frame_stride != 1:
+        print("Ball scouting requires every source frame; overriding --frame-stride to 1", file=sys.stderr)
+        args.frame_stride = 1
     if args.expected_duration < 0:
         raise SystemExit("--expected-duration cannot be negative")
     if args.reid_memory_seconds <= 0:

@@ -14,6 +14,7 @@ python-dotenv
 
 # Frame quality filtering: rejects broadcast graphics before they reach a labeller.
 numpy>=2.0
+scipy>=1.13
 opencv-python-headless>=4.10
 # Team identification only. The binding is useless without the Tesseract binary, so a
 # machine that has this but not that still runs -- every track just stays unattributed.
