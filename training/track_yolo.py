@@ -1154,9 +1154,23 @@ def stream_homography(
             seen = sightings.setdefault(int(tag_id), TagSighting(int(tag_id)))
             seen.xs.append(float(centre[0]))
             seen.ys.append(float(centre[1]))
+            pixels = corner.reshape(4, 2) / UPSCALE
+            pixels[:, 1] += region_top
+            seen.corners.append(pixels.tolist())
 
     observed, _notes = steady_tags(sightings)
     used_ids = sorted(tag_id for tag_id in observed if tag_id in layout.tags)
+    corner_ids = [i for i in used_ids if len(sightings[i].corners) >= 3]
+    if len(corner_ids) >= 3 and width > 0 and height > 0:
+        from ingest.collection.calibrate import fit_tag_corners
+        fitted = fit_tag_corners(sightings, corner_ids, layout, (width, height), region)
+        if fitted is not None and fitted[0].trustworthy:
+            mapper, pose, corner_ids, images, _objects = fitted
+            return dict(mapping_source=mapper.source, field_length_ft=layout.length_ft,
+                        field_width_ft=layout.width_ft, plane_height_ft=0.0,
+                        point_count=len(images), has_redundancy=True, trustworthy=True,
+                        tags_used=corner_ids, frames_sampled=frames_read,
+                        matrix=mapper.matrix, pose=pose, image_size=[width, height])
     image_points = [observed[tag_id] for tag_id in used_ids]
     field_points_3d = [
         (layout.tags[tag_id].x_ft, layout.tags[tag_id].y_ft, layout.tags[tag_id].z_ft)
@@ -1199,6 +1213,7 @@ def stream_homography(
         "trustworthy": bool(mapper.trustworthy),
         "tags_used": used_ids,
         "frames_sampled": frames_read,
+        "image_size": [width, height],
         "matrix": mapper.matrix,
         "pose": pose,
     }
@@ -1528,6 +1543,16 @@ def main() -> int:
             ball_analyzer = BallShotAnalyzer(ball_config)
     output.parent.mkdir(parents=True, exist_ok=True)
     homography_path = args.homography
+    if video_path and args.auto_homography and not homography_path:
+        from ingest.collection.calibrate import calibrate
+        calibration = calibrate(video_path, region=(args.crop[1], args.crop[3]),
+                                samples=24, optimize_hfov=True)
+        (output.parent / "homography.diagnostics.json").write_text(
+            json.dumps(calibration, indent=2) + "\n", encoding="utf-8")
+        if (calibration.get("solution") or {}).get("trustworthy"):
+            calibration["trustworthy"] = True
+            homography_path = str(output.parent / "homography.json")
+            Path(homography_path).write_text(json.dumps(calibration, indent=2) + "\n", encoding="utf-8")
     if args.stream_url and args.auto_homography and not homography_path:
         diagnostics_path = output.parent / "homography.diagnostics.json"
         try:
@@ -1707,6 +1732,28 @@ def main() -> int:
         source_frame_index = frame_index * args.frame_stride
         timestamp = round(frame_index / fps, 6)
         height, width = result.orig_img.shape[:2]
+        if frame_index == 0 and ball_analyzer is not None:
+            effective_config = ball_config_path
+            snapshot = (shots_output or output).with_name("ball_scouting.config.json")
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            if homography_path:
+                from training.auto_goals import configure_auto_goals
+                if video_path:
+                    probe = cv2.VideoCapture(str(video_path))
+                    image_size = (int(probe.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                  int(probe.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+                    probe.release()
+                else:
+                    document = json.loads(Path(homography_path).read_text(encoding="utf-8"))
+                    image_size = document.get("image_size") or (
+                        round(width / (args.crop[2] - args.crop[0])),
+                        round(height / (args.crop[3] - args.crop[1])))
+                effective_config = configure_auto_goals(
+                    ball_config_path, homography_path, image_size, args.crop,
+                    snapshot)
+                ball_analyzer = BallShotAnalyzer(load_ball_scouting_config(effective_config))
+            if Path(effective_config).resolve() != snapshot.resolve():
+                snapshot.write_text(Path(effective_config).read_text(encoding="utf-8"), encoding="utf-8")
         stable_ids: list[int | None] = []
         if result.boxes is not None:
             xyxy = result.boxes.xyxy.detach().cpu().tolist()
@@ -1930,6 +1977,10 @@ def main() -> int:
         write_shot_records(shots_output, ball_analyzer.shots if ball_analyzer else [])
         write_goal_entries(shots_output.with_name("goal_entries.jsonl"),
                            ball_analyzer.goal_entries if ball_analyzer else [])
+        if ball_analyzer:
+            from training.auto_goals import save_camera_gaps
+            save_camera_gaps(shots_output.with_name("ball_scouting.config.json"),
+                             ball_analyzer.goal_camera_gaps)
     if snapshot_dir:
         (snapshot_dir / "annotations.json").write_text(
             json.dumps({

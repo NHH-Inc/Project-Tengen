@@ -140,6 +140,8 @@ class GoalGeometry:
     minimum_depth_radii: float = 0.0
     maximum_gap_seconds: float = 0.085
     maximum_confirmation_seconds: float = 0.25
+    allow_partial_approach: bool = False
+    expected_ball_radius: float = 0.0
 
     @property
     def center(self) -> Point:
@@ -162,6 +164,8 @@ class BallScoutingConfig:
     debug: DebugConfig = field(default_factory=DebugConfig)
     goals: tuple[GoalGeometry, ...] = ()
     launch_signals: LaunchSignalConfig = field(default_factory=LaunchSignalConfig)
+    automatic_goals: bool = False
+    calibration_anchors: tuple = ()
 
 
 def _hsv_triplet(value: object, name: str) -> tuple[int, int, int]:
@@ -200,10 +204,13 @@ def _goal(value: object, index: int) -> GoalGeometry:
         raise ValueError(f"{name} must be an object")
     allowed = {"id", "region_id", "polygon", "entry_direction", "made_boundary", "miss_boundaries",
                "approach_boundary", "confirmation_polygon", "confirmation_frames", "minimum_depth_radii",
-               "maximum_gap_seconds", "maximum_confirmation_seconds", "_comment"}
+               "maximum_gap_seconds", "maximum_confirmation_seconds", "allow_partial_approach",
+               "expected_ball_radius", "_comment"}
     if set(value) - allowed:
         raise ValueError(f"{name} has unknown settings: {sorted(set(value) - allowed)}")
     goal_id = value.get("id")
+    if not isinstance(value.get("allow_partial_approach", False), bool):
+        raise ValueError(f"{name}.allow_partial_approach must be a boolean")
     if not isinstance(goal_id, str) or not goal_id.strip():
         raise ValueError(f"{name}.id must be a non-empty string")
     raw_polygon = value.get("polygon")
@@ -241,6 +248,9 @@ def _goal(value: object, index: int) -> GoalGeometry:
             for miss_index, boundary in enumerate(raw_misses)
         ),
         region_id=region_id.strip(),
+        allow_partial_approach=value.get("allow_partial_approach", False) is True,
+        expected_ball_radius=_number(value.get("expected_ball_radius", 0),
+                                     f"{name}.expected_ball_radius", minimum=0),
         approach_line=(_directed_boundary(value["approach_boundary"], f"{name}.approach_boundary")
                        if value.get("approach_boundary") is not None else None),
         confirmation_polygon=confirmation_polygon,
@@ -553,7 +563,9 @@ def load_ball_scouting_config(path: str | Path) -> BallScoutingConfig:
     enabled = document.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
-    return BallScoutingConfig(enabled, detector, tracking, shot, debug, goals, signals)
+    return BallScoutingConfig(enabled, detector, tracking, shot, debug, goals, signals,
+        (document.get("goal_calibration") or {}).get("source") == "apriltag_pose",
+        tuple((document.get("goal_calibration") or {}).get("anchors", [])))
 
 
 @dataclass(frozen=True)
@@ -1111,6 +1123,11 @@ class BallShotAnalyzer:
         self._previous_frame: int | None = None
         self.shot_methods: dict[str, str] = {}
         self.goal_counter = GoalEntryCounter(config.goals)
+        self.goals_valid = True
+        self._last_camera_check = -math.inf
+        self._last_camera_verified = -math.inf
+        self._camera_tags_visible = False
+        self.goal_camera_gaps: list[list[float | None]] = []
 
     @property
     def goal_entries(self):
@@ -1153,6 +1170,26 @@ class BallShotAnalyzer:
         self.frame_size = (width, height)
         self._analysis_step += 1
         detections = self.detector.detect(frame)
+        if self.config.automatic_goals and (self.detector.scene_changed or discontinuity
+                or t_seconds - self._last_camera_check >= (1.0 if self._camera_tags_visible else .1)):
+            from training.auto_goals import camera_matches
+            was_valid = self.goals_valid
+            self._camera_tags_visible = camera_matches(frame, self.config.calibration_anchors)
+            if self.detector.scene_changed or discontinuity:
+                self._last_camera_verified = -math.inf
+            if self._camera_tags_visible:
+                self._last_camera_verified = t_seconds
+            # A failed decode is not evidence of a moved camera. Keep a recently
+            # verified pose through short occlusions, retrying ten times a second.
+            # Cuts/gaps invalidate immediately; sustained failure also expires it.
+            self.goals_valid = t_seconds - self._last_camera_verified <= 3.0
+            self._last_camera_check = t_seconds
+            if self.goals_valid != was_valid:
+                self.goal_counter.reset_temporal(t_seconds)
+                if not self.goals_valid:
+                    self.goal_camera_gaps.append([t_seconds, None])
+                elif self.goal_camera_gaps:
+                    self.goal_camera_gaps[-1][1] = t_seconds
         if discontinuity or self.detector.scene_changed:
             self._closed_shot_track_ids.update(self._shots_by_ball_track)
             self.tracker.active.clear()
@@ -1186,6 +1223,20 @@ class BallShotAnalyzer:
                 for robot in current_robots.values()
             )
         )
+        # A fast inbound ball first seen at the basket also has no velocity yet.
+        # The shooter-only birth gate used to fragment those balls before crossing.
+        for track in self.tracker.active.values():
+            if track.hits != 1:
+                continue
+            position = (track.last.center[0] / width, track.last.center[1] / height)
+            for goal in self.config.goals:
+                if goal.confirmation_polygon:
+                    xs, ys = zip(*goal.confirmation_polygon)
+                    pad = max(track.last.radius * 3 / width, .015)
+                    if (min(xs) - pad <= position[0] <= max(xs) + pad
+                            and min(ys) - pad * width / height <= position[1] <= max(ys)):
+                        carried_track_ids.add(track.track_id)
+                        break
         matched, retired = self.tracker.update(
             detections,
             frame_index,
@@ -1209,7 +1260,7 @@ class BallShotAnalyzer:
                 self._record_gate_pulse(pulse, current_robots, interval)
         entries = self.goal_counter.observe(
             list(self.tracker.active.values()), frame_index, t_seconds, self.frame_size,
-        )
+        ) if self.goals_valid else []
         self._associate_goal_entries(entries)
         for track in retired:
             if track.track_id not in self._shots_by_ball_track:
@@ -1909,7 +1960,7 @@ class BallShotAnalyzer:
         # approach/interior/depth checks here.
         # Misses are never inferred from disappearance or proximity.  They require a separate,
         # explicitly configured directed boundary and a visible crossing.
-        for goal in self.config.goals:
+        for goal in self.config.goals if self.goals_valid else ():
             for boundary in goal.miss_boundaries:
                 if crosses_directed_boundary(previous, current, boundary):
                     shot.outcome = "missed"
@@ -1925,7 +1976,7 @@ class BallShotAnalyzer:
         import numpy as np
 
         height, width = frame.shape[:2]
-        for goal in self.config.goals:
+        for goal in self.config.goals if self.goals_valid else ():
             if goal.confirmation_polygon:
                 interior = np.array([(round(x * width), round(y * height))
                                      for x, y in goal.confirmation_polygon])
@@ -2021,6 +2072,8 @@ class BallShotAnalyzer:
         ]
         if self.config.goals:
             rows.append(f"Goal entries: {goals['made']} made / {goals['unassigned']} source unknown")
+            if not self.goals_valid:
+                rows.append("Auto goals paused: camera changed; recalibration required")
         else:
             rows.append("Goals not calibrated: made count unavailable")
         for entry in self.goal_entries:

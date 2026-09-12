@@ -81,6 +81,7 @@ export interface VideoPlayerProps {
   shots: ShotRecord[];
   shotGoals: ShotGoal[];
   goalEntries: GoalEntry[];
+  goalCameraGaps?: [number, number | null][];
   /** Events below this are drawn as suspect. Doc 3: low confidence must be visually distinct. */
   confidenceThreshold: number;
   boxSampleRate: number;
@@ -105,6 +106,7 @@ export function VideoPlayer({
   shots,
   shotGoals,
   goalEntries,
+  goalCameraGaps = [],
   confidenceThreshold,
   boxSampleRate,
   trim,
@@ -130,11 +132,11 @@ export function VideoPlayer({
 
   // The overlay redraws from whatever these hold, so the frame callback never re-subscribes.
   const drawState = useRef({
-    tracks, events, shots, shotGoals, goalEntries,
+    tracks, events, shots, shotGoals, goalEntries, goalCameraGaps,
     confidenceThreshold, showBoxes, showShots, boxSampleRate,
   });
   drawState.current = {
-    tracks, events, shots, shotGoals, goalEntries,
+    tracks, events, shots, shotGoals, goalEntries, goalCameraGaps,
     confidenceThreshold, showBoxes, showShots, boxSampleRate,
   };
 
@@ -193,7 +195,13 @@ export function VideoPlayer({
       ctx.save();
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      for (const goal of s.shotGoals) {
+      const goalsPaused = s.goalCameraGaps.some(([start, end]) => t >= start && (end === null || t < end));
+      if (goalsPaused) {
+        ctx.fillStyle = '#ffd078';
+        ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillText('Goal counting paused: AprilTags not verified', 12, 48);
+      }
+      for (const goal of goalsPaused ? [] : s.shotGoals) {
         if (goal.confirmationPolygon) {
           ctx.beginPath();
           goal.confirmationPolygon.forEach(([x, y], i) => {
@@ -244,8 +252,9 @@ export function VideoPlayer({
 
       for (const shot of s.shots) {
         const lastTime = shot.ballTrack.at(-1)?.tSeconds ?? shot.launchTSeconds;
-        if (t < shot.launchTSeconds - 0.2 || t > lastTime + 0.75) continue;
-        const path = shot.ballTrack.filter((point) => point.tSeconds <= t + 1e-3);
+        if (t < shot.launchTSeconds - 0.2 || t > lastTime + 0.20) continue;
+        const path = shot.ballTrack.filter((point) => point.tSeconds <= t + 1e-3
+          && point.tSeconds >= t - .35);
         if (path.length === 0) continue;
         const outcomeKnown = shot.outcomeTSeconds != null && t >= shot.outcomeTSeconds;
         const colour = outcomeKnown && shot.outcome === 'made'
@@ -274,15 +283,14 @@ export function VideoPlayer({
         ctx.stroke();
         ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
         ctx.fillStyle = colour;
-        ctx.fillText(
-          `shot ${shot.shotId.slice(0, 4)} · ${shot.robotTrackId == null ? 'unassigned' : `R${shot.robotTrackId}`}`,
-          current.x * cssW + radius + 3,
-          current.y * cssH - radius,
-        );
+        if (outcomeKnown && shot.outcome !== 'unknown') {
+          ctx.fillText(shot.outcome === 'made' ? 'IN' : 'MISS',
+            current.x * cssW + radius + 3, current.y * cssH - radius);
+        }
       }
 
       for (const entry of s.goalEntries) {
-        if (t < entry.tSeconds || t > entry.tSeconds + .75 || entry.ballTrack.length === 0) continue;
+        if (t < entry.tSeconds || t > entry.tSeconds + .25 || entry.ballTrack.length === 0) continue;
         ctx.beginPath();
         entry.ballTrack.forEach((point, i) => {
           if (i === 0 || point.tSeconds - entry.ballTrack[i - 1].tSeconds > .085)
@@ -295,7 +303,7 @@ export function VideoPlayer({
         const last = entry.ballTrack[entry.ballTrack.length - 1];
         ctx.fillStyle = '#50dc72';
         ctx.font = '700 12px ui-monospace, SFMono-Regular, Menlo, monospace';
-        ctx.fillText(`IN · ${entry.robotTrackId == null ? 'source unknown' : `R${entry.robotTrackId}`}`,
+        ctx.fillText(`IN${entry.robotTrackId == null ? '' : ` · R${entry.robotTrackId}`}`,
           last.x * cssW + 8, last.y * cssH);
       }
 
@@ -436,7 +444,7 @@ export function VideoPlayer({
   useEffect(() => {
     if (!playing) draw(time);
   }, [
-    draw, playing, tracks, events, shots, shotGoals, goalEntries,
+    draw, playing, tracks, events, shots, shotGoals, goalEntries, goalCameraGaps,
     confidenceThreshold, showBoxes, showShots, time,
   ]);
 

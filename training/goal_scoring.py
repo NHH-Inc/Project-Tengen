@@ -143,7 +143,17 @@ class GoalEntryCounter:
                     state.inside_hits = 0
                     state.crossing = None
                 if state.armed_at is None:
-                    continue
+                    # Broadcast graphics can hide the rim crossing. Two observed
+                    # inward positions above the deeper scoring gate still establish
+                    # approach. Never arm from a ball born below the scoring line.
+                    if (goal.allow_partial_approach and goal.confirmation_polygon
+                            and first.t_seconds - track.points[0].t_seconds <= goal.maximum_gap_seconds
+                            and _inside(previous, goal.confirmation_polygon)
+                            and self._depth(first, goal, size) <= -.5 and directed > 0):
+                        state.armed_at = first.t_seconds
+                        state.inside_hits = 1
+                    else:
+                        continue
                 interior = goal.confirmation_polygon
                 inside_now = interior is None or _inside(current, interior)
                 if inside_now:
@@ -163,7 +173,9 @@ class GoalEntryCounter:
                     state.crossing = last
                 if (state.crossing is None or not inside_now
                         or state.inside_hits < goal.confirmation_frames
-                        or self._depth(last, goal, size) < goal.minimum_depth_radii):
+                        or self._depth(last, goal, size) < goal.minimum_depth_radii
+                        or max(p.radius for p in track.points[-12:]) <
+                        goal.expected_ball_radius * math.hypot(width, height) * .5):
                     continue
                 entry = GoalEntry(
                     str(uuid.uuid4()), goal.goal_id, goal.region_id or f"{goal.goal_id}_{index + 1}",
@@ -193,6 +205,21 @@ class GoalEntryCounter:
                         2, min(p["radius"], q["radius"]) * diagonal * .8):
                     matches += 1
             if matches >= 2:
+                return True
+            # 30 Hz images encoded at 60 Hz can split one flight into alternating
+            # odd/even track IDs. Require three almost identical observed positions
+            # on adjacent source frames; proximity at the basket alone is insufficient.
+            aliases = set()
+            for p in proposed.ball_track:
+                for qi, q in enumerate(old.ball_track):
+                    if (abs(p["frame_index"] - q["frame_index"]) <= 1
+                            and abs(p["t_seconds"] - q["t_seconds"]) <= .022
+                            and math.hypot((p["x"] - q["x"]) * width,
+                                           (p["y"] - q["y"]) * height)
+                            <= max(1, min(p["radius"], q["radius"]) * diagonal * .25)):
+                        aliases.add(qi)
+                        break
+            if len(aliases) >= 3:
                 return True
         return False
 

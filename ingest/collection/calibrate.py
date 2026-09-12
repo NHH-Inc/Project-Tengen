@@ -26,8 +26,9 @@ Four things have to be got right, and each one fails silently if it is not:
     error is zero by construction and means nothing. Five is where it starts to. The result says
     which case it is instead of reporting a number that looks like evidence.
 
-**What the mapping is to.** The default `pose` mode uses tag heights plus an assumed or measured
-horizontal FOV to recover camera extrinsics, then derives an image-to-carpet homography. The legacy
+**What the mapping is to.** The default `pose` mode fits surveyed tag corners, camera extrinsics
+and both focal axes, then derives an image-to-carpet homography. Tag-centre fitting with an
+assumed or measured horizontal FOV remains a fallback when corners are inadequate. The legacy
 `plane` mode maps to the selected tag height, not the carpet; `plane_height_ft` records that fact.
 
     python -m ingest.collection.calibrate --video data/segments/<clip>.mp4 \\
@@ -46,7 +47,7 @@ from .apriltag_layout import correspondences_from_observations, load_layout
 
 #: Frames to sample across the clip. Tags are occluded by robots constantly, so more samples find
 #: more tags; past a point it only costs time.
-SAMPLES = 12
+SAMPLES = 24
 
 #: The detector struggles with a broadcast-sized tag at native resolution -- 3 tags found against
 #: 12 at double size on the same frame.
@@ -67,6 +68,7 @@ class TagSighting:
     tag_id: int
     xs: list[float] = field(default_factory=list)
     ys: list[float] = field(default_factory=list)
+    corners: list[list[list[float]]] = field(default_factory=list)
 
     def median(self) -> tuple[float, float]:
         import statistics
@@ -136,6 +138,9 @@ def gather_sightings(video_path, samples=SAMPLES, region=(0.0, 1.0), upscale=UPS
             seen = sightings.setdefault(int(tag_id), TagSighting(int(tag_id)))
             seen.xs.append(float(centre[0]))
             seen.ys.append(float(centre[1]))
+            pixels = corner.reshape(4, 2) / upscale
+            pixels[:, 1] += region_top
+            seen.corners.append(pixels.tolist())
     capture.release()
     return sightings, frames
 
@@ -169,6 +174,53 @@ def _video_size(video_path) -> tuple[int, int]:
     return width, height
 
 
+def fit_tag_corners(sightings, used_ids, layout, image_size, region):
+    """Reject inconsistent whole markers, never cherry-pick corners of a bad tag."""
+    import cv2
+    import numpy as np
+    from .homography import solve_broadcast_corners
+
+    ids = [i for i in used_ids if len(sightings[i].corners) >= MIN_SIGHTINGS]
+    rejected = []
+    budget = len(ids) // 4
+    width, height = image_size
+    while len(ids) >= 3:
+        images = np.concatenate([np.median(sightings[i].corners, axis=0) for i in ids])
+        objects = np.concatenate([layout.tags[i].corners_ft() for i in ids])
+        centers = objects.reshape(-1, 4, 3).mean(axis=1)
+        if (np.ptp(centers[:, 0]) < layout.length_ft * .2
+                or np.ptp(centers[:, 1]) < layout.width_ft * .15):
+            return None
+        fit = solve_broadcast_corners(images, objects, image_size,
+            (layout.length_ft, layout.width_ft), (width / 2, height * sum(region) / 2))
+        if fit is None:
+            return None
+        mapper, pose = fit
+        if mapper.trustworthy:
+            pose["rejected_tags"] = rejected
+            return mapper, pose, ids, images, objects
+        if len(rejected) >= budget or len(ids) <= 4:
+            return None
+        projected, _ = cv2.projectPoints(objects, np.array(pose["rvec"]), np.array(pose["tvec"]),
+                                        np.array(pose["camera_matrix"]), None)
+        errors = np.linalg.norm(projected.reshape(-1, 2) - images, axis=1).reshape(-1, 4)
+        # A high-leverage bad marker can drag the pose toward itself and make good
+        # tags look worse. Compare whole-tag leave-one-out fits before removing one.
+        trials = []
+        for index in range(len(ids)):
+            keep = np.ones(len(images), dtype=bool)
+            keep[index * 4:index * 4 + 4] = False
+            trial = solve_broadcast_corners(images[keep], objects[keep], image_size,
+                (layout.length_ft, layout.width_ft), (width / 2, height * sum(region) / 2))
+            if trial is not None:
+                trials.append((trial[1]["reprojection_px"], trial[1]["rms_reprojection_px"], index))
+        if not trials:
+            return None
+        worst = min(trials)[2]
+        rejected.append({"tag_id": ids.pop(worst), "median_error_px": float(np.median(errors[worst]))})
+    return None
+
+
 def _extra_points(extra_points) -> list[tuple[tuple[float, float], tuple[float, float]]]:
     points = []
     for point in extra_points:
@@ -189,8 +241,8 @@ def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0
               optimize_hfov=False) -> dict:
     """Calibrate either the carpet by camera pose or a single tag plane.
 
-    ``pose`` uses all observed AprilTag heights plus optional hand-marked carpet points. It needs
-    a horizontal FOV because broadcast files do not carry camera intrinsics. ``plane`` preserves
+    ``pose`` prefers surveyed corners and fits both focal axes for resized broadcast panels.
+    Tag centres plus optional carpet points use the supplied FOV as a fallback. ``plane`` preserves
     the old four-point fallback and maps to the dominant tag height, never silently to the carpet.
     """
     from . import homography as homography_module
@@ -247,6 +299,26 @@ def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0
         return result
 
     if method == "pose":
+        # Decoded corners retain both surveyed tag orientation and vertical extent.
+        # Use them when available instead of discarding almost all geometric evidence.
+        import numpy as np
+        corner_ids = [i for i in used_ids if len(sightings[i].corners) >= MIN_SIGHTINGS]
+        width, height = _video_size(video_path)
+        if len(corner_ids) >= 3 and not extra and width > 0 and height > 0:
+            corner_solve = fit_tag_corners(sightings, corner_ids, layout, (width, height), region)
+            if corner_solve is not None and corner_solve[0].trustworthy:
+                mapper, pose, corner_ids, images, objects = corner_solve
+                result.update(mapping_source=mapper.source, matrix=mapper.matrix, pose=pose,
+                              image_size=[width, height], point_count=len(images),
+                              tags_used=corner_ids,
+                              observed_corners={str(i): np.median(sightings[i].corners, axis=0).tolist()
+                                                for i in corner_ids},
+                              points=[{"image": a.tolist(), "field": b[:2].tolist()}
+                                      for a, b in zip(images, objects)],
+                              solution={"reprojection_px": pose["reprojection_px"],
+                                        "has_redundancy": True, "trustworthy": True})
+                return result
+            notes.append("corner pose did not pass reprojection checks; trying tag centres")
         image_points = [observed[tag_id] for tag_id in used_ids]
         field_points_3d = [
             (layout.tags[tag_id].x_ft, layout.tags[tag_id].y_ft, layout.tags[tag_id].z_ft)
@@ -298,6 +370,7 @@ def calibrate(video_path, layout_path=DEFAULT_LAYOUT, samples=SAMPLES, region=(0
             mapper, pose = solved
             result["matrix"] = mapper.matrix
             result["pose"] = pose
+            result["image_size"] = [width, height]
             result["solution"] = {
                 "reprojection_px": pose["reprojection_px"],
                 "has_redundancy": len(image_points) >= 7,
@@ -401,9 +474,8 @@ def main(argv=None) -> int:
                         help="fraction of frame height to search; use this when a broadcast "
                              "stacks two camera views, or tags from both get mixed into one fit")
     parser.add_argument("--method", choices=("pose", "plane", "carpet"), default="pose",
-                        help="carpet fits hand-marked carpet points directly and needs no tags or "
-                             "FOV -- the only method that works on this corpus, see the module "
-                             "docstring; pose uses non-coplanar tags; plane is the legacy "
+                        help="carpet fits hand-marked carpet points directly; pose fits surveyed "
+                             "tag corners and camera intrinsics; plane is the legacy "
                              "dominant-tag-height fallback")
     parser.add_argument("--hfov-deg", type=float, default=70.0,
                         help="horizontal camera FOV assumed by pose mode (measure it when possible)")
@@ -496,6 +568,8 @@ def main(argv=None) -> int:
         "trustworthy": solution["trustworthy"],
         "points": result["points"],
         "matrix": result["matrix"],
+        "image_size": result.get("image_size"),
+        "tags_used": result.get("tags_used", []),
     }
     if args.method == "pose":
         payload["pose"] = result["pose"]

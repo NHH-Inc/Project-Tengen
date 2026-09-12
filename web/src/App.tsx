@@ -202,7 +202,11 @@ export default function App() {
               <div className="video-source-main">
                 <span className="video-source-label">Video</span>
                 <span className="video-source-note stream">
-                  yt-dlp stream only · video and audio stay on localhost; no match file is downloaded.
+                  {job.localPath ? `Local match video · ${job.height}p · ${job.fps?.toFixed(2)} FPS`
+                    : 'Live video stream'}
+                  {shotState.goalCalibration?.source === 'apriltag_pose'
+                    ? ` · automatic goals from ${shotState.goalCalibration.tagsUsed.length} AprilTags`
+                    : shotState.goals.length > 0 ? ' · configured goal regions' : ''}
                 </span>
               </div>
             </div>
@@ -218,6 +222,7 @@ export default function App() {
               shots={shotState.shots}
               shotGoals={shotState.goals}
               goalEntries={shotState.goalEntries}
+              goalCameraGaps={shotState.goalCalibration?.cameraGaps}
               confidenceThreshold={confidenceThreshold}
               boxSampleRate={overlaySampleRate || job.fps || 30}
               selectedEventId={selectedEventId}

@@ -305,6 +305,87 @@ def solve_camera_pose(
     return mapper, pose
 
 
+def solve_broadcast_corners(image_points, field_points_3d, image_size, field_size,
+                            principal_point=None):
+    """Fit pose and both focal axes from decoded tag corners.
+
+    Composited broadcasts can squeeze the camera panel vertically. Assuming fx=fy
+    fits the nearly coplanar tag centres but extrapolates badly to the elevated rim.
+    Corner heights supply the missing vertical scale. At least three spatially
+    separated markers are required; a single marker cannot calibrate a broadcast.
+    """
+    import cv2
+    import numpy as np
+    from scipy.optimize import least_squares
+
+    obj = np.asarray(field_points_3d, dtype=float)
+    img = np.asarray(image_points, dtype=float)
+    if (len(obj) < 12 or obj.shape != (len(img), 3) or img.shape[1:] != (2,)
+            or not np.isfinite(obj).all() or not np.isfinite(img).all()
+            or np.linalg.matrix_rank(obj - obj.mean(axis=0)) < 3):
+        return None
+    width, height = image_size
+    cx, cy = principal_point or (width / 2, height / 2)
+
+    def unpack(values):
+        return (np.array([[np.exp(values[6]), 0, cx],
+                          [0, np.exp(values[7]), cy], [0, 0, 1]]),
+                values[:3], values[3:6])
+
+    def residual(values):
+        camera, rotation, translation = unpack(values)
+        predicted, _ = cv2.projectPoints(obj, rotation, translation, camera, None)
+        return (predicted.reshape(-1, 2) - img).ravel()
+
+    candidates = []
+    for fov in (45, 70, 100):
+        for aspect in (.55, 1.0, 1.6):
+            camera = camera_matrix_from_hfov(width, height, fov)
+            camera[1, 1] *= aspect
+            camera[0, 2], camera[1, 2] = cx, cy
+            try:
+                ok, rotation, translation = cv2.solvePnP(
+                    obj, img, camera, None, flags=cv2.SOLVEPNP_SQPNP)
+                if not ok:
+                    continue
+                initial = np.r_[rotation.ravel(), translation.ravel(),
+                                np.log(camera[0, 0]), np.log(camera[1, 1])]
+                fit = least_squares(residual, initial, loss="soft_l1", f_scale=1.5,
+                                    max_nfev=250, bounds=(
+                                        [-np.inf] * 6 + [np.log(width * .15)] * 2,
+                                        [np.inf] * 6 + [np.log(width * 8)] * 2))
+                camera, rotation, translation = unpack(fit.x)
+                matrix, _ = cv2.Rodrigues(rotation)
+                position = -matrix.T @ translation
+                depths = (obj @ matrix.T + translation)[:, 2]
+                if position[2] <= 6 or np.any(depths <= 0):
+                    continue
+                candidates.append((float(np.mean(residual(fit.x) ** 2)), fit.x))
+            except (cv2.error, ValueError):
+                continue
+    if not candidates:
+        return None
+    _, values = min(candidates, key=lambda item: item[0])
+    camera, rvec, tvec = unpack(values)
+    rotation, _ = cv2.Rodrigues(rvec)
+    error = np.linalg.norm(residual(values).reshape(-1, 2), axis=1)
+    forward = camera @ np.column_stack((rotation[:, :2], tvec))
+    if abs(np.linalg.det(forward)) < 1e-12:
+        return None
+    inverse = np.linalg.inv(forward)
+    inverse /= inverse[2, 2]
+    trustworthy = bool(np.max(error) <= MAX_POSE_REPROJECTION_PX)
+    mapper = Homography(inverse.tolist(), 0, *field_size, len(img), 0,
+                        "carpet_tag_corners", trustworthy)
+    pose = dict(camera_matrix=camera.tolist(), rvec=rvec.tolist(), tvec=tvec.tolist(),
+                camera_position_ft=(-rotation.T @ tvec).tolist(),
+                reprojection_px=float(np.max(error)),
+                rms_reprojection_px=float(np.sqrt(np.mean(error ** 2))),
+                focal_aspect_ratio=float(camera[1, 1] / camera[0, 0]),
+                hfov_deg=math.degrees(2 * math.atan(width / (2 * camera[0, 0]))))
+    return mapper, pose
+
+
 def solve(
     image_points: list[tuple[float, float]],
     field_points: list[tuple[float, float]],

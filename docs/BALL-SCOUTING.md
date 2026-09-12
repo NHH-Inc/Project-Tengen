@@ -57,6 +57,7 @@ python -m training.track_yolo `
   --model data\models\YOUR_MODEL\weights\best.pt `
   --video data\segments\MATCH.mp4 `
   --output data\jobs\BALL_TEST\tracks.jsonl `
+  --auto-homography `
   --ball-config analysis\config\ball_scouting.my-camera.json `
   --shots-output data\jobs\BALL_TEST\shots.jsonl `
   --annotated-output data\jobs\BALL_TEST\annotated.mp4
@@ -68,7 +69,7 @@ broadcast image.
 
 ## Tune in this order
 
-1. Leave `goals` empty. Tune `hsv_lower`/`hsv_upper`, pixel size, circularity, fill, and aspect
+1. Set `auto_goals` to `false` while tuning detection alone. Tune `hsv_lower`/`hsv_upper`, pixel size, circularity, fill, and aspect
    limits until the yellow outlines in `annotated.mp4` cover real balls without covering field
    graphics or robot decorations. Temporarily set `debug.show_mask` to `true` to see the binary
    HSV mask in the lower-right corner.
@@ -81,8 +82,8 @@ broadcast image.
    `pulse_minimum_prominence` is an absolute occupancy change and `pulse_relative_prominence`
    controls how deep a valley must be to separate adjacent peaks. Gate spacing is measured in
    ball radii. The carried-ball state machine remains available for longer observed launches.
-4. Add goal geometry and tune it on visible crossings. Green boundaries are makes and red
-   boundaries are explicit misses.
+4. Restore automatic goals and run `--auto-homography`, or supply explicit camera-specific
+   geometry. Inspect visible crossings. Green boundaries are makes and red boundaries are explicit misses.
 
 Thresholds ending in `_ratio_per_second` are fractions of the processed-frame diagonal per
 second, so they remain meaningful across frame rates and nearby resolutions. Size filters are in
@@ -90,6 +91,20 @@ pixels because apparent ball size changes strongly with a camera's position; kee
 configuration per camera/view.
 
 ## Goal geometry
+
+With `--auto-homography` (or a trusted `--homography` pose), an empty `goals` list now projects
+the 2026 hub funnels automatically. Calibration retains all four AprilTag corners and fits
+horizontal and vertical focal scales separately to handle squeezed broadcast panels. The carpet
+homography locates robots; the associated 3-D camera pose locates the elevated openings.
+Explicit goal regions take precedence, and `auto_goals: false` disables generation.
+
+The effective `ball_scouting.config.json` records generated boundaries, tag IDs, calibration
+residual and camera validity intervals. Two decoded tags must remain near their calibrated
+positions. A recently verified pose survives up to 3 seconds of unreadable tags, with retries
+every 0.1 seconds instead of every second. Detected cuts or timestamp gaps immediately discard
+that grace period; sustained tag loss also pauses counting. Returning to the calibrated view
+resumes it. The player hides stale goal regions during those intervals. See
+[automatic-goal validation](AUTO-GOALS-VALIDATION.md) for the real-match test and commands.
 
 Goal counting runs independently of launch counting in `training/goal_scoring.py`. It can
 count a visible basket entry even when the launch was hidden or its ball track was lost.
@@ -129,7 +144,7 @@ evidence from duplicate tracks is fused. Confidence values are heuristic, not pr
 Einstein Final 1 wide view with the default crop. Select it with `--ball-config` (or `--config`
 for replay), or set `FRC_BALL_SCOUTING_CONFIG` to that path and restart the ingest service for
 new runs of that view. It is **not a universal camera calibration**. The general example keeps
-goals empty; uncalibrated runs display an explicit notice instead of an apparent zero makes.
+goals empty for automatic generation; runs without a trusted 3-D pose display an explicit notice.
 Recalibrate after changing camera angle, crop or zoom. The scoreboard hides part of this
 sample's flight paths, so visible entries can be counted while their source remains unknown.
 

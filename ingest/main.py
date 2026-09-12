@@ -774,6 +774,7 @@ def get_job_shots(job_id: str, db: Session = Depends(get_db)):
         "shots": shots,
         "statistics": shot_statistics(shots),
         "goals": config.get("goals", []) if isinstance(config, dict) else [],
+        "goal_calibration": config.get("goal_calibration") if isinstance(config, dict) else None,
         "goal_entries": entries,
         "goal_statistics": goal_statistics(entries),
     }

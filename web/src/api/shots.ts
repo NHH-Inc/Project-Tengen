@@ -65,6 +65,7 @@ export interface ShotResponse {
   statistics: ShotCounts & { perRobot: Record<string, ShotCounts> };
   goals: ShotGoal[];
   goalEntries: GoalEntry[];
+  goalCalibration?: { source: string; tagsUsed: number[]; cameraGaps: [number, number | null][] };
 }
 
 interface WireShotPoint {
@@ -128,6 +129,7 @@ export interface WireShotResponse {
   statistics: WireCounts;
   goals: WireGoal[];
   goal_entries?: WireGoalEntry[];
+  goal_calibration?: { source?: string; tags_used?: number[]; camera_gaps?: [number, number | null][] } | null;
 }
 
 const EMPTY_COUNTS = (): ShotCounts => ({ attempted: 0, made: 0, missed: 0, unknown: 0 });
@@ -242,6 +244,13 @@ export function parseShotResponse(raw: WireShotResponse): ShotResponse {
       perRobot: counts.per_robot ?? {},
     },
     goals,
+    goalCalibration: raw.goal_calibration && typeof raw.goal_calibration.source === 'string'
+      ? { source: raw.goal_calibration.source,
+        tagsUsed: (raw.goal_calibration.tags_used ?? []).filter(Number.isInteger),
+        cameraGaps: (raw.goal_calibration.camera_gaps ?? []).filter((gap) => Array.isArray(gap)
+          && gap.length === 2 && Number.isFinite(gap[0]) && gap[0] >= 0
+          && (gap[1] === null || (Number.isFinite(gap[1]) && gap[1] >= gap[0]))) }
+      : undefined,
     goalEntries: (raw.goal_entries ?? []).flatMap((entry): GoalEntry[] => {
       if (typeof entry.entry_id !== 'string' || typeof entry.region_id !== 'string'
           || typeof entry.goal !== 'string' || !Number.isFinite(entry.t_seconds)

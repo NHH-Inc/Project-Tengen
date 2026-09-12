@@ -52,6 +52,24 @@ class Tag:
     x_ft: float
     y_ft: float
     z_ft: float
+    quaternion: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+
+    def corners_ft(self, size_inches: float = 6.5):
+        """OpenCV 36h11 decoded corner order in WPILib's tag coordinate frame.
+
+        OpenCV's dictionary origin is the printed marker's bottom-right for the
+        official WPILib targets: BR, BL, TL, TR as viewed facing an upright tag.
+        This is decoded orientation, not sorting corners by image coordinates.
+        """
+        import numpy as np
+        from scipy.spatial.transform import Rotation
+
+        w, x, y, z = self.quaternion
+        rotation = Rotation.from_quat([x, y, z, w]).as_matrix()
+        half = size_inches / 24.0
+        local = np.array([[0, half, -half], [0, -half, -half],
+                          [0, -half, half], [0, half, half]])
+        return local @ rotation.T + [self.x_ft, self.y_ft, self.z_ft]
 
     @property
     def height_key(self) -> int:
@@ -98,6 +116,8 @@ def load_layout(path: Path | str) -> FieldLayout:
             x_ft=translation["x"] * METRES_TO_FEET,
             y_ft=translation["y"] * METRES_TO_FEET,
             z_ft=translation["z"] * METRES_TO_FEET,
+            quaternion=tuple(entry["pose"]["rotation"]["quaternion"][key]
+                             for key in ("W", "X", "Y", "Z")),
         )
 
     return FieldLayout(

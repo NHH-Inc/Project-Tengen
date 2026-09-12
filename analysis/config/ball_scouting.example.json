@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "enabled": true,
-  "_comment": "All coordinates are normalized to the YOLO model crop, not the uncropped broadcast frame. Start with goals empty to tune yellow detection and launch tracking, then add manually measured goal geometry.",
+  "_comment": "Coordinates are normalized to the YOLO model crop. Empty goals are automatically projected from a trusted 2026 AprilTag camera pose. Explicit goal regions take precedence; auto_goals:false disables automatic placement.",
   "detector": {
     "hsv_lower": [
       20,

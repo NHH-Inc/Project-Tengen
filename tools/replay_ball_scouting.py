@@ -82,6 +82,8 @@ def main():
     parser.add_argument("--reference-shots")
     parser.add_argument("--tolerance-seconds", type=float, default=0.075)
     parser.add_argument("--annotated", action="store_true")
+    parser.add_argument("--homography", help="camera calibration used to fill an empty goals list")
+    parser.add_argument("--auto-homography", action="store_true")
     args = parser.parse_args()
     left, top, right, bottom = args.crop
     if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
@@ -90,9 +92,6 @@ def main():
         parser.error("tolerance must be positive")
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=False)
-    analyzer = BallShotAnalyzer(load_ball_scouting_config(args.config))
-    (output / "ball_scouting.config.json").write_text(
-        Path(args.config).read_text(encoding="utf-8"), encoding="utf-8")
     robots = CachedRobots(args.robot_tracks)
     capture = cv2.VideoCapture(args.video)
     if not capture.isOpened():
@@ -100,6 +99,21 @@ def main():
     fps = capture.get(cv2.CAP_PROP_FPS)
     if not np.isfinite(fps) or fps <= 0:
         raise ValueError("Video has no valid source frame rate")
+    calibration_path = args.homography
+    if args.auto_homography and not calibration_path:
+        from ingest.collection.calibrate import calibrate
+        calibration = calibrate(args.video, region=(top, bottom), samples=24, optimize_hfov=True)
+        calibration_path = output / "homography.json"
+        calibration_path.write_text(json.dumps(calibration, indent=2) + "\n", encoding="utf-8")
+    config_path = Path(args.config)
+    if calibration_path:
+        from training.auto_goals import configure_auto_goals
+        config_path = configure_auto_goals(config_path, calibration_path,
+            (int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))),
+            args.crop, output / "ball_scouting.config.json")
+    if config_path.resolve() != (output / "ball_scouting.config.json").resolve():
+        (output / "ball_scouting.config.json").write_text(config_path.read_text(encoding="utf-8"), encoding="utf-8")
+    analyzer = BallShotAnalyzer(load_ball_scouting_config(config_path))
     writer = None
     index = 0
     started = time.perf_counter()
@@ -138,11 +152,14 @@ def main():
     elapsed = time.perf_counter() - started
     write_shot_records(output / "shots.jsonl", analyzer.shots)
     write_goal_entries(output / "goal_entries.jsonl", analyzer.goal_entries)
+    from training.auto_goals import save_camera_gaps
+    save_camera_gaps(output / "ball_scouting.config.json", analyzer.goal_camera_gaps)
     report = dict(video=args.video, robot_tracks=args.robot_tracks, source_fps=fps,
                   frames_analyzed=index, frame_stride=1, wall_seconds=elapsed,
                   processing_fps=index / max(elapsed, 1e-9), counts=shot_statistics(analyzer.shots),
                   methods=dict(Counter(analyzer.shot_methods.values())),
                   goal_counts=goal_statistics(analyzer.goal_entries),
+                  goal_camera_gaps=analyzer.goal_camera_gaps,
                   accuracy="unmeasured: no human-labelled reference supplied")
     (output / "shot_methods.json").write_text(json.dumps(analyzer.shot_methods, indent=2) + "\n",
                                              encoding="utf-8")

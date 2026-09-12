@@ -338,7 +338,7 @@ class YoloAnalysisOrchestrator:
                 f"Auto-calibrated from {video_path.name} using AprilTags {result.get('tags_used', [])}. "
                 "Valid for this fixed camera pose only."
             ),
-            "mapping_source": "carpet_pose",
+            "mapping_source": result.get("mapping_source", "carpet_pose"),
             "field_length_ft": layout.length_ft,
             "field_width_ft": layout.width_ft,
             "plane_height_ft": 0.0,
@@ -348,6 +348,8 @@ class YoloAnalysisOrchestrator:
             "points": result.get("points", []),
             "matrix": result["matrix"],
             "pose": result.get("pose"),
+            "image_size": result.get("image_size"),
+            "tags_used": result.get("tags_used", []),
         }
         path = job_dir / "homography.json"
         path.write_text(json.dumps(calibration, indent=2) + "\n", encoding="utf-8")
