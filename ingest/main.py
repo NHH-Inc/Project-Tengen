@@ -45,7 +45,7 @@ from .serializers import (
     track_to_dict,
     validate_event_fields,
 )
-from training.ball_scouting import shot_statistics
+from .shot_stats import goal_statistics, shot_statistics
 
 app = FastAPI(title="FRC Auto-Scouting Ingest Service")
 
@@ -763,7 +763,6 @@ def get_job_shots(job_id: str, db: Session = Depends(get_db)):
         config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
     except (OSError, json.JSONDecodeError):
         config = {}
-    from training.goal_scoring import goal_statistics
     entries_path = path.with_name("goal_entries.jsonl")
     try:
         entries = [json.loads(line) for line in entries_path.read_text(encoding="utf-8").splitlines()
