@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApi, type CreateJobInput } from '../api';
+import { getApi, type CreateJobInput, type UploadJobInput } from '../api';
 import type { ContractViolation, Job } from '../contracts';
 import { ACTIVE_STATUSES } from '../lib/format';
 
@@ -70,6 +70,16 @@ export function useJobs(pollMs = 1500) {
     [load]
   );
 
+  const uploadJob = useCallback(
+    async (input: UploadJobInput) => {
+      const api = await getApi();
+      const { data } = await api.uploadJob(input);
+      await load();
+      return data;
+    },
+    [load]
+  );
+
   const deleteJob = useCallback(
     async (jobId: string) => {
       const api = await getApi();
@@ -91,5 +101,5 @@ export function useJobs(pollMs = 1500) {
     [load]
   );
 
-  return { ...state, reload: load, createJob, deleteJob, retryJob };
+  return { ...state, reload: load, createJob, uploadJob, deleteJob, retryJob };
 }

@@ -5,15 +5,27 @@ when the implementation behind it is thin. A missing endpoint is indistinguishab
 broken one at the browser.
 """
 
+import base64
 import json
 import os
 import shutil
+import subprocess
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -226,6 +238,52 @@ else:
     analysis_orchestrator = native_analysis_orchestrator
 
 
+#: capture_mode for a recording uploaded from this machine -- a phone or webcam at an event --
+#: rather than streamed from YouTube. Such a job owns its file: there is no link to fetch it
+#: again from, so nothing may treat that file as a disposable cache.
+LOCAL_CAPTURE = "local"
+UPLOAD_SUFFIXES = {".mp4", ".mkv", ".mov", ".m4v", ".webm", ".avi"}
+
+
+def _local_video_id(job_id: str) -> str:
+    """An identifier that satisfies Contract A's video_id pattern for a job with no YouTube video.
+
+    Contract A requires an 11-character [A-Za-z0-9_-] video_id on every job, the database column
+    is NOT NULL, and the native analyzer reads it as a string. Relaxing the contract the night
+    before an event would reach all three, so a local job derives a stable id from its job_id
+    instead. It names nothing on YouTube: capture_mode "local" is what tells a client not to
+    build a watch link from it.
+    """
+    return base64.urlsafe_b64encode(uuid.UUID(job_id).bytes).decode("ascii")[:11]
+
+
+def _browser_playable(path: Path) -> Path:
+    """Remux a recording into MP4 so the web player can seek it; the video is not re-encoded.
+
+    A webcam capture is best written as MKV, which survives a crash mid-recording, but browsers
+    and /api/video expect MP4. Copying the streams into a new container takes seconds. If the
+    codec cannot live in MP4, the original is kept: the analyzer reads it either way, only the
+    in-browser preview is lost.
+    """
+    if path.suffix.lower() == ".mp4":
+        return path
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return path
+    target = path.with_suffix(".mp4")
+    completed = subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-i", str(path), "-map", "0:v:0", "-map", "0:a?",
+         "-c", "copy", "-movflags", "+faststart", str(target)],
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0 or not target.is_file() or target.stat().st_size == 0:
+        target.unlink(missing_ok=True)
+        return path
+    path.unlink(missing_ok=True)
+    return target
+
+
 def _media_window(url: str, info: dict) -> tuple[float, float, bool]:
     """Resolve the local segment window from metadata and an optional URL timestamp."""
     total_duration = info.get("duration")
@@ -379,6 +437,77 @@ async def create_job(
     return job_to_dict(db_job)
 
 
+def _save_upload(upload: UploadFile, target: Path) -> None:
+    with target.open("wb") as handle:
+        shutil.copyfileobj(upload.file, handle, length=8 * 1024 * 1024)
+
+
+@app.post("/api/jobs/upload")
+async def upload_job(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    match_id: str | None = Form(None),
+    season: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Queue a recording made on this machine -- a phone or webcam at an event -- for analysis.
+
+    YouTube jobs stream and never touch disk; this is the other way in, for footage that was
+    never uploaded anywhere. The file is kept under FRC_DATA_DIR/uploads and the job starts at
+    "downloaded", since there is nothing left to fetch.
+    """
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in UPLOAD_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported video type {suffix or '(none)'}; use one of "
+            + ", ".join(sorted(UPLOAD_SUFFIXES)),
+        )
+    match_id = (match_id or "").strip() or None
+
+    job_id = str(uuid.uuid4())
+    upload_dir = Path(data_dir) / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = upload_dir / f"{job_id}{suffix}"
+    try:
+        await run_in_threadpool(_save_upload, file, raw_path)
+        media_path = await run_in_threadpool(_browser_playable, raw_path)
+        media = await run_in_threadpool(video_downloader.probe_media, str(media_path))
+    except Exception as exc:
+        for leftover in (raw_path, raw_path.with_suffix(".mp4")):
+            leftover.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Could not read that video: {exc}")
+    finally:
+        await file.close()
+
+    db_job = models.Job(
+        job_id=job_id,
+        video_id=_local_video_id(job_id),
+        match_id=match_id,
+        season=int(season or DEFAULT_SEASON),
+        capture_mode=LOCAL_CAPTURE,
+        local_path=str(media_path.resolve()),
+        status="downloaded",
+        attempt=1,
+        start_offset=0.0,
+        duration=media["duration"],
+        fps=media["fps"],
+        width=media["width"],
+        height=media["height"],
+    )
+    if db_job.match_id:
+        alliances, tba_score = tba_client.alliances_and_score(db_job.match_id)
+        db_job.alliances = alliances
+        db_job.tba_score = tba_score
+
+    db.add(db_job)
+    db.commit()
+    db.refresh(db_job)
+
+    background_tasks.add_task(process_job, job_id, "", False)
+    return job_to_dict(db_job)
+
+
 @app.get("/api/jobs")
 def list_jobs(db: Session = Depends(get_db)):
     jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
@@ -443,6 +572,10 @@ async def retry_job(
     job.attempt = (job.attempt or 1) + 1
     db.commit()
     db.refresh(job)
+    if job.capture_mode == LOCAL_CAPTURE:
+        # A local job's video_id names nothing on YouTube; its file is the source.
+        background_tasks.add_task(process_job, job_id, "", False)
+        return job_to_dict(job)
     retry_url = f"https://www.youtube.com/watch?v={job.video_id}"
     if job.start_offset:
         retry_url += f"&t={job.start_offset}s"
@@ -469,32 +602,43 @@ def _process_job(job_id: str, url: str, live_capture: bool = False):
             setattr(job, key, value)
         db.commit()
 
+    local = job.capture_mode == LOCAL_CAPTURE
     try:
-        set_status("downloading", stage="downloading", progress=0.0)
-
-        info = video_downloader.get_video_info(url)
-        if live_capture:
-            # Live streams have no finite duration at queue time. The stream analyzer publishes
-            # the final duration when the broadcast ends.
-            start_offset, duration = 0.0, None
+        if local:
+            # The recording is already on disk and was probed on upload. No stream_url is sent,
+            # so the analyzer falls back to local_path -- the path both backends already read.
+            if not job.local_path or not os.path.isfile(job.local_path):
+                raise FileNotFoundError(f"The uploaded recording is unavailable: {job.local_path}")
+            stream_url = None
+            duration = job.duration
+            fps = job.fps or 30.0
+            width, height = job.width or 1920, job.height or 1080
         else:
-            start_offset, duration, _full_video = _media_window(url, info)
-        fps = info.get("fps") or 30.0
-        width, height = info.get("width") or 1920, info.get("height") or 1080
-        stream_url = _analysis_stream_url(job.video_id, start_offset)
+            set_status("downloading", stage="downloading", progress=0.0)
 
-        # Only metadata is persisted. Both the model and browser consume the yt-dlp stream;
-        # no downloaded segment is created or attached to the job.
-        set_status(
-            "downloaded",
-            local_path=None,
-            start_offset=start_offset,
-            duration=duration,
-            fps=fps,
-            width=width,
-            height=height,
-            stage=None,
-        )
+            info = video_downloader.get_video_info(url)
+            if live_capture:
+                # Live streams have no finite duration at queue time. The stream analyzer
+                # publishes the final duration when the broadcast ends.
+                start_offset, duration = 0.0, None
+            else:
+                start_offset, duration, _full_video = _media_window(url, info)
+            fps = info.get("fps") or 30.0
+            width, height = info.get("width") or 1920, info.get("height") or 1080
+            stream_url = _analysis_stream_url(job.video_id, start_offset)
+
+            # Only metadata is persisted. Both the model and browser consume the yt-dlp stream;
+            # no downloaded segment is created or attached to the job.
+            set_status(
+                "downloaded",
+                local_path=None,
+                start_offset=start_offset,
+                duration=duration,
+                fps=fps,
+                width=width,
+                height=height,
+                stage=None,
+            )
 
         set_status("analyzing", stage="detecting", progress=0.0)
 
@@ -503,7 +647,8 @@ def _process_job(job_id: str, url: str, live_capture: bool = False):
         job_data.pop("progress", None)
         job_data.pop("stage", None)
         job_data.pop("created_at", None)
-        job_data["stream_url"] = stream_url
+        if stream_url:
+            job_data["stream_url"] = stream_url
 
         def on_progress(progress, stage):
             # Contract D streams this so a progress bar can exist; component 3 draws it, so
@@ -522,7 +667,9 @@ def _process_job(job_id: str, url: str, live_capture: bool = False):
             duration = float(final_duration)
         set_status(
             "complete",
-            local_path=None,
+            # A stream job never had a file. A local job's file is the recording itself, and the
+            # player needs it after analysis -- clearing it here would orphan the upload.
+            local_path=job.local_path if local else None,
             duration=duration,
             fps=result_metadata.get("box_sample_rate") or fps,
             width=width,

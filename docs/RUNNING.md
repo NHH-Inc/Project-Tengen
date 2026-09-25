@@ -360,6 +360,55 @@ processing the VOD. Start it only when you have enough free disk for the broadca
 your home ingest machine rather than school hardware. If the source is not currently live, the
 queue tells you to use ordinary video mode instead.
 
+### Analyse your own recording (phone or webcam)
+
+For an event with no YouTube stream, record each match yourself and upload the file: in the
+sidebar, **Or upload a recording** → pick the file → **Upload and analyze**. Add the TBA match key
+if you know it (e.g. `2026flroc_qm12`) so the six teams come from The Blue Alliance.
+
+- MP4, MKV, MOV, M4V, WebM and AVI are accepted. An MKV is remuxed to MP4 for the browser player;
+  the video itself is not re-encoded, so this takes seconds.
+- The file is kept under `data\uploads\`. Unlike a YouTube segment it is the only copy the app
+  has, so the retention sweep never deletes it. Removing the job does.
+- Record on a tripod, as high as you can get, landscape, whole field in frame. The detector was
+  trained on elevated broadcast shots; a low angle from the stands is new to it.
+- Raw footage has no broadcast scoreboard overlay, so nothing can be read off-screen: teams come
+  from the match key, or from bumpers.
+
+To record from a webcam on the analysis laptop itself (MKV survives a crash mid-match):
+
+```powershell
+ffmpeg -f dshow -video_size 1920x1080 -framerate 30 -i video="HP FHD Camera" -c:v libx264 -preset veryfast -crf 20 match01.mkv
+```
+
+`ffmpeg -list_devices true -f dshow -i dummy` lists the camera names; a phone linked through
+Windows Phone Link appears there too. Press **q** to stop.
+
+### Running the YOLO analyser on a laptop with no NVIDIA GPU
+
+Install CPU PyTorch into its own environment, then point `ingest\.env` at it:
+
+```powershell
+py -3.13 -m venv C:\yolo11-venv
+C:\yolo11-venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+C:\yolo11-venv\Scripts\python -m pip install -r training\requirements-yolo.txt "lap>=0.5.12"
+```
+
+```ini
+FRC_ANALYSIS_BACKEND=yolo
+YOLO_PYTHON=C:\yolo11-venv\Scripts\python.exe
+YOLO_MODEL_PATH=data\models\best.pt
+FRC_YOLO_DEVICE=cpu
+```
+
+`FRC_YOLO_DEVICE` defaults to `0`, the first CUDA GPU, which a laptop with integrated graphics does
+not have. Measured on an Intel Core Ultra 7 255U with the stock yolo11n weights: **13.2 fps at
+960, 24.1 fps at 640**, detection only. A 2:30 match analysed every frame is therefore about six
+minutes at 960 before tracking and ball scouting are added. Set `FRC_YOLO_IMAGE_SIZE=640` to halve
+that if a queue builds up, at the cost of small robots: on the held-out 2026 pack, the same
+weights found 5.61 robots a frame at 640 against 6.34 at 960. Keep the laptop plugged in; on
+battery it throttles.
+
 ---
 
 ## Part 4 — labelling frames with the local models

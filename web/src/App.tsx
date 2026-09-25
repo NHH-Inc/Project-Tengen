@@ -134,6 +134,12 @@ export default function App() {
           setSelectedEventId(null);
           return created;
         }}
+        onUpload={async (input) => {
+          const created = await jobsState.uploadJob(input);
+          setSelectedJobId(created.jobId);
+          setSelectedEventId(null);
+          return created;
+        }}
         onDelete={jobsState.deleteJob}
         onRetry={jobsState.retryJob}
       />

@@ -30,6 +30,13 @@ export interface CreateJobInput {
   liveCapture?: boolean;
 }
 
+/** POST /api/jobs/upload: a recording made on this machine rather than a YouTube link. */
+export interface UploadJobInput {
+  file: File;
+  matchId?: string | null;
+  season?: number | null;
+}
+
 export interface ExportInput {
   matchIds: string[];
   mode: 'raw' | 'aggregate';
@@ -47,6 +54,8 @@ export interface ScoutingApi {
   listJobs(): Promise<Parsed<Job[]>>;
   getJob(jobId: string): Promise<Parsed<Job | null>>;
   createJob(input: CreateJobInput): Promise<Parsed<Job>>;
+  /** Upload a phone or webcam recording; it is analyzed from disk, never fetched from YouTube. */
+  uploadJob(input: UploadJobInput): Promise<Parsed<Job>>;
   deleteJob(jobId: string): Promise<void>;
   /**
    * Reuses the job id for both failed retries and completed-job re-runs. Resets status to queued,

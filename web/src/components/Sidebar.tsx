@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { UploadJobInput } from '../api';
 import type { ContractViolation, Job } from '../contracts';
 import { STATUS_LABEL, fmtPercent, isMatchKey, parseVideoId } from '../lib/format';
 
@@ -14,6 +15,7 @@ export interface SidebarProps {
   apiMode: 'http' | 'fixture';
   onSelectJob: (jobId: string) => void;
   onCreate: (input: { url: string; matchId?: string | null; liveCapture?: boolean }) => Promise<unknown>;
+  onUpload: (input: UploadJobInput) => Promise<unknown>;
   onDelete: (jobId: string) => Promise<void>;
   onRetry: (job: Job) => Promise<unknown>;
 }
@@ -28,6 +30,7 @@ export function Sidebar(props: SidebarProps) {
     apiMode,
     onSelectJob,
     onCreate,
+    onUpload,
     onDelete,
     onRetry,
   } = props;
@@ -41,7 +44,7 @@ export function Sidebar(props: SidebarProps) {
         </span>
       </header>
 
-      <NewJobForm onCreate={onCreate} />
+      <NewJobForm onCreate={onCreate} onUpload={onUpload} />
 
       <section className="queue">
         <h2>
@@ -68,10 +71,15 @@ export function Sidebar(props: SidebarProps) {
 
 function NewJobForm({
   onCreate,
+  onUpload,
 }: {
   onCreate: (input: { url: string; matchId?: string | null; liveCapture?: boolean }) => Promise<unknown>;
+  onUpload: (input: UploadJobInput) => Promise<unknown>;
 }) {
   const [url, setUrl] = useState('');
+  // A recording from a phone or webcam at the event. When one is picked it replaces the link.
+  const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [matchId, setMatchId] = useState('');
   const [liveCapture, setLiveCapture] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,6 +91,24 @@ function NewJobForm({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProblem(null);
+    if (file) {
+      if (!matchOk) {
+        setProblem('Match key looks wrong. TBA keys are lowercase, like 2026casf_qm42.');
+        return;
+      }
+      setBusy(true);
+      try {
+        await onUpload({ file, matchId: matchId.trim() || null });
+        setFile(null);
+        setMatchId('');
+        if (fileInput.current) fileInput.current.value = '';
+      } catch (err) {
+        setProblem((err as Error).message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!videoId) {
       setProblem('That does not contain an 11-character YouTube video ID.');
       return;
@@ -113,10 +139,25 @@ function NewJobForm({
           type="text"
           value={url}
           placeholder="https://youtube.com/watch?v=…"
+          disabled={file !== null}
           onChange={(e) => setUrl(e.target.value)}
         />
       </label>
-      {url && (
+      <label>
+        Or upload a recording <span className="muted">phone or webcam</span>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="video/*,.mkv"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+      </label>
+      {file && (
+        <p className="hint ok">
+          {file.name} · {(file.size / 1024 / 1024).toFixed(0)} MB
+        </p>
+      )}
+      {!file && url && (
         <p className={`hint ${videoId ? 'ok' : 'bad'}`}>
           {videoId ? `video ${videoId}` : 'no video ID found'}
         </p>
@@ -130,6 +171,7 @@ function NewJobForm({
           onChange={(e) => setMatchId(e.target.value)}
         />
       </label>
+      {!file && (
       <label className="check">
         <input
           type="checkbox"
@@ -138,7 +180,8 @@ function NewJobForm({
         />
         Capture this live stream
       </label>
-      {liveCapture && (
+      )}
+      {!file && liveCapture && (
         <p className="hint">
           The link must be live now. This computer records until YouTube ends the stream, then
           analyzes the finished video. It does not create scouting data during the match.
@@ -146,7 +189,15 @@ function NewJobForm({
       )}
       {!matchOk && <p className="hint bad">lowercase TBA key, e.g. 2026casf_qm42</p>}
       <button type="submit" disabled={busy}>
-        {busy ? 'Queueing…' : liveCapture ? 'Start live capture' : 'Queue video'}
+        {busy
+          ? file
+            ? 'Uploading…'
+            : 'Queueing…'
+          : file
+            ? 'Upload and analyze'
+            : liveCapture
+              ? 'Start live capture'
+              : 'Queue video'}
       </button>
       {problem && <p className="error">{problem}</p>}
     </form>
@@ -192,7 +243,11 @@ function JobCard({
           <span className="job-status">{STATUS_LABEL[job.status]}</span>
         </div>
         <div className="job-sub">
-          <code>{job.videoId}</code>
+          {job.captureMode === 'local' ? (
+            <span className="muted">uploaded recording</span>
+          ) : (
+            <code>{job.videoId}</code>
+          )}
           {job.startOffset > 0 && (
             <span className="muted" title="Segment clipped out of a longer stream">
               +{Math.round(job.startOffset)}s

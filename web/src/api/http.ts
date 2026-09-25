@@ -24,6 +24,7 @@ import {
 import {
   ApiError,
   type CreateJobInput,
+  type UploadJobInput,
   type EventQuery,
   type ExportInput,
   type Parsed,
@@ -63,7 +64,7 @@ export class HttpApi implements ScoutingApi {
         ...init,
         headers: {
           Accept: 'application/json',
-          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(typeof init?.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
           ...init?.headers,
         },
       });
@@ -112,6 +113,18 @@ export class HttpApi implements ScoutingApi {
     const raw = await this.request<WireJob>('/jobs', { method: 'POST', body: JSON.stringify(body) });
     const job = parseJob(raw, log);
     if (!job) throw new ApiError('Ingest returned a job that failed contract validation', 200, '/jobs');
+    return { data: job, violations: log.items };
+  }
+
+  async uploadJob(input: UploadJobInput): Promise<Parsed<Job>> {
+    const log = new ViolationLog();
+    const form = new FormData();
+    form.append('file', input.file, input.file.name);
+    if (input.matchId) form.append('match_id', input.matchId);
+    if (input.season) form.append('season', String(input.season));
+    const raw = await this.request<WireJob>('/jobs/upload', { method: 'POST', body: form });
+    const job = parseJob(raw, log);
+    if (!job) throw new ApiError('Ingest returned a job that failed contract validation', 200, '/jobs/upload');
     return { data: job, violations: log.items };
   }
 

@@ -34,6 +34,11 @@ def sweep(db, grace_days: float | None = None, dry_run: bool = False) -> dict:
     for job in db.query(models.Job).filter(models.Job.status == "complete").all():
         if not job.local_path:
             continue
+        # An uploaded recording is not a cache. The premise above -- media can be fetched again
+        # -- holds for a YouTube segment and fails for a phone recording, where this file is the
+        # only copy the app has.
+        if job.capture_mode == "local":
+            continue
         updated = job.updated_at
         if updated is not None and updated.tzinfo is None:
             updated = updated.replace(tzinfo=datetime.timezone.utc)

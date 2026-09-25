@@ -827,7 +827,9 @@ export function VideoPlayer({
           Fullscreen
         </button>
 
-        {/* The one place component 3 adds start_offset -- doc 0 says nothing else ever should. */}
+        {/* The one place component 3 adds start_offset -- doc 0 says nothing else ever should.
+            An uploaded recording has no YouTube original, so it gets no link. */}
+        {job.captureMode !== 'local' && (
         <a
           className="yt-link"
           href={youtubeUrlAt(job.videoId, time, job.startOffset)}
@@ -837,6 +839,7 @@ export function VideoPlayer({
         >
           Open on YouTube ↗
         </a>
+        )}
       </div>
 
       {selected && (

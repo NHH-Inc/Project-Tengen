@@ -28,6 +28,13 @@ param(
     [string]$Command = 'help'
 )
 
+# Node, Python and pytest all write UTF-8, but Windows PowerShell decodes a native program's
+# output with the console's legacy code page, so an em dash arrives as three garbled characters
+# (this comment stays ASCII: PowerShell 5.1 reads a BOM-less script as ANSI). Decoding as UTF-8
+# fixes every tool at once, and it is what the console should have been doing anyway.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+
 # NOT 'Stop'. In PowerShell 5.1 anything a native exe writes to stderr becomes an ErrorRecord,
 # so a harmless deprecation warning from pytest or uvicorn aborts the whole script even though
 # the process exited 0. Exit codes are checked explicitly instead.
