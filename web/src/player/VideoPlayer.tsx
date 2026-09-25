@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { PlayableJob, Track } from '../contracts';
 import { scoringCountsAt, type GoalEntry, type ShotGoal, type ShotRecord } from '../api/shots';
 import type { ViewEvent } from '../lib/corrections';
@@ -122,7 +122,8 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<HTMLElement | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(1);
@@ -586,10 +587,21 @@ export function VideoPlayer({
   const selected = events.find((e) => e.eventId === selectedEventId) ?? null;
   const phasePct = positionPct;
 
+  // The whole player goes fullscreen, never the stage alone. A fullscreen element is forced to
+  // the size of the screen, which overrode the stage's aspect ratio: the video stayed sized by its
+  // width while the box overlay stretched to the screen, and every box drifted off its robot. The
+  // stage now keeps its shape inside the fullscreen player (see .player:fullscreen in styles.css),
+  // and the scrub bar and controls stay usable.
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === playerRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else await stageRef.current?.requestFullscreen();
+      else await playerRef.current?.requestFullscreen();
     } catch {
       setMediaError('This browser did not allow fullscreen playback.');
     }
@@ -598,113 +610,117 @@ export function VideoPlayer({
   const videoCrop = job.captureMode === 'local' ? FULL_FRAME : BROADCAST_CROP;
   const videoCropWidth = videoCrop.right - videoCrop.left;
   const videoCropHeight = videoCrop.bottom - videoCrop.top;
+  const stageWidth = (sourceSize?.width ?? job.width) * videoCropWidth;
+  const stageHeight = (sourceSize?.height ?? job.height) * videoCropHeight;
 
   return (
-    <section className="player">
-      <div
-        ref={stageRef}
-        className="player-stage"
-        style={{
-          aspectRatio: sourceSize
-            ? `${sourceSize.width * videoCropWidth} / ${sourceSize.height * videoCropHeight}`
-            : `${job.width * videoCropWidth} / ${job.height * videoCropHeight}`,
-        }}
-      >
-        <video
-          ref={videoRef}
-          className="player-video"
-          src={src}
-          preload="auto"
-          playsInline
+    <section ref={playerRef} className="player">
+      <div className="player-frame">
+        <div
+          className="player-stage"
           style={{
-            position: 'absolute',
-            width: `${(100 / videoCropWidth).toFixed(4)}%`,
-            height: 'auto',
-            left: `${(-100 * videoCrop.left / videoCropWidth).toFixed(4)}%`,
-            top: `${(-100 * videoCrop.top / videoCropHeight).toFixed(4)}%`,
-            maxWidth: 'none',
-          }}
-          onPlay={() => {
-            setPlaying(true);
-            const audio = audioRef.current;
-            if (audio && audio.paused) {
-              audio.currentTime = videoRef.current?.currentTime ?? mediaStartSeconds;
-              void audio.play().catch(() => undefined);
-            }
-          }}
-          onPause={() => {
-            setPlaying(false);
-            audioRef.current?.pause();
-          }}
-          onEnded={() => {
-            setPlaying(false);
-            audioRef.current?.pause();
-          }}
-          onRateChange={(e) => {
-            const nextRate = (e.target as HTMLVideoElement).playbackRate;
-            setRate(nextRate);
-            if (audioRef.current) audioRef.current.playbackRate = nextRate;
-          }}
-          onVolumeChange={(e) => {
-            if (audioSrc) return;
-            const video = e.target as HTMLVideoElement;
-            setVolume(video.volume);
-            setMuted(video.muted);
-          }}
-          onLoadedMetadata={(e) => {
-            const video = e.target as HTMLVideoElement;
-            // Stream audio is played by the synchronized hidden audio element. This also avoids
-            // double audio when yt-dlp falls back to one legacy file containing both tracks.
-            if (audioSrc) video.muted = true;
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-              setSourceSize({ width: video.videoWidth, height: video.videoHeight });
-            }
-            if (Number.isFinite(video.duration) && mediaStartSeconds >= video.duration) {
-              setMediaError(
-                `The match offset (${mediaStartSeconds}s) is past the end of this ${fmtClock(video.duration)} video.`
-              );
-              return;
-            }
-            video.currentTime = mediaStartSeconds + playbackStart;
-            setTime(playbackStart);
-            draw(playbackStart);
-          }}
-          onLoadedData={() => {
-            setReady(true);
-            setMediaError(null);
-          }}
-          onError={(e) => {
-            const video = e.target as HTMLVideoElement;
-            setReady(false);
-            setMediaError(
-              video.error?.message ||
-                'The downloaded file could not be played. Check that it uses a browser-supported MP4 codec.'
-            );
-          }}
-        />
-        {audioSrc && (
-          <audio
-            ref={audioRef}
-            src={audioSrc}
+            aspectRatio: `${stageWidth} / ${stageHeight}`,
+            // Read by the fullscreen rule, which has to fit the stage to the screen's height as
+            // well as its width without changing its shape.
+            '--stage-ratio': stageHeight > 0 ? stageWidth / stageHeight : 16 / 9,
+          } as CSSProperties}
+        >
+          <video
+            ref={videoRef}
+            className="player-video"
+            src={src}
             preload="auto"
-            onLoadedMetadata={(e) => {
-              const audio = e.target as HTMLAudioElement;
-              audio.currentTime = videoRef.current?.currentTime ?? mediaStartSeconds;
-              audio.playbackRate = rate;
+            playsInline
+            style={{
+              position: 'absolute',
+              width: `${(100 / videoCropWidth).toFixed(4)}%`,
+              height: 'auto',
+              left: `${(-100 * videoCrop.left / videoCropWidth).toFixed(4)}%`,
+              top: `${(-100 * videoCrop.top / videoCropHeight).toFixed(4)}%`,
+              maxWidth: 'none',
+            }}
+            onPlay={() => {
+              setPlaying(true);
+              const audio = audioRef.current;
+              if (audio && audio.paused) {
+                audio.currentTime = videoRef.current?.currentTime ?? mediaStartSeconds;
+                void audio.play().catch(() => undefined);
+              }
+            }}
+            onPause={() => {
+              setPlaying(false);
+              audioRef.current?.pause();
+            }}
+            onEnded={() => {
+              setPlaying(false);
+              audioRef.current?.pause();
+            }}
+            onRateChange={(e) => {
+              const nextRate = (e.target as HTMLVideoElement).playbackRate;
+              setRate(nextRate);
+              if (audioRef.current) audioRef.current.playbackRate = nextRate;
             }}
             onVolumeChange={(e) => {
-              const audio = e.target as HTMLAudioElement;
-              setVolume(audio.volume);
-              setMuted(audio.muted);
+              if (audioSrc) return;
+              const video = e.target as HTMLVideoElement;
+              setVolume(video.volume);
+              setMuted(video.muted);
             }}
-            onError={() => {
-              setMediaError('The yt-dlp audio stream could not be loaded.');
+            onLoadedMetadata={(e) => {
+              const video = e.target as HTMLVideoElement;
+              // Stream audio is played by the synchronized hidden audio element. This also avoids
+              // double audio when yt-dlp falls back to one legacy file containing both tracks.
+              if (audioSrc) video.muted = true;
+              if (video.videoWidth > 0 && video.videoHeight > 0) {
+                setSourceSize({ width: video.videoWidth, height: video.videoHeight });
+              }
+              if (Number.isFinite(video.duration) && mediaStartSeconds >= video.duration) {
+                setMediaError(
+                  `The match offset (${mediaStartSeconds}s) is past the end of this ${fmtClock(video.duration)} video.`
+                );
+                return;
+              }
+              video.currentTime = mediaStartSeconds + playbackStart;
+              setTime(playbackStart);
+              draw(playbackStart);
+            }}
+            onLoadedData={() => {
+              setReady(true);
+              setMediaError(null);
+            }}
+            onError={(e) => {
+              const video = e.target as HTMLVideoElement;
+              setReady(false);
+              setMediaError(
+                video.error?.message ||
+                  'The downloaded file could not be played. Check that it uses a browser-supported MP4 codec.'
+              );
             }}
           />
-        )}
-        <canvas ref={canvasRef} className="player-overlay" />
-        {!ready && !mediaError && <div className="player-loading">loading video…</div>}
-        {mediaError && <div className="player-loading player-media-error">{mediaError}</div>}
+          {audioSrc && (
+            <audio
+              ref={audioRef}
+              src={audioSrc}
+              preload="auto"
+              onLoadedMetadata={(e) => {
+                const audio = e.target as HTMLAudioElement;
+                audio.currentTime = videoRef.current?.currentTime ?? mediaStartSeconds;
+                audio.playbackRate = rate;
+              }}
+              onVolumeChange={(e) => {
+                const audio = e.target as HTMLAudioElement;
+                setVolume(audio.volume);
+                setMuted(audio.muted);
+              }}
+              onError={() => {
+                setMediaError('The yt-dlp audio stream could not be loaded.');
+              }}
+            />
+          )}
+          <canvas ref={canvasRef} className="player-overlay" />
+          {!ready && !mediaError && <div className="player-loading">loading video…</div>}
+          {mediaError && <div className="player-loading player-media-error">{mediaError}</div>}
+        </div>
       </div>
 
       <div className="scrub">
@@ -831,8 +847,8 @@ export function VideoPlayer({
           Shots
         </label>
 
-        <button type="button" onClick={() => void toggleFullscreen()} title="Fullscreen">
-          Fullscreen
+        <button type="button" onClick={() => void toggleFullscreen()} title="Fullscreen (Esc to leave)">
+          {fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         </button>
 
         {/* The one place component 3 adds start_offset -- doc 0 says nothing else ever should.
