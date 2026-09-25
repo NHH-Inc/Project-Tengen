@@ -25,9 +25,13 @@ const LOW_CONF = '#e8b93b';
 // Same normalized crop passed to the YOLO worker: the upper broadcast panel marked in the
 // supplied reference image. The stage is sized to this rectangle and the full video is shifted
 // underneath it, so the live video and normalized model boxes stay aligned.
-const VIDEO_CROP = { left: 0.02, top: 0.035, right: 0.98, bottom: 0.66 } as const;
-const VIDEO_CROP_WIDTH = VIDEO_CROP.right - VIDEO_CROP.left;
-const VIDEO_CROP_HEIGHT = VIDEO_CROP.bottom - VIDEO_CROP.top;
+//
+// This MUST match crop_for() in ingest/yolo_orchestrator.py, because the boxes are normalized to
+// whatever rectangle the model saw. An uploaded recording is analysed whole there, so it is shown
+// whole here; drawing its full-frame boxes over the broadcast crop would misplace every one of
+// them and hide the near half of the field.
+const BROADCAST_CROP = { left: 0.02, top: 0.035, right: 0.98, bottom: 0.66 } as const;
+const FULL_FRAME = { left: 0, top: 0, right: 1, bottom: 1 } as const;
 // Broadcast padding: the countdown before the match and the score card after it. Trimming these
 // makes review faster, but the amount of padding is a property of whoever cut the upload, not a
 // constant. Fixed values are dangerous here in one specific direction: an FRC match ends with
@@ -591,6 +595,10 @@ export function VideoPlayer({
     }
   };
 
+  const videoCrop = job.captureMode === 'local' ? FULL_FRAME : BROADCAST_CROP;
+  const videoCropWidth = videoCrop.right - videoCrop.left;
+  const videoCropHeight = videoCrop.bottom - videoCrop.top;
+
   return (
     <section className="player">
       <div
@@ -598,8 +606,8 @@ export function VideoPlayer({
         className="player-stage"
         style={{
           aspectRatio: sourceSize
-            ? `${sourceSize.width * VIDEO_CROP_WIDTH} / ${sourceSize.height * VIDEO_CROP_HEIGHT}`
-            : `${job.width * VIDEO_CROP_WIDTH} / ${job.height * VIDEO_CROP_HEIGHT}`,
+            ? `${sourceSize.width * videoCropWidth} / ${sourceSize.height * videoCropHeight}`
+            : `${job.width * videoCropWidth} / ${job.height * videoCropHeight}`,
         }}
       >
         <video
@@ -610,10 +618,10 @@ export function VideoPlayer({
           playsInline
           style={{
             position: 'absolute',
-            width: `${(100 / VIDEO_CROP_WIDTH).toFixed(4)}%`,
+            width: `${(100 / videoCropWidth).toFixed(4)}%`,
             height: 'auto',
-            left: `${(-100 * VIDEO_CROP.left / VIDEO_CROP_WIDTH).toFixed(4)}%`,
-            top: `${(-100 * VIDEO_CROP.top / VIDEO_CROP_HEIGHT).toFixed(4)}%`,
+            left: `${(-100 * videoCrop.left / videoCropWidth).toFixed(4)}%`,
+            top: `${(-100 * videoCrop.top / videoCropHeight).toFixed(4)}%`,
             maxWidth: 'none',
           }}
           onPlay={() => {
