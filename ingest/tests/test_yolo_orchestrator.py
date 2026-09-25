@@ -5,7 +5,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ingest.yolo_orchestrator import YoloAnalysisOrchestrator, match_events, phase_at
+from ingest.yolo_orchestrator import (
+    FULL_FRAME,
+    MODEL_CROP,
+    YoloAnalysisOrchestrator,
+    crop_for,
+    match_events,
+    phase_at,
+)
 from ingest.serializers import normalize_public_track_labels
 from training.track_yolo import (
     AppearanceTrackMemory,
@@ -147,6 +154,82 @@ class YoloOrchestratorTests(unittest.TestCase):
             self.assertIn("--expected-duration", command)
             self.assertEqual(command[command.index("--expected-duration") + 1], "2.0")
             self.assertEqual(result["result"]["duration"], 2.0)
+
+    def _command_for(self, extra_job_fields: dict, local_video: bool = False) -> tuple[list, dict]:
+        """Run the adapter with a fake tracker process and return the command it built."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            python, model = root / "python.exe", root / "model.pt"
+            python.write_bytes(b"")
+            model.write_bytes(b"")
+            command_seen = []
+
+            class FakeProcess:
+                returncode = 0
+
+                def __init__(self, command, **_kwargs):
+                    command_seen.append(command)
+                    output = Path(command[command.index("--output") + 1])
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_text(json.dumps({
+                        "track_id": 1, "robot_name": "robot1", "alliance": "blue",
+                        "boxes": [{"t": 0.0, "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.1}], "gaps": [],
+                    }) + "\n", encoding="utf-8")
+                    self.stdout = io.StringIO('{"stage":"tracking"}\n')
+                    self.stderr = io.StringIO("")
+
+                def wait(self):
+                    return 0
+
+            job = {
+                "job_id": "11111111-1111-4111-8111-111111111111",
+                "video_id": "abcdefghijk",
+                "match_id": None,
+                "season": 2026,
+                "duration": 2.0,
+                "fps": 30.0,
+            }
+            if local_video:
+                clip = root / "match.mp4"
+                clip.write_bytes(b"frames")
+                job["local_path"] = str(clip)
+            else:
+                job["stream_url"] = "https://www.youtube.com/watch?v=abcdefghijk"
+            job.update(extra_job_fields)
+            adapter = YoloAnalysisOrchestrator(
+                repo_root=Path.cwd(), python_path=python, model_path=model,
+                output_base_dir=root / "jobs", auto_homography=False,
+            )
+            with (
+                patch("ingest.yolo_orchestrator.subprocess.Popen", FakeProcess),
+                patch.object(adapter, "_video_metadata", return_value=(60, 30.0, 2.0), create=True),
+            ):
+                result = adapter.run_job(
+                    job, season_path=str(Path.cwd() / "contracts" / "seasons" / "2026.json")
+                )
+            return command_seen[0], result["result"]
+
+    def test_a_broadcast_keeps_the_crop_that_drops_its_overlay(self):
+        command, result = self._command_for({"capture_mode": "recorded"})
+        crop = command[command.index("--crop") + 1: command.index("--crop") + 5]
+        self.assertEqual([float(v) for v in crop], list(MODEL_CROP))
+        self.assertEqual(result["model_crop"]["bottom"], MODEL_CROP[3])
+
+    def test_an_uploaded_recording_is_analysed_whole(self):
+        """MODEL_CROP stops at 0.66: on a camera aimed at the field that is the near half."""
+        command, result = self._command_for({"capture_mode": "local"}, local_video=True)
+        self.assertIn("--video", command)
+        crop = command[command.index("--crop") + 1: command.index("--crop") + 5]
+        self.assertEqual([float(v) for v in crop], list(FULL_FRAME))
+        self.assertEqual(
+            result["model_crop"], {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0},
+            "the result must record the crop that was actually used",
+        )
+
+    def test_crop_for_defaults_to_the_broadcast_crop(self):
+        """A job from an older client carries no capture_mode; it is a YouTube job."""
+        self.assertEqual(crop_for({}), MODEL_CROP)
+        self.assertEqual(crop_for({"capture_mode": "live"}), MODEL_CROP)
 
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
         box = crop_box_to_source((0.0, 0.0, 1.0, 1.0), (0.02, 0.035, 0.98, 0.66), 960, 625)
