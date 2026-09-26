@@ -49,8 +49,10 @@ APPS_SCRIPT_SECRET=the same string you set as SECRET
 **5. Check it is live.** Open the `/exec` URL in a browser. You should see:
 
 ```json
-{"ok":true,"service":"tengen-sheets-export","note":"POST rows to this URL"}
+{"ok":true,"service":"tengen-sheets-export","writes_to":"Tengen","note":"POST rows to this URL"}
 ```
+
+No `writes_to` means the old version is still deployed — see "Editing without redeploying" below.
 
 Then export as normal — `POST /api/export/sheets`. The response includes
 `"transport": "apps_script"` so you can tell which path ran.
@@ -64,12 +66,39 @@ having no effect. After any edit: **Deploy → Manage deployments → edit → N
 **`{"ok":false,"error":"rejected"}`** means the secret in `.env` and the one in the script do not
 match. The message is deliberately vague — a precise one would help someone guessing.
 
-**The tab is created automatically** (`aggregates`, or `raw_events` in raw mode). You do not need
-to make it by hand, and renaming it will cause the next export to create a fresh one.
+**Everything goes in one tab named `Tengen`.** If the spreadsheet already has one (any
+capitalisation), it is used; otherwise it is created. Renaming it will cause the next export to
+create a fresh one. Earlier versions of this script wrote `aggregates` and `raw_events` tabs;
+those are no longer written and can be deleted.
+
+## Where the rows go
+
+Each kind of export is its own block in the `Tengen` tab, side by side:
+
+| row | aggregates block (usually columns A–N) | raw events block (to its right) |
+|---|---|---|
+| 1 | `Tengen aggregates` | `Tengen raw events` |
+| 2 | headers: `row_key`, `match_id`, `team`, … | headers: `row_key`, `match_id`, `event_id`, … |
+| 3+ | one row per team per match | one row per event |
+
+The title in row 1 is how the script finds a block again, so leave it alone. A block is created
+the first time that kind is exported, two columns past everything already in the tab — anything
+the team keeps there is never overwritten. If the columns ever grow into the next block, the
+export is refused with a message rather than overwriting it.
+
+To use the numbers elsewhere in the spreadsheet, point formulas at the block, e.g. total shots
+made by team 1234 across every exported match:
+
+```
+=SUMIFS(Tengen!G:G, Tengen!C:C, 1234)
+```
 
 ## What it does with your data
 
-Only writes. Column A is a stable key, so re-exporting a match **replaces** its rows rather than
-appending duplicates, and a row that is already present and identical is skipped and counted in
-`rows_skipped`. Nothing is ever read back as a source of truth — per doc 3, Sheets is an export
-destination, not storage.
+Only writes. Each block's first column is a stable key, so re-exporting a match **replaces** its
+rows rather than appending duplicates, and a row that is already present and identical is skipped
+and counted in `rows_skipped`. Nothing is ever read back as a source of truth — per doc 3, Sheets
+is an export destination, not storage.
+
+The service-account transport (`ingest/sheets.py`) still writes separate `aggregates` and
+`raw_events` tabs.
