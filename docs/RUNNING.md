@@ -281,7 +281,7 @@ so the lighter service environment does not need CUDA or Ultralytics installed. 
 ```powershell
 # in: REPO
 YOLO_PYTHON=C:\yolo11-venv\Scripts\python.exe
-YOLO_MODEL_PATH=.\data\models\yolo11n-frc-robots-20260901\weights\best.pt
+YOLO_MODEL_PATH=.\data\models\yolo-v3-960-20260906\weights\best.pt
 FRC_ANALYSIS_BACKEND=yolo
 FRC_YOLO_TRACKER=bytetrack
 ```

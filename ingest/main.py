@@ -180,7 +180,7 @@ native_analysis_orchestrator = orchestrator.AnalysisOrchestrator(
     output_base_dir=os.path.join(data_dir, "jobs"),
 )
 
-_yolo_model_default = REPO_ROOT / "data" / "models" / "yolo11n-frc-robots-20260901" / "weights" / "best.pt"
+_yolo_model_default = REPO_ROOT / "data" / "models" / "yolo-v3-960-20260906" / "weights" / "best.pt"
 yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
     repo_root=REPO_ROOT,
     python_path=os.environ.get("YOLO_PYTHON"),

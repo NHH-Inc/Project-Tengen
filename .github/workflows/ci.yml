@@ -29,6 +29,9 @@ jobs:
       - name: Build
         run: cmake --build analysis/build --config Release -j
 
+      - name: C++ tests
+        run: ctest --test-dir analysis/build --output-on-failure
+
       # Contract D: the binary must accept --job, --season and --out, and must fail loudly
       # with an error_code on the last line of stderr rather than silently doing nothing.
       - name: Contract D smoke
