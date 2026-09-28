@@ -30,6 +30,7 @@ import { seasonConfig, type SeasonConfig } from '../season';
 import {
   ApiError,
   type CreateJobInput,
+  type UploadJobInput,
   type EventQuery,
   type ExportInput,
   type Parsed,
@@ -204,6 +205,32 @@ export class FixtureApi implements ScoutingApi {
       captureMode: input.liveCapture ? 'live' : 'recorded',
       startOffset: parseVideoStartTime(input.url),
       status: 'queued',
+      stage: null,
+      progress: null,
+      errorCode: null,
+      error: null,
+      attempt: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.jobs = [job, ...this.jobs];
+    void this.advance(job.jobId);
+    return { data: job, violations: [] };
+  }
+
+  async uploadJob(input: UploadJobInput): Promise<Parsed<Job>> {
+    await this.seed();
+    const template = this.jobs[0];
+    const now = new Date().toISOString();
+    const job: Job = {
+      ...template,
+      jobId: uuid(),
+      matchId: input.matchId ?? null,
+      season: input.season ?? template.season,
+      captureMode: 'local',
+      localPath: `uploads/${input.file.name}`,
+      startOffset: 0,
+      status: 'downloaded',
       stage: null,
       progress: null,
       errorCode: null,

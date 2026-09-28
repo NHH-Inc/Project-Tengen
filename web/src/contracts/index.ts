@@ -71,7 +71,7 @@ export interface WireJob {
   season: number;
   video_id: string;
   /** Additive API field; omitted by fixture files and older servers. */
-  capture_mode?: 'recorded' | 'live';
+  capture_mode?: 'recorded' | 'live' | 'local';
   local_path: string | null;
   start_offset: number;
   duration: number | null;
@@ -158,8 +158,11 @@ export interface Job {
   matchId: string | null;
   season: number;
   videoId: string;
-  /** A live recording is analyzed only after its YouTube stream ends. */
-  captureMode: 'recorded' | 'live';
+  /**
+   * A live recording is analyzed only after its YouTube stream ends. A local job was uploaded
+   * from this machine (a phone or webcam at an event): its videoId names nothing on YouTube.
+   */
+  captureMode: 'recorded' | 'live' | 'local';
   localPath: string | null;
   /** Seconds. Add to an event's tSeconds to get a position in the ORIGINAL video. */
   startOffset: number;
@@ -324,7 +327,8 @@ export function parseJob(raw: WireJob, log: ViolationLog): Job | null {
     matchId: raw.match_id ?? null,
     season: raw.season,
     videoId: raw.video_id,
-    captureMode: raw.capture_mode === 'live' ? 'live' : 'recorded',
+    captureMode:
+      raw.capture_mode === 'live' || raw.capture_mode === 'local' ? raw.capture_mode : 'recorded',
     localPath: raw.local_path ?? null,
     startOffset: raw.start_offset,
     duration: raw.duration ?? null,

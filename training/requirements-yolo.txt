@@ -5,6 +5,10 @@
 ultralytics
 # Required by --stream-url for decoding the live FFmpeg pipe.
 av
+# Also required by --stream-url: track_yolo resolves the stream and its frame rate through it. The
+# API runs this tracker with its own Python, so the ingest venv having yt-dlp does not help --
+# without it every YouTube job fails four seconds in with ModuleNotFoundError.
+yt-dlp
 opencv-python
 pillow
 numpy

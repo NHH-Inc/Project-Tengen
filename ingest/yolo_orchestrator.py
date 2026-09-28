@@ -20,6 +20,16 @@ from typing import Callable
 ProgressCallback = Callable[[float | None, str], None]
 MODEL_CROP = (0.02, 0.035, 0.98, 0.66)
 AUTO_HOMOGRAPHY_REGION = (0.0, 0.68)
+#: A recording made at the event -- a phone or webcam aimed at the field -- has no broadcast
+#: overlay and no second camera panel. MODEL_CROP stops two-thirds of the way down the frame,
+#: which on such a recording is the near half of the field: every robot there would be cut out
+#: before the model saw it. Uploads are analysed whole.
+FULL_FRAME = (0.0, 0.0, 1.0, 1.0)
+
+
+def crop_for(job_data: dict) -> tuple[float, float, float, float]:
+    """The part of each frame the model sees: the broadcast crop, or all of an upload."""
+    return FULL_FRAME if job_data.get("capture_mode") == "local" else MODEL_CROP
 
 
 def utc_now() -> str:
@@ -295,7 +305,12 @@ class YoloAnalysisOrchestrator:
         duration = (frames - 1) / fps if frames > 1 and fps > 0 else fallback_duration
         return frames, fps, max(0.0, duration)
 
-    def _job_homography(self, video_path: Path | None, job_dir: Path) -> Path | None:
+    def _job_homography(
+        self,
+        video_path: Path | None,
+        job_dir: Path,
+        region: tuple[float, float] = AUTO_HOMOGRAPHY_REGION,
+    ) -> Path | None:
         """Use an explicit calibration, or derive one from steady AprilTags in a local clip."""
 
         if self.homography_path and self.homography_path.is_file():
@@ -315,7 +330,7 @@ class YoloAnalysisOrchestrator:
             result = calibrate(
                 video_path,
                 layout_path,
-                region=AUTO_HOMOGRAPHY_REGION,
+                region=region,
                 method="pose",
                 hfov_deg=self.homography_hfov_deg,
                 optimize_hfov=True,
@@ -362,6 +377,7 @@ class YoloAnalysisOrchestrator:
                 "Python and YOLO_MODEL_PATH to a trained .pt file."
             )
         stream_url = str(job_data.get("stream_url") or "").strip()
+        crop = crop_for(job_data)
         video_path = None if stream_url else Path(str(job_data.get("local_path", ""))).resolve()
         if not stream_url and (video_path is None or not video_path.is_file()):
             raise RuntimeError(f"Stream URL is missing and local video is unavailable: {video_path}")
@@ -421,7 +437,11 @@ class YoloAnalysisOrchestrator:
             or (shots_path is not None and shots_path.exists())
         ):
             raise RuntimeError(f"Refusing to overwrite existing YOLO output: {job_dir}")
-        job_homography = self._job_homography(video_path, job_dir)
+        job_homography = self._job_homography(
+            video_path,
+            job_dir,
+            region=(crop[1], crop[3]) if crop == FULL_FRAME else AUTO_HOMOGRAPHY_REGION,
+        )
         if self.ball_config_path is not None and ball_config_snapshot is not None:
             shutil.copyfile(self.ball_config_path, ball_config_snapshot)
 
@@ -500,7 +520,7 @@ class YoloAnalysisOrchestrator:
             "--partial-output",
             str(partial_tracks_path),
             "--crop",
-            *(str(value) for value in MODEL_CROP),
+            *(str(value) for value in crop),
         ]
         if annotated_path:
             command.extend(["--annotated-output", str(annotated_path)])
@@ -636,11 +656,13 @@ class YoloAnalysisOrchestrator:
             "snapshots_count": len(list(snapshot_dir.glob("snapshot_*.jpg"))),
             "raw_tracks_path": str(raw_tracks_path) if raw_tracks_path.is_file() else None,
             "shots_path": str(shots_path) if shots_path is not None else None,
+            # The crop this run actually used, which is per job: all of an upload, part of a
+            # broadcast. health() still reports the broadcast default.
             "model_crop": {
-                "left": MODEL_CROP[0],
-                "top": MODEL_CROP[1],
-                "right": MODEL_CROP[2],
-                "bottom": MODEL_CROP[3],
+                "left": crop[0],
+                "top": crop[1],
+                "right": crop[2],
+                "bottom": crop[3],
             },
         }
         result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
