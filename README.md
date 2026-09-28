@@ -2,6 +2,32 @@
 
 Watches recorded FRC match video and produces per-robot scouting data.
 
+## Run the Python desktop app
+
+Tengen now has a native Python desktop interface. It opens local videos, runs the trained
+YOLO detector, plays video with tracking overlays, and supports event review, team corrections,
+undo, field positions, team statistics, and CSV/JSON export. No localhost, browser, Node.js,
+database server, or C++ build is needed for this workflow.
+
+On this Mac, open **Tengen** in `~/Applications`, or double-click **Launch Tengen.command**
+in this folder. Keep this project folder in place: the application launcher uses its Python
+environment and trained weights.
+
+To set up another Mac (Python 3.11 required):
+
+```sh
+./setup-desktop.sh
+.venv-desktop/bin/python -m desktop.install_macos
+.venv-desktop/bin/python tengen.py
+```
+
+Choose **Open video…**, then **Analyze video…**. **Load demo** opens the bundled synthetic
+video with known tracks and events. See [Desktop guide](docs/DESKTOP.md) for settings,
+saved files, verification, and current analysis limitations.
+
+The original web/API components remain available for existing deployments. The sections below
+describe that older workflow; the native desktop app is the default entry point for this Mac.
+
 > "FRC" throughout these docs means the competition — FRC matches, FRC robots, FRC fields.
 > The project itself is Tengen. Environment variables keep their `FRC_` prefix on purpose:
 > renaming them would break every teammate's `.env` for no benefit.

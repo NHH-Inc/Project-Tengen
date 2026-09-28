@@ -1027,60 +1027,70 @@ def build_cropped_video(source: Path, destination: Path, crop: tuple[float, floa
         raise RuntimeError(f"Cropped model input contains no frames: {destination}")
 
 
-STREAM_SELECTOR = "bv[height<=1080][ext=mp4][vcodec^=avc1]/bv[height<=1080][ext=mp4]/bv[height<=1080]"
+# Prefer YouTube's HLS rendition so FFmpeg can start on the first segment. A progressive MP4
+# can make FFmpeg wait for the entire file before emitting its first frame.
+STREAM_SELECTOR = (
+    "bv[height<=1080][protocol^=m3u8][vcodec^=avc1]/"
+    "bv[height<=1080][ext=mp4][vcodec^=avc1]/"
+    "bv[height<=1080][ext=mp4]/bv[height<=1080]"
+)
 
 
-def stream_source_fps(url: str) -> float:
-    """Read stream metadata without fetching media."""
+def _resolve_stream_media(url: str) -> dict[str, object]:
+    """Resolve a short-lived media URL for FFmpeg without piping media through yt-dlp."""
     import yt_dlp
 
     with yt_dlp.YoutubeDL({
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "skip_download": True,
         "format": STREAM_SELECTOR,
     }) as ydl:
         info = ydl.extract_info(url, download=False)
-    return float(info.get("fps") or 30.0)
+    if not info.get("url"):
+        raise RuntimeError("yt-dlp did not return a playable video URL")
+    return info
+
+
+def stream_source_fps(url: str) -> float:
+    """Read stream metadata without fetching media."""
+    return float(_resolve_stream_media(url).get("fps") or 30.0)
+
+
+def _ffmpeg_headers(headers: dict[str, object] | None) -> list[str]:
+    """Convert yt-dlp's request headers into FFmpeg's CRLF-delimited header option."""
+    if not headers:
+        return []
+    value = "".join(f"{key}: {header_value}\r\n" for key, header_value in headers.items())
+    return ["-headers", value]
 
 
 def stream_source_frames(url: str):
-    """Yield full BGR frames from a yt-dlp/FFmpeg pipe without saving the source video."""
+    """Yield full BGR frames from a resolved media URL without saving the source video."""
     try:
         import av
-        import yt_dlp
     except ImportError as exc:
-        raise RuntimeError("The stream mode requires PyAV and yt-dlp in the vision environment") from exc
+        raise RuntimeError("The stream mode requires PyAV in the vision environment") from exc
 
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("ffmpeg must be on PATH for YouTube stream mode")
 
-    # A metadata-only yt-dlp call gives the source frame rate for snapshot timestamps. The
-    # media itself is fetched by the separate stdout pipe below.
-    # DASH MP4 is not seekable when sent to stdout. FFmpeg reads that pipe and emits a
-    # streamable Matroska pipe; MJPEG keeps the decoder path broadly compatible with the
-    # installed OpenCV/Ultralytics stack while still never touching disk.
-    yt_process = subprocess.Popen(
-        [
-            sys.executable, "-m", "yt_dlp", "--quiet", "--no-warnings", "--no-playlist",
-            "--format", STREAM_SELECTOR, "--output", "-", url,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    assert yt_process.stdout is not None
+    # Let FFmpeg open the signed media URL directly. Piping yt-dlp's MP4 stdout into FFmpeg
+    # can leave FFmpeg waiting forever when yt-dlp exits after a DASH fragment/format error.
+    # The URL is short-lived, so resolve it immediately before opening the decoder.
+    media = _resolve_stream_media(url)
+    media_url = str(media["url"])
     ffmpeg_process = subprocess.Popen(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+            ffmpeg, "-hide_banner", "-loglevel", "error",
+            *_ffmpeg_headers(media.get("http_headers")),
+            "-i", media_url,
             "-map", "0:v:0", "-an", "-c:v", "mjpeg", "-f", "matroska", "pipe:1",
         ],
-        stdin=yt_process.stdout,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    yt_process.stdout.close()
     assert ffmpeg_process.stdout is not None
     try:
         with av.open(ffmpeg_process.stdout, mode="r", format="matroska") as container:
@@ -1089,16 +1099,10 @@ def stream_source_frames(url: str):
     finally:
         if ffmpeg_process.poll() is None:
             ffmpeg_process.terminate()
-        if yt_process.poll() is None:
-            yt_process.terminate()
         ffmpeg_stderr = ffmpeg_process.stderr.read().decode("utf-8", errors="replace") if ffmpeg_process.stderr else ""
-        yt_stderr = yt_process.stderr.read().decode("utf-8", errors="replace") if yt_process.stderr else ""
         ffmpeg_process.wait(timeout=30)
-        yt_process.wait(timeout=30)
         if ffmpeg_process.returncode not in (0, -15, 15) and ffmpeg_stderr.strip():
             raise RuntimeError(f"ffmpeg stream failed: {ffmpeg_stderr.strip()[-1000:]}")
-        if yt_process.returncode not in (0, -15, 15) and yt_stderr.strip():
-            raise RuntimeError(f"yt-dlp stream failed: {yt_stderr.strip()[-1000:]}")
 
 
 def stream_cropped_frames(url: str, crop: tuple[float, float, float, float]):
