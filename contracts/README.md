@@ -16,6 +16,8 @@ the other two.
 | `correction.schema.json` | F — corrections | v2: `scope` (event/track), `target_id` |
 | `result.schema.json` | D — `result.json` metadata | key names now pinned by doc 0 |
 | `seasons/<year>.json` | field, periods, point values | per year, selected by `job.season` |
+| `timeline.schema.json` | Robot timeline (strategy layer) | **v1, proposed 2026-10-12**, additive; needs all three to agree |
+| `strategy/<year>.json` | Alliance-frame zones, lanes, hubs | **proposed 2026-10-12**; derived from the surveyed tag layout |
 | `OPEN_QUESTIONS.md` | — | all resolved through v3 |
 
 Doc 0 names `events.schema.json`, `job.schema.json` and `enums.md`. The other files are

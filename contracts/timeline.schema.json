@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frc-video-scouting/contracts/timeline.schema.json",
+  "title": "Robot timeline (strategy layer, v1, PROPOSED)",
+  "description": "One object per robot per match in timeline.jsonl, written by ingest/strategy/timeline.py from tracks.jsonl and shots.jsonl. Positions are resampled to a fixed rate, never interpolated across a listed gap or a hole longer than 0.6 s, and given both in field feet and in the alliance frame (own wall at x=0; red rotated 180 degrees about the field centre). Samples are columnar: every array in `samples` has the same length. Proposed 2026-10-12; additive, changes no existing contract.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "job_id", "match_id", "season", "robot_key", "team", "alliance",
+               "track_ids", "rate_hz", "match_start_t", "frame", "coverage", "samples", "launches"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "job_id": { "type": ["string", "null"] },
+    "match_id": { "type": ["string", "null"] },
+    "season": { "type": "integer" },
+    "robot_key": { "type": "string", "description": "team:<number> when known, else track:<id>. A '#track:<id>' suffix marks a second simultaneous claim to one team." },
+    "team": { "type": ["integer", "null"] },
+    "alliance": { "type": ["string", "null"], "enum": ["red", "blue", null] },
+    "track_ids": { "type": "array", "items": { "type": "integer" } },
+    "identity_issues": { "type": "array", "items": { "type": "string" } },
+    "rate_hz": { "type": "number", "exclusiveMinimum": 0 },
+    "match_start_t": { "type": "number", "description": "Video seconds of match time zero." },
+    "clock_source": { "type": "string", "enum": ["scoreboard_clock", "match_start_event", "clip_start", "none"], "description": "Where match time came from. clip_start means it was assumed, and is seconds wrong on most broadcast uploads." },
+    "frame": { "type": "string", "enum": ["alliance", "field"], "description": "'field' when the alliance is unknown and ax/ay are therefore null." },
+    "position_source": { "type": ["string", "null"] },
+    "coverage": {
+      "type": "object",
+      "required": ["observed_s", "positioned_s"],
+      "properties": {
+        "observed_s": { "type": "number", "minimum": 0 },
+        "positioned_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "samples": {
+      "type": "object",
+      "required": ["t", "mt", "phase", "x", "y", "ax", "ay", "speed", "zone", "lane"],
+      "properties": {
+        "t": { "type": "array", "items": { "type": "number" }, "description": "Video seconds." },
+        "mt": { "type": "array", "items": { "type": "number" }, "description": "Match play elapsed: 0 to the auto length in auto, held through the pause, then counting on through teleop. Negative before the start." },
+        "phase": { "type": "array", "items": { "type": "string", "enum": ["pre_match", "auto", "transition", "teleop", "endgame", "post_match"] } },
+        "x": { "type": "array", "items": { "type": ["number", "null"] }, "description": "Field feet." },
+        "y": { "type": "array", "items": { "type": ["number", "null"] } },
+        "ax": { "type": "array", "items": { "type": ["number", "null"] }, "description": "Alliance-frame feet." },
+        "ay": { "type": "array", "items": { "type": ["number", "null"] } },
+        "speed": { "type": "array", "items": { "type": ["number", "null"] }, "description": "Smoothed ground speed, ft/s." },
+        "zone": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Zone id from contracts/strategy/<season>.json." },
+        "lane": { "type": "array", "items": { "type": ["string", "null"] } }
+      }
+    },
+    "launches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t", "mt", "phase", "ax", "ay"],
+        "properties": {
+          "shot_id": { "type": ["string", "null"] },
+          "t": { "type": "number" },
+          "mt": { "type": "number" },
+          "phase": { "type": "string" },
+          "ax": { "type": ["number", "null"] },
+          "ay": { "type": ["number", "null"] },
+          "speed": { "type": ["number", "null"] },
+          "confidence": { "type": ["number", "null"] }
+        }
+      }
+    }
+  }
+}

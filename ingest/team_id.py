@@ -59,6 +59,11 @@ def tesseract_available() -> bool:
     if pytesseract is None:
         return False
     command = os.environ.get("TESSERACT_CMD")
+    if not command and os.name == "nt":
+        # The standard Windows installer (UB-Mannheim) does not put tesseract on PATH.
+        default = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                               "Tesseract-OCR", "tesseract.exe")
+        command = default if os.path.isfile(default) else None
     if command:
         pytesseract.pytesseract.tesseract_cmd = command
     try:

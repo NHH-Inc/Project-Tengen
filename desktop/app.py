@@ -268,6 +268,15 @@ class MainWindow(QMainWindow):
         self.details = QPlainTextEdit()
         self.details.setReadOnly(True)
         self.tabs.addTab(self.details, "Run details")
+        strategy_panel = QSplitter(Qt.Orientation.Horizontal)
+        self.strategy_table = table(["Robot", "Alliance", "Seen (s)", "Field xy (s)", "Launches",
+                                     "Top spot (ft)", "Volley interval (s)", "Dwell (s)", "Defense (s)", "Start"])
+        strategy_panel.addWidget(self.strategy_table)
+        self.strategy_text = QPlainTextEdit()
+        self.strategy_text.setReadOnly(True)
+        strategy_panel.addWidget(self.strategy_text)
+        strategy_panel.setSizes([700, 420])
+        self.tabs.addTab(strategy_panel, "Strategy")
         self.tabs.currentChanged.connect(lambda: self.frame_presented(self.canvas.time))
         actions = QHBoxLayout()
         self.analyze_button = button("Analyze video…", self.start_analysis, True)
@@ -409,6 +418,7 @@ class MainWindow(QMainWindow):
         self.heat_team.setCurrentIndex(max(0, self.heat_team.findData(selected)))
         self.heat_team.blockSignals(False)
         self.filter_heatmap()
+        self.refresh_strategy()
         self.update_media_info()
         from ingest.stats import scoring_is_meaningful, reconstruct_score
         accuracy = "Score comparison unavailable: season point values are placeholders."
@@ -419,6 +429,74 @@ class MainWindow(QMainWindow):
             else:
                 accuracy = "No official score/alliance data for this local video."
         self.details.setPlainText(f"{accuracy}\n\nSaved in: {self.review.directory}\nCorrections: {len(self.review.corrections)}\n\n" + json.dumps(self.review.result, indent=2))
+
+    def refresh_strategy(self):
+        """Behaviour for this match, and each of its teams' profile across every saved run.
+
+        Positions and teams come from the same corrected review the other tabs show. Matches
+        without field calibration still list robots, with positions marked unavailable.
+        """
+        from ingest.strategy.features import match_features
+        from ingest.strategy.profile import build_profile
+        from ingest.strategy.timeline import build_timelines, load_geometry
+
+        self.strategy_table.setRowCount(0)
+        try:
+            season = self.review.season
+            geometry = load_geometry(int(self.review.job.get("season") or 2026))
+            features = match_features(build_timelines(self.review.directory), geometry, season)
+        except Exception as exc:  # A strategy failure must not stop the review from opening.
+            self.strategy_text.setPlainText(f"Strategy unavailable: {exc}")
+            return
+
+        def spot(f):
+            spots = (f.get("shooting") or {}).get("spots") or []
+            return f"({spots[0]['ax']:.0f}, {spots[0]['ay']:.0f}) x{spots[0]['launches']}" if spots else None
+
+        fill_table(self.strategy_table, [[
+            f"Team {f['team']}" if f.get("team") else f["robot_key"], f.get("alliance"),
+            f["coverage"]["observed_s"], f["coverage"]["positioned_s"], f["launches"]["total"], spot(f),
+            (f.get("shooting") or {}).get("median_volley_interval_s"), (f.get("shooting") or {}).get("median_dwell_s"),
+            (f.get("defense") or {}).get("near_opponent_s"),
+            (f["start"]["lane"] if f.get("start") else None)] for f in features])
+
+        teams = {f["team"] for f in features if f.get("team")}
+        history: dict[int, list[dict]] = {team: [] for team in teams}
+        for run in sorted(RUNS.glob("*/tracks.jsonl")):
+            if run.parent.resolve() == self.review.directory:
+                continue
+            try:
+                for f in match_features(build_timelines(run.parent), geometry, season):
+                    if f.get("team") in history:
+                        history[f["team"]].append(f)
+            except Exception:
+                continue
+        for f in features:
+            if f.get("team") in history:
+                history[f["team"]].append(f)
+
+        lines = ["Positions are in each team's own alliance frame: feet from its own wall, "
+                 "and across from its right side.", ""]
+        if not teams:
+            lines.append("Assign team numbers in Robots to build team profiles and counters.")
+        for team in sorted(teams):
+            profile = build_profile(history[team])
+            lines.append(f"TEAM {team}: {profile['n_matches']} matches, "
+                         f"{profile['n_with_positions']} with field positions")
+            tendencies = profile.get("tendencies")
+            if tendencies:
+                start = tendencies["start"]
+                if start["lane"]:
+                    lines.append(f"  starts {start['lane']} lane ({start['lane_matches']}/{start['known']})")
+                for s in tendencies["shooting"]["spots"]:
+                    lines.append(f"  shoots from ({s['ax']}, {s['ay']}) ft: {s['launches']} launches, {s['matches']} matches")
+            for counter in profile["counters"]:
+                lines.append(f"  COUNTER: {counter['advice']}")
+                lines.append(f"     because: {counter['evidence']}")
+            if not profile["counters"]:
+                lines.append("  no counters yet: needs 3+ matches with positions and a clear tendency")
+            lines.append("")
+        self.strategy_text.setPlainText("\n".join(lines))
 
     def position_changed(self, position):
         if not self.seek.isSliderDown():
@@ -694,7 +772,7 @@ def main(argv=None):
     parser.add_argument("--run", type=Path)
     parser.add_argument("--demo", action="store_true")
     parser.add_argument("--seek", type=float, default=0, help="Initial playback position in seconds")
-    parser.add_argument("--tab", choices=["Timeline", "Robots", "Team stats", "Heat map", "Shots", "Run details"])
+    parser.add_argument("--tab", choices=["Timeline", "Robots", "Team stats", "Heat map", "Shots", "Run details", "Strategy"])
     args = parser.parse_args(argv)
     app = QApplication(sys.argv[:1])
     app.setApplicationName("Tengen")

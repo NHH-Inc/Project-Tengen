@@ -106,6 +106,7 @@ def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: 
     )
     try:
         engine.run_job(job, str(season_path), on_progress=progress)
+        read_match_clock(directory, video, read_json(season_path), progress)
         job["status"] = "complete"
         write_json(directory / "job.json", job)
         return directory
@@ -113,6 +114,24 @@ def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: 
         job.update(status="failed", error=str(exc))
         write_json(directory / "job.json", job)
         raise
+
+
+def read_match_clock(directory: Path, video: Path, season: dict, progress=lambda value, stage: None) -> None:
+    """Fit match time from the scoreboard clock, so phases are not counted from the clip start.
+
+    Optional: footage with no scoreboard (our own camera) or a machine without Tesseract simply
+    has no match_clock.json, and the strategy layer says its match time was assumed.
+    """
+    from ingest.strategy.clock import fit_clock, read_clock
+    from ingest.team_id import tesseract_available
+
+    if not tesseract_available():
+        return
+    progress(None, "reading match clock")
+    readings = read_clock(video)
+    clock = fit_clock(readings, season)
+    if clock.source == "scoreboard_clock":
+        write_json(directory / "match_clock.json", {**clock.as_dict(), "readings": readings})
 
 
 def mark_canceled(directory: Path) -> None:

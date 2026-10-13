@@ -1,0 +1,21 @@
+{
+  "season": 2026,
+  "description": "Strategy geometry for 2026 REBUILT, in the ALLIANCE FRAME: feet, origin at the robot's own alliance wall corner, x toward the opponent wall, y to the driver's left. A red robot's field position is rotated 180 degrees about the field centre into this frame, so one team's red and blue matches compare directly.",
+  "provenance": "Field size and hub centres are computed from contracts/fields/2026-apriltags.json (WPILib, surveyed): each hub centre is the midpoint of its eight face tags (blue hub tags 18-21, 24-27). Zone boundaries are placed at the hub centre lines; that is an approximation of the game's alliance-zone lines, not a transcription of the game manual.",
+  "field_length_ft": 54.268,
+  "field_width_ft": 26.473,
+  "hubs": {
+    "own_hub": { "x": 15.176, "y": 13.237, "half_size_ft": 1.98 },
+    "opponent_hub": { "x": 39.093, "y": 13.237, "half_size_ft": 1.98 }
+  },
+  "zones": [
+    { "id": "own_alliance_zone", "label": "Own alliance zone", "x_min": 0.0, "x_max": 15.176 },
+    { "id": "neutral_zone", "label": "Neutral zone", "x_min": 15.176, "x_max": 39.093 },
+    { "id": "opponent_alliance_zone", "label": "Opponent alliance zone", "x_min": 39.093, "x_max": 54.268 }
+  ],
+  "lanes": [
+    { "id": "right", "label": "Right lane (driver's view)", "y_min": 0.0, "y_max": 8.824 },
+    { "id": "centre", "label": "Centre lane", "y_min": 8.824, "y_max": 17.649 },
+    { "id": "left", "label": "Left lane (driver's view)", "y_min": 17.649, "y_max": 26.473 }
+  ]
+}
