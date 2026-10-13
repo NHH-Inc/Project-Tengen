@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from desktop.core import (AnalysisOptions, DEFAULT_MODEL, DEFAULT_BALL_CONFIG, FIXTURE, ROOT, RUNS, Review,
                           mark_canceled, read_json, write_json)
-from ingest.yolo_orchestrator import phase_at, MODEL_CROP
+from ingest.yolo_orchestrator import ABOVE_SCORE_BAR, phase_at, MODEL_CROP
 from desktop.rendering import VideoCanvas, HeatMap, FULL_FRAME
 
 STYLE = """
@@ -115,6 +115,14 @@ class AnalysisDialog(QDialog):
         self.auto_calibrate = QCheckBox("Try automatic AprilTag field calibration")
         self.auto_calibrate.setChecked(True)
         layout.addRow(self.auto_calibrate)
+        self.view = QComboBox()
+        for label, crop in (("Championship broadcast (two stacked cameras)", None),
+                            ("Other broadcast: everything above the score bar", list(ABOVE_SCORE_BAR)),
+                            ("Whole frame (our own camera)", list(FULL_FRAME))):
+            self.view.addItem(label, crop)
+        self.view.setToolTip("Which part of each frame the robot detector looks at. Pick the one "
+                             "that keeps every robot and drops the score graphics.")
+        layout.addRow("Video layout", self.view)
         self.annotated = QCheckBox("Save a video with detection overlays")
         self.annotated.setChecked(True)
         layout.addRow(self.annotated)
@@ -143,7 +151,7 @@ class AnalysisDialog(QDialog):
                                match_id=self.match.text(), device=self.device.currentText(),
                                confidence=self.confidence.value(), ball_config=self.ball.text(),
                                homography=self.calibration.text(), auto_homography=self.auto_calibrate.isChecked(),
-                               annotated=self.annotated.isChecked())
+                               annotated=self.annotated.isChecked(), crop=self.view.currentData())
 
 
 class MainWindow(QMainWindow):

@@ -25,10 +25,28 @@ AUTO_HOMOGRAPHY_REGION = (0.0, 0.68)
 #: which on such a recording is the near half of the field: every robot there would be cut out
 #: before the model saw it. Uploads are analysed whole.
 FULL_FRAME = (0.0, 0.0, 1.0, 1.0)
+#: Off-season and regional broadcasts do not share the Championship's stacked layout. Space Coast
+#: Showdown 2026 switches between one wide shot and two stacked panels, with the score bar across
+#: the bottom 23% -- MODEL_CROP there cut off the near side of the field, robots included. This
+#: keeps everything above the score bar.
+ABOVE_SCORE_BAR = (0.0, 0.0, 1.0, 0.765)
 
 
 def crop_for(job_data: dict) -> tuple[float, float, float, float]:
-    """The part of each frame the model sees: the broadcast crop, or all of an upload."""
+    """The part of each frame the model sees.
+
+    An explicit `model_crop` on the job wins, because broadcast layouts differ between events.
+    Otherwise all of an upload, or the Championship broadcast crop.
+    """
+    explicit = job_data.get("model_crop")
+    if explicit is not None:
+        try:
+            left, top, right, bottom = (float(v) for v in explicit)
+        except (TypeError, ValueError):
+            raise ValueError(f"model_crop must be four numbers, got {explicit!r}") from None
+        if not (0.0 <= left < right <= 1.0 and 0.0 <= top < bottom <= 1.0):
+            raise ValueError(f"model_crop must lie inside the frame, got {explicit!r}")
+        return (left, top, right, bottom)
     return FULL_FRAME if job_data.get("capture_mode") == "local" else MODEL_CROP
 
 

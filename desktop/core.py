@@ -69,6 +69,9 @@ class AnalysisOptions:
     homography: str = ""
     auto_homography: bool = True
     annotated: bool = True
+    #: The part of each frame the model sees, as (left, top, right, bottom) shares. None means the
+    #: Championship broadcast crop. See ingest.yolo_orchestrator for the named layouts.
+    crop: list | None = None
 
 
 def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: Path = RUNS,
@@ -89,6 +92,8 @@ def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: 
                match_id=options.match_id.strip() or f"local_{job_id[:8]}", season=options.season,
                start_offset=0, status="analyzing", created_at=datetime.now(timezone.utc).isoformat(),
                **metadata)
+    if options.crop is not None:
+        job["model_crop"] = list(options.crop)
     write_json(directory / "job.json", job)
     write_json(directory / "options.json", vars(options))
     # Tell the caller where the run lives before any long work starts. On Windows a cancel is a

@@ -235,6 +235,15 @@ class YoloOrchestratorTests(unittest.TestCase):
         self.assertEqual(crop_for({}), MODEL_CROP)
         self.assertEqual(crop_for({"capture_mode": "live"}), MODEL_CROP)
 
+    def test_an_explicit_crop_wins_and_is_checked(self):
+        """Broadcast layouts differ by event, so a job may name its own crop."""
+        self.assertEqual(crop_for({"model_crop": [0, 0, 1, 0.765]}), (0.0, 0.0, 1.0, 0.765))
+        self.assertEqual(crop_for({"capture_mode": "local", "model_crop": [0, 0.1, 1, 0.9]}),
+                         (0.0, 0.1, 1.0, 0.9))
+        for bad in ([0, 0, 1], [0.5, 0, 0.4, 1], [0, 0, 1.2, 1], "full"):
+            with self.assertRaises(ValueError):
+                crop_for({"model_crop": bad})
+
     def test_crop_coordinates_can_be_mapped_back_to_the_source(self):
         box = crop_box_to_source((0.0, 0.0, 1.0, 1.0), (0.02, 0.035, 0.98, 0.66), 960, 625)
         self.assertEqual(box, (0.02, 0.035, 0.96, 0.625))
