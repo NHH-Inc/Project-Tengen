@@ -376,8 +376,11 @@ in the 2027 season. **Rough owners are suggestions; adjust them in Discord.**
   identity slot went to a tiny false positive at the blue alliance wall (median box a fifth of a
   robot's width), and robot 4027 plus that slot both ended at 73 s, so only 4 of 6 robots
   were tracked for the last ~100 s. The re-ID layer needs a minimum box size before a track
-  may claim a slot. *(Robert: `track_yolo.py` identity layer.)* The miner now flags this as
-  `undersized`.
+  may claim a slot. The miner now flags this as `undersized`.
+- **Fixed 2026-10-13 (`fe374d1`)**: tiny boxes may not take an identity, and once six exist a
+  robot hidden past the 5 s memory gets its own back. Same match, re-analysed: all six robots
+  tracked for **111 of 164 s (was 41)**, at least five for 150 s (was 58), alliances 3/3 (was
+  4/2), no undersized track. *(Robert: please review.)*
 - Measure the Python engine's six-robot re-ID on more broadcast matches. Target: ≤ 8 tracks for
   6 robots on broadcast footage, and exactly 6 on our own camera.
 - Identity panel: TBA schedule + bumper colour + 6-click assignment. *(Robert, in desktop)*
