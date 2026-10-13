@@ -1,175 +1,113 @@
-# Project Tengen
+<img src="brand/tengen-mark.svg" width="100px" align="left" alt="Tengen">
 
-Watches recorded FRC match video and produces per-robot scouting data.
+### `Project Tengen`
 
-## Run the Python desktop app
+[![CI](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml)
+[![Model](docs/status/badge-model.svg)](docs/MODELS.md)
+[![Held-out](docs/status/badge-heldout.svg)](docs/MODELS.md)
+[![Tracking](docs/status/badge-tracking.svg)](docs/MODELS.md)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sZqMP3JEbb)
 
-Tengen now has a native Python desktop interface. It opens local videos, runs the trained
-YOLO detector, plays video with tracking overlays, and supports event review, team corrections,
-undo, field positions, team statistics, and CSV/JSON export. No localhost, browser, Node.js,
-database server, or C++ build is needed for this workflow.
+Tengen watches FRC match video and works out **how each team plays, and how to beat it**:
+where a robot shoots from and how long it sits there, its auto, its cycles, its defense, when it
+heads for the endgame. It runs offline on a laptop in the stands.
 
-On this Mac, open **Tengen** in `~/Applications`, or double-click **Launch Tengen.command**
-in this folder. Keep this project folder in place: the application launcher uses its Python
-environment and trained weights.
+<div flex="true">
+  <a href="docs/DESKTOP.md">Run it</a>
+  •
+  <a href="docs/STRATEGY-PLAN.md">The plan</a>
+  •
+  <a href="docs/MODELS.md">Models</a>
+  •
+  <a href="docs/IMPROVING-THE-MODEL.md">Improve the model</a>
+  •
+  <a href="docs/frc-scouting-0-contract.md">Doc 0</a>
+  •
+  <a href="https://discord.gg/sZqMP3JEbb">Discord</a>
+</div>
 
-To set up another Mac (Python 3.11 required):
+<br clear="left"/>
 
-```sh
-./setup-desktop.sh
-.venv-desktop/bin/python -m desktop.install_macos
-.venv-desktop/bin/python tengen.py
+![Tengen on a 2026 Championship match: tracked robots, and every path and shot of the match from above](docs/assets/hero.jpg)
+
+<sub>2026 Championship, Curie qualification 10. Left: the six robots Tengen tracks. Right: every
+path and shot (yellow) of the match from above, from the field's own AprilTags.</sub>
+
+## What it does
+
+- **Finds and follows all six robots** in a broadcast, a phone recording or a webcam, and keeps
+  who is who through occlusion.
+- **Puts them on the field.** Positions in feet from the field's AprilTags, red rotated onto blue
+  so a team's matches line up whichever alliance it was on.
+- **Reads the match clock** off the scoreboard, so auto, teleop and endgame are where the referees
+  had them, not where the clip happens to start.
+- **Measures behaviour:** shooting spots and dwell, volley timing, start position and auto path,
+  zones and lanes, defense and who was marked, endgame timing.
+- **Builds team profiles and counters.** Every claim carries how many matches it rests on, and
+  links back to the video.
+
+## Status
+
+[![model](docs/status/badge-model.svg)](docs/MODELS.md)
+[![held-out](docs/status/badge-heldout.svg)](docs/MODELS.md)
+[![tracking](docs/status/badge-tracking.svg)](docs/MODELS.md)
+[![models](docs/status/badge-models.svg)](docs/MODELS.md)
+
+[![held-out map](docs/status/model-map.svg)](docs/MODELS.md)
+
+[![model history](docs/status/history.svg)](docs/MODELS.md)
+
+<sub>* Held-out: 400 frames of real 2026 broadcasts that no model has trained on, the same frames
+for every version. Each square is one frame, coloured by how many robots the current model finds;
+each block is one broadcast. Tracking: share of a real match with all six robots tracked at
+once. Every number is generated from [`training/registry`](training/registry) by
+`python -m tools.models evaluate` and `python -m tools.status`, never typed in.</sub>
+
+## Quick start
+
+The desktop app needs no server, browser or database.
+
+```powershell
+py -3.13 -m venv .venv-desktop
+.venv-desktop\Scripts\python -m pip install -r requirements-desktop.txt
+.venv-desktop\Scripts\python tengen.py
 ```
 
-Choose **Open video…**, then **Analyze video…**. **Load demo** opens the bundled synthetic
-video with known tracks and events. See [Desktop guide](docs/DESKTOP.md) for settings,
-saved files, verification, and current analysis limitations.
+Then double-click **`Launch Tengen.cmd`** next time (on a Mac, `./setup-desktop.sh` and
+**`Launch Tengen.command`**). **Open video…**, then **Analyze video…**, then the **Strategy** tab.
+Details: [DESKTOP.md](docs/DESKTOP.md). The web app and ingest service:
+[WEB-AND-API.md](docs/WEB-AND-API.md).
 
-The original web/API components remain available for existing deployments. The sections below
-describe that older workflow; the native desktop app is the default entry point for this Mac.
-
-> "FRC" throughout these docs means the competition — FRC matches, FRC robots, FRC fields.
-> The project itself is Tengen. Environment variables keep their `FRC_` prefix on purpose:
-> renaming them would break every teammate's `.env` for no benefit.
+## How it works
 
 ```
-[3] web  ──HTTP──▶  [2] ingest  ──exec──▶  [1] analysis
-                         │                       │
-                         ├── yt-dlp              └── events.jsonl, tracks.jsonl
-                         ├── TBA API
-                         └── Postgres
+video ─▶ detect + track ─▶ timeline ─▶ features ─▶ profile ─▶ counters
+         (YOLO11, six      (10 Hz, field  (spots, dwell,  (per team,   (advice with
+          identities,       feet, match    volleys, auto,  with n)      its evidence)
+          AprilTags,        clock)         defense)
+          shots)
 ```
 
-Three components, one repo, **no cross-imports**. Component 3 only ever talks to component 2 over
-HTTP; component 2 runs component 1 as a subprocess. `docs/frc-scouting-0-contract.md` is the only
-shared surface, and nothing in `/contracts/` changes without all three of us agreeing.
-
-| Dir | Component | Language | Owns |
-|---|---|---|---|
-| `analysis/` | 1 | C++ | Detection, tracking, OCR, event extraction |
-| `ingest/` | 2 | Python | yt-dlp, TBA/YouTube APIs, job queue, HTTP API, the database |
-| `web/` | 3 | TypeScript | UI, player, overlay, corrections, Sheets export |
-| `contracts/` | — | — | Shared schemas + per-year season configs. **Owned by everyone.** |
-| `fixtures/` | — | — | Golden test data. **Owned by everyone.** |
-| `training/` | — | Python | RF-DETR detector training. Runs on an NVIDIA GPU only. |
-| `docs/` | — | — | Everything below |
-
-## Which doc do I want?
-
-| I want to… | Read |
+| | |
 |---|---|
-| **Understand the whole project** | [docs/HANDOFF.md](docs/HANDOFF.md) |
-| **Know what to do next** | [docs/PLAN.md](docs/PLAN.md) |
-| **Just run it** | [docs/RUNNING.md](docs/RUNNING.md) |
-| **Understand or do model training** | [docs/TRAINING.md](docs/TRAINING.md) |
-| **Get frames labelled by people** | [docs/LABELLING.md](docs/LABELLING.md) |
-| **Host it / know where videos and data live** | [docs/HOSTING.md](docs/HOSTING.md) |
-| **Set up the one shared instance** | [docs/CENTRAL-SETUP.md](docs/CENTRAL-SETUP.md) |
-| **Know why something is the way it is** | [docs/DECISIONS.md](docs/DECISIONS.md) |
-| **Write code against the data formats** | [docs/frc-scouting-0-contract.md](docs/frc-scouting-0-contract.md), then [contracts/README.md](contracts/README.md) |
-| **Understand the player / overlay timing rules** | [docs/media-streaming.md](docs/media-streaming.md) |
+| [Doc 0](docs/frc-scouting-0-contract.md) | The shared contract. Read first. |
+| [Strategy plan](docs/STRATEGY-PLAN.md) | Where Tengen is going and what is measured so far |
+| [Models](docs/MODELS.md) | Every detector, numbered, with its scores |
+| [Improving the model](docs/IMPROVING-THE-MODEL.md) | Step by step, from a match to a better model |
+| [Desktop](docs/DESKTOP.md) · [Web and API](docs/WEB-AND-API.md) · [Running](docs/RUNNING.md) | Using it |
+| [Training](docs/TRAINING.md) · [Labelling](docs/LABELLING.md) | Building models |
+| [Decisions](docs/DECISIONS.md) | Why things are the way they are |
 
-## Fastest possible start
+## Team
 
-Nothing installed, no backend, no database — the whole UI against the golden fixtures:
+Built by FRC students: Justin ([@ComplexKing](https://github.com/ComplexKing)), Robert
+([@rtrod](https://github.com/rtrod)) and Nathaniel ([@shenjiatv-jpg](https://github.com/shenjiatv-jpg)).
+Questions, footage and help are welcome on [Discord](https://discord.gg/sZqMP3JEbb).
 
-```powershell
-cd web
-npm install
-npm run dev
-```
+## Credits and disclaimer
 
-Open `http://localhost:5173`. You get a real 152-second clip with real tracks and events. This is
-the right way to work on the web app, and the right way to see what the project does.
-
-## Review robot boxes in competition images
-
-The standalone Python labeler opens local image/JSON pairs, overlays the JSON boxes, and autosaves
-red/blue corrections back to the matching JSON file:
-
-```powershell
-python -m pip install -r requirements-labeler.txt
-python robot_box_labeler.py "C:\path\to\competition-images"
-```
-
-Full input-format and editing details: [docs/ROBOT-BOX-LABELER.md](docs/ROBOT-BOX-LABELER.md).
-
-## The real thing
-
-```powershell
-.\run.ps1 setup
-.\run.ps1 full
-```
-
-`run.ps1` is the single entry point. `setup` installs everything; `full` starts ingest and the web
-app together. Ports are the doc 0 defaults — web `5173`, ingest `8080`, Postgres `5432`.
-
-| Command | Does |
-|---|---|
-| `.\run.ps1 setup` | One-time install of every dependency |
-| `.\run.ps1 doctor` | Tells you what is missing and how to fix it |
-| `.\run.ps1 web` | Web app only, fixture data, no backend |
-| `.\run.ps1 api` | Ingest service only |
-| `.\run.ps1 full` | Both, wired together |
-| `.\run.ps1 check` | Every test and contract check |
-| `.\run.ps1 clean` | Reclaim disk from cached segments |
-
-Full walkthrough, prerequisites, and troubleshooting: [docs/RUNNING.md](docs/RUNNING.md).
-
-## The rules that keep getting rediscovered
-
-These are in doc 0, but they are the ones people break:
-
-- **Corrections never overwrite model output.** `?raw=true` must always return exactly what the
-  model said. A correction composes on read.
-- **`phase` is derived** from `contracts/seasons/<year>.json`. Never hardcode 15/135/20.
-- **Tracks carry a required `gaps` array.** Never interpolate across a gap, and never split a
-  track at one — a gap means "the camera cut away," not "a new robot."
-- **Aggregates are queried, never stored.**
-- **Anything unrecognised is a bug, not a fallback.** Drop the row and report it; do not coerce it.
-- **`goal` is season-scoped** — legal values come from the season config's `goals` array, not from
-  a doc 0 enum.
-- Point values stay zero until the 2026 game is public.
-
-## Configuration
-
-Component 2 reads these from the environment. All are optional — the service degrades rather than
-fails.
-
-| Variable | Effect when unset |
-|---|---|
-| `DATABASE_URL` | SQLite at `./frc_scouting.db`. Set to Postgres in production. |
-| `TBA_API_KEY` | `alliances` and `tba_score` stay null; no scores to check accuracy against. |
-| `SHEETS_SPREADSHEET_ID` + `GOOGLE_APPLICATION_CREDENTIALS` | `POST /api/export/sheets` returns 503 instead of silently not writing. |
-| `FRC_DATA_DIR` | `./data` — segments in `data/segments/`, job output in `data/jobs/`. |
-| `ANALYSIS_BINARY` | `./analysis/build/bin/analysis` |
-| `FRC_ANALYSIS_BACKEND` | `auto` — selects YOLO + ByteTrack when configured, otherwise native |
-| `YOLO_PYTHON` | unset — dedicated Python executable containing Ultralytics, so native is used unless set |
-| `YOLO_MODEL_PATH` | trained YOLO `.pt` path; defaults to the local FRC robot checkpoint when present |
-| `FRC_YOLO_TRACKER` | `bytetrack` |
-| `FRC_YOLO_CONFIDENCE` / `FRC_YOLO_IMAGE_SIZE` / `FRC_YOLO_FRAME_STRIDE` / `FRC_YOLO_DEVICE` | `0.25` / `960` / `1` / `0`; every source frame by default, enforced when ball scouting is configured |
-| `FRC_YOLO_REID_MEMORY_SECONDS` | `5.0` — appearance-backed identity memory after a robot disappears |
-| `FRC_YOLO_REID_APPEARANCE_THRESHOLD` / `FRC_YOLO_REID_SCORE_MARGIN` | `0.60` / `0.08` — merge evidence and ambiguity gates |
-| `FRC_YOLO_REID_MAX_DISTANCE` / `FRC_YOLO_REID_MAX_SPEED` | `0.60` / `0.75` — normalized image-space motion gates when field calibration is unavailable |
-| `FRC_YOLO_REID_EDGE_THRESHOLD` | `0.10` — boundary band for edge-consistent re-entry |
-| `FRC_YOLO_REID_TEMPLATE_GALLERY_SIZE` / `FRC_YOLO_REID_TEMPLATE_CONFIRMATION_FRAMES` | `5` / `3` — protected appearance gallery settings |
-| `FRC_YOLO_REID_TEMPLATE_MIN_CONFIDENCE` | `0.50` — minimum detector confidence for a new gallery exemplar |
-| `FRC_YOLO_REID_ALLIANCE_LOCK_SECONDS` / `FRC_YOLO_REID_ALLIANCE_LOCK_MARGIN_SECONDS` | `5.0` / `2.0` — trusted observation time and evidence lead required before an identity's alliance becomes permanent |
-| `FRC_YOLO_STARTUP_POSITION_SECONDS` / `FRC_YOLO_STARTUP_SPLIT_X` | `2.0` / `0.50` — during the opening window, image-left authoritatively locks blue and image-right locks red; set seconds to `0` to disable |
-| `FRC_BALL_SCOUTING_CONFIG` | unset disables the separate HSV ball/shot pipeline; the checked-in `.env.example` enables it with the starter config, which can be replaced by a camera-specific file; see [docs/BALL-SCOUTING.md](docs/BALL-SCOUTING.md) |
-| `FRC_AUTO_HOMOGRAPHY` | `1` — fit a carpet mapping from steady field AprilTags for each job |
-| `FRC_HOMOGRAPHY_CONFIG` | optional fixed camera calibration JSON; takes precedence over automatic calibration |
-| `FRC_DEFAULT_SEASON` | `2026` |
-| `FRC_MIN_FREE_GB` | `10` — refuses to start a download below this. |
-| `FRC_SEGMENT_GRACE_DAYS` | `7` — how long a completed job's video survives before `clean` reclaims it. |
-
-Never commit `ingest/.env`, `data/`, ONNX weights, service-account JSON, or Hugging Face tokens.
-
-## Checks
-
-```powershell
-.\run.ps1 check
-```
-
-Which runs: web typecheck + build + fixture validation, 71 Contract E smoke checks, and 30 ingest
-unit tests.
+FIRST®, FRC® and REBUILT™ are trademarks of FIRST. Tengen is an independent student project and
+is not affiliated with or endorsed by FIRST. Match frames shown here come from public FIRST
+broadcasts. The 2026 AprilTag layout is WPILib's (BSD-3-Clause, see
+[its attribution](contracts/fields/2026-apriltags.ATTRIBUTION.md)); the first training images came
+from two CC BY 4.0 Roboflow Universe datasets.
