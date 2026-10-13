@@ -149,3 +149,16 @@ preference must never quietly grant access to anything.
 `#frc-announcements` exists as a destination. Following has to be done from the *source* side:
 open the FRC server's announcement channel and use Follow, then pick this channel. A bot cannot do
 it, because the permission being exercised belongs to a member of that server, not to us.
+
+## Posting model results
+
+```powershell
+.venv-desktop\Scripts\python tools\discord-bot\post_models.py          # preview
+.venv-desktop\Scripts\python tools\discord-bot\post_models.py --send   # post
+```
+
+Posts the model scoreboard to the public, read-only `#model-scoreboard` (created on first use;
+the bot replaces its own previous scoreboard so the channel is always the current state), and a
+fuller update to the private `#model-training`. Run `python -m tools.models evaluate` and
+`python -m tools.status` first. `discord_api.py` is the small REST client both use; it reads the
+token from `.env` and never prints it.

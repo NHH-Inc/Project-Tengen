@@ -47,11 +47,11 @@ def request(method: str, path: str, body: dict | None = None, files: list[Path] 
         boundary = uuid.uuid4().hex
         parts = [f"--{boundary}\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n"
                  f"Content-Type: application/json\r\n\r\n{json.dumps(body or {})}\r\n".encode()]
-        for index, path in enumerate(files):
-            kind = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        for index, upload in enumerate(files):
+            kind = mimetypes.guess_type(upload.name)[0] or "application/octet-stream"
             parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"files[{index}]\"; "
-                         f"filename=\"{path.name}\"\r\nContent-Type: {kind}\r\n\r\n".encode()
-                         + path.read_bytes() + b"\r\n")
+                         f"filename=\"{upload.name}\"\r\nContent-Type: {kind}\r\n\r\n".encode()
+                         + upload.read_bytes() + b"\r\n")
         parts.append(f"--{boundary}--\r\n".encode())
         data = b"".join(parts)
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
