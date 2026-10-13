@@ -77,6 +77,9 @@
         { "name": "roadmap", "type": "text",
           "topic": "What is being worked on and what is planned next.",
           "read_only_for": ["@everyone"] },
+        { "name": "model-scoreboard", "type": "text",
+          "topic": "Every robot detector, scored on the same held-out frames. Updated by the bot.",
+          "read_only_for": ["@everyone"] },
         { "name": "showcase", "type": "text",
           "topic": "Tengen in action: clips, screenshots, scouting results." }
       ]
