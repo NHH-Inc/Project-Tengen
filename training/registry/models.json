@@ -1,0 +1,80 @@
+{
+  "_comment": "Every robot detector Tengen has had, numbered. Facts here come from each checkpoint's own training record (train_args, train_metrics) or a saved run; nothing is filled in from memory. Held-out scores are generated into scores/<id>.json by `python -m tools.models evaluate` and must not be edited by hand. Weights live in data/ and are never committed.",
+  "yardstick": {
+    "pack": "data/label-packs/v3-viewpoint",
+    "description": "400 frames of real 2026 broadcast footage across venues, never trained on. Counts robots found per frame; six play a match, and stacked two-view broadcasts show them twice, so six is a floor.",
+    "headline": "full_share"
+  },
+  "models": [
+    {
+      "id": "v1",
+      "name": "robot-v1",
+      "status": "retired",
+      "file": "data/robot-v1.onnx",
+      "weights": "data/robot-v1.pt",
+      "architecture": "YOLO11n",
+      "trained_by": "Robert",
+      "trained_on": "2026-09-01",
+      "train_size_px": 960,
+      "epochs": 100,
+      "dataset": "frc-robots-merged: 2,429 human-labelled images from two CC BY 4.0 Roboflow datasets, splits rebuilt by source image",
+      "val": {"precision": 0.843, "recall": 0.857, "map50": 0.908, "map50_95": 0.602},
+      "notes": "The first detector. Its val split is not v2's or v3's, so these numbers do not compare across versions; the held-out score does."
+    },
+    {
+      "id": "v2",
+      "name": "robot-v2",
+      "status": "retired",
+      "file": "data/robot-v2.onnx",
+      "weights": "data/robot-v2.pt",
+      "architecture": "YOLO11n",
+      "trained_by": "Justin",
+      "trained_on": "2026-09-03",
+      "train_size_px": 960,
+      "epochs": 150,
+      "dataset": "frc-robots-v2: the merged set plus 1,017 machine-labelled 2026 match frames (detector corroborated by temporal persistence); 3,446 images",
+      "val": {"precision": 0.862, "recall": 0.864, "map50": 0.900, "map50_95": 0.595},
+      "run": "training/registry/runs/v2/results.png",
+      "notes": "Trained on the AMD RX 7800 XT through ROCm in WSL. Nearly blind to the lower panel of stacked broadcasts."
+    },
+    {
+      "id": "v3-640",
+      "name": "robot-v3 (640 export)",
+      "status": "retired",
+      "file": "data/robot-v3-640.onnx",
+      "weights": "data/robot-v3.pt",
+      "architecture": "YOLO11n",
+      "trained_by": "Robert",
+      "trained_on": "2026-09-05",
+      "train_size_px": 640,
+      "epochs": 100,
+      "dataset": "robot-yolo11n-reviewed-aug: over 1,000 images reviewed by hand in Robert's labeller, with augmentation",
+      "val": {"precision": 0.947, "recall": 0.957, "map50": 0.973, "map50_95": 0.544},
+      "run": "training/registry/runs/v3/results.png",
+      "notes": "The same weights as v3, exported for 640 px input. Posted in #model-training on 2026-09-06."
+    },
+    {
+      "id": "v3",
+      "name": "robot-v3",
+      "status": "current",
+      "file": "data/robot-v3.onnx",
+      "weights": "data/robot-v3.pt",
+      "architecture": "YOLO11n",
+      "trained_by": "Robert",
+      "trained_on": "2026-09-05",
+      "train_size_px": 640,
+      "epochs": 100,
+      "dataset": "robot-yolo11n-reviewed-aug: over 1,000 images reviewed by hand in Robert's labeller, with augmentation",
+      "val": {"precision": 0.947, "recall": 0.957, "map50": 0.973, "map50_95": 0.544},
+      "run": "training/registry/runs/v3/results.png",
+      "pipeline": {
+        "match": "2026 Championship Curie qm10",
+        "all_six_tracked_share": 0.68,
+        "at_least_five_tracked_share": 0.91,
+        "measured_on": "2026-10-13",
+        "notes": "With the identity fix in fe374d1; before it, 0.25 and 0.35. This measures the whole tracking pipeline, not the detector alone."
+      },
+      "notes": "Trained at 640 px, exported for 960 px input, which scores better on held-out footage. In use by the desktop app and the analyzer."
+    }
+  ]
+}

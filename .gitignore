@@ -119,3 +119,10 @@ weights/
 *.bmp
 *.tif
 *.tiff
+
+# The few images that belong in the repository: README art, the generated status graphics, and
+# each model's training curves. Everything else image-shaped is data and stays out (above).
+!docs/assets/*.jpg
+!docs/assets/*.png
+!docs/status/*.png
+!training/registry/runs/*/*.png

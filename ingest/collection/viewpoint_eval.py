@@ -85,7 +85,7 @@ def evaluate(detector, pack: Path, expected: int = 6, progress=None,
     else:
         reviewed = reviewed_stems(pack)
         truth = truth_counts(pack / "labels", reviewed) if reviewed else {}
-    counts, per_segment, matched, found_of_truth = [], {}, [], []
+    counts, per_segment, matched, found_of_truth, per_frame = [], {}, [], [], {}
     images = sorted((pack / "images").glob("*.jpg"))
     for i, path in enumerate(images, 1):
         image = cv2.imread(str(path))
@@ -93,6 +93,7 @@ def evaluate(detector, pack: Path, expected: int = 6, progress=None,
             continue
         n = len(detector.detect(image))
         counts.append(n)
+        per_frame[path.stem] = n
         per_segment.setdefault(segment_of(path.stem), []).append(n)
         if path.stem in truth:
             matched.append(truth[path.stem])
@@ -111,6 +112,9 @@ def evaluate(detector, pack: Path, expected: int = 6, progress=None,
         "blind_frames": sum(1 for n in counts if n == 0),
         "full_frames": sum(1 for n in counts if n >= expected),
         "segments": {seg: mean(ns) for seg, ns in per_segment.items()},
+        # Every frame's count, so a status map can show which frames a model gets and which it
+        # does not, and two models can be compared frame by frame.
+        "per_frame": per_frame,
     }
     # Only meaningful once a pack comes back. Detections are not matched to boxes by IoU here --
     # this is a count, so it cannot tell a right box from a wrong one in the right quantity. It
