@@ -212,6 +212,24 @@ def _surrounding_colour(hsv, component):
     return "red" if red > blue else "blue"
 
 
+def _bar_columns(cells) -> slice:
+    """Both alliance cells and everything between them, whichever side red is on.
+
+    Venues disagree: Istanbul put red on the left, the 2026 Championship put blue there. Taking
+    red's left edge and blue's right edge assumed the former, and on a blue-left broadcast it
+    produced an empty strip, so the timer and both scores read as nothing for the whole match.
+    """
+    left = min(cells["red"][0], cells["blue"][0])
+    right = max(cells["red"][1], cells["blue"][1])
+    return slice(left, right + 1)
+
+
+def _bar_rows(cells) -> slice:
+    top = min(cells["red"][2], cells["blue"][2])
+    bottom = max(cells["red"][3], cells["blue"][3])
+    return slice(top, bottom + 1)
+
+
 def read_alliance_scores(frame) -> tuple[int | None, int | None]:
     """(red, blue) as shown on the scoreboard, or None for either that could not be read.
 
@@ -238,10 +256,7 @@ def read_alliance_scores(frame) -> tuple[int | None, int | None]:
     if not cells:
         return None, None
 
-    left = cells["red"][0]
-    right = cells["blue"][1]
-    top, bottom = cells["red"][2], cells["red"][3]
-    bar = frame[top:bottom + 1, left:right + 1]
+    bar = frame[_bar_rows(cells), _bar_columns(cells)]
     if bar.size == 0:
         return None, None
 
@@ -315,9 +330,7 @@ def read_match_timer(frame) -> int | None:
     if not cells:
         return None
 
-    left, right = cells["red"][0], cells["blue"][1]
-    top, bottom = cells["red"][2], cells["red"][3]
-    bar = frame[top:bottom + 1, left:right + 1]
+    bar = frame[_bar_rows(cells), _bar_columns(cells)]
     if bar.size == 0:
         return None
 
