@@ -114,14 +114,12 @@ def main(argv=None) -> int:
             readings = read_clock(video)
             clock = fit_clock(readings, season)
             (run / "match_clock.json").write_text(json.dumps(
-                {**clock.as_dict(), "readings": readings}, indent=1) + "
-", encoding="utf-8")
+                {**clock.as_dict(), "readings": readings}, indent=1) + "\n", encoding="utf-8")
             print(f"{run.name}: auto starts {clock.auto_start_t} s ({clock.auto_seconds:.0f} s), "
                   f"teleop starts {clock.teleop_start_t} s ({clock.teleop_seconds:.0f} s); "
                   f"{clock.support['auto']}+{clock.support['teleop']} of "
                   f"{clock.support['readings']} readings agree"
-                  + "".join(f"
-  note: {n}" for n in clock.notes))
+                  + "".join(f"\n  note: {n}" for n in clock.notes))
         return 0
 
     if args.command == "timeline":

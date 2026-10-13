@@ -249,3 +249,25 @@ class ProfileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CommandLineTests(unittest.TestCase):
+    """Nothing else imports the CLI, so a broken line there would only show up when someone ran it."""
+
+    def test_every_command_runs_on_an_analysed_match(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        from ingest.strategy.__main__ import main
+
+        match = Match("2026x_qm1")
+        match.tracks = [track(1, 254, "blue"), track(2, 118, "red")]
+        match.shoot(1, 20.0)
+        directory = match.write()
+        for command in ("clock", "timeline", "features", "profile", "evaluate"):
+            with self.subTest(command=command), redirect_stdout(StringIO()) as out:
+                self.assertEqual(main([command, str(directory)]), 0)
+            if command == "clock":
+                self.assertIn("video not found", out.getvalue())
+        self.assertTrue((directory / "timeline.jsonl").exists())
+        self.assertTrue((directory / "strategy_features.json").exists())
