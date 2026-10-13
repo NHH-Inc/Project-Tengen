@@ -95,8 +95,13 @@ mistaken for a finished one where the rest of the images genuinely had no robots
 Drop returned `labels/` folders back over the matching pack directory, then:
 
 ```powershell
-python -m ingest.collection.dataset_merge --into data\datasets\frc-robots-v3 data\datasets\frc-robots-v2 data\label-packs\v3-viewpoint
+python -m ingest.collection.dataset_merge --into data\datasets\frc-robots-v4 data\datasets\robot-yolo11n-reviewed-aug data\label-packs\<returned pack>
 ```
+
+> **Never merge `v3-viewpoint` (or any held-out pack).** Since 2026-10-13 it is the yardstick
+> every model is scored on ([MODELS.md](MODELS.md)). Training on it would inflate every later
+> score. Labels returned for it are used as `--truth` for scoring only. The full loop is in
+> [IMPROVING-THE-MODEL.md](IMPROVING-THE-MODEL.md).
 
 Images whose labels are still empty are **dropped, not merged** — an unlabelled image is not a
 negative example, and asserting "no robots here" about a frame nobody looked at is exactly the
