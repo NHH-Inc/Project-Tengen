@@ -1,0 +1,727 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 800" width="1100" height="800" font-family="Segoe UI,Helvetica,Arial,sans-serif">
+<rect x="0.00" y="0.00" width="1100.00" height="800.00" fill="#0d1117" stroke="#0d1117" stroke-width="0"></rect>
+<text x="6.0" y="24.0" font-size="16" fill="#ffffff" text-anchor="start">Held-out frames: v3 finds all six in 64.5% (258/400)</text>
+<rect x="6.00" y="34.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00018944: 8 robots</title></rect>
+<rect x="26.79" y="34.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00027119: 9 robots</title></rect>
+<rect x="47.58" y="34.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00035295: 8 robots</title></rect>
+<rect x="68.37" y="34.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00043470: 7 robots</title></rect>
+<rect x="6.00" y="50.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00051646: 8 robots</title></rect>
+<rect x="26.79" y="50.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00059822: 8 robots</title></rect>
+<rect x="47.58" y="50.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9mYUC_T8GOI_00000_00189_00067997: 9 robots</title></rect>
+<rect x="68.37" y="50.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00021447: 10 robots</title></rect>
+<rect x="6.00" y="67.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00029821: 10 robots</title></rect>
+<rect x="26.79" y="67.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00038195: 8 robots</title></rect>
+<rect x="47.58" y="67.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00046570: 6 robots</title></rect>
+<rect x="68.37" y="67.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00054944: 9 robots</title></rect>
+<rect x="6.00" y="84.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00063319: 9 robots</title></rect>
+<rect x="26.79" y="84.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QaUwhu3qnzE_00000_00215_00071693: 6 robots</title></rect>
+<rect x="47.58" y="84.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00021447: 7 robots</title></rect>
+<rect x="68.37" y="84.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00029821: 7 robots</title></rect>
+<rect x="6.00" y="100.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00046570: 8 robots</title></rect>
+<rect x="26.79" y="100.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00038195: 5 robots</title></rect>
+<rect x="47.58" y="100.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00054944: 5 robots</title></rect>
+<rect x="68.37" y="100.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00063319: 5 robots</title></rect>
+<rect x="6.00" y="117.33" width="83.16" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Vaw_PaSNYvg_00000_00215_00071693: 4 robots</title></rect>
+<rect x="6.00" y="34.00" width="83.16" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>BCVI: 17/21</title></rect>
+<text x="10.0" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">BCVI</text>
+<rect x="6.00" y="134.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00038200: 6 robots</title></rect>
+<rect x="26.79" y="134.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00054951: 7 robots</title></rect>
+<rect x="47.58" y="134.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00063326: 9 robots</title></rect>
+<rect x="68.37" y="134.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00021450: 7 robots</title></rect>
+<rect x="6.00" y="150.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00029826: 7 robots</title></rect>
+<rect x="26.79" y="150.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00038201: 6 robots</title></rect>
+<rect x="47.58" y="150.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00054953: 7 robots</title></rect>
+<rect x="68.37" y="150.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00063329: 7 robots</title></rect>
+<rect x="6.00" y="167.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00071704: 6 robots</title></rect>
+<rect x="26.79" y="167.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00021450: 8 robots</title></rect>
+<rect x="47.58" y="167.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00029825: 8 robots</title></rect>
+<rect x="68.37" y="167.33" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00021449: 5 robots</title></rect>
+<rect x="6.00" y="184.00" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00029824: 5 robots</title></rect>
+<rect x="26.79" y="184.00" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00046575: 5 robots</title></rect>
+<rect x="47.58" y="184.00" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MMbdsp2H5dM_00000_00215_00071701: 4 robots</title></rect>
+<rect x="68.37" y="184.00" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Z6PFdu7ncpQ_00000_00215_00046577: 5 robots</title></rect>
+<rect x="6.00" y="200.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00038201: 5 robots</title></rect>
+<rect x="26.79" y="200.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00046577: 4 robots</title></rect>
+<rect x="47.58" y="200.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00054952: 5 robots</title></rect>
+<rect x="68.37" y="200.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00063328: 5 robots</title></rect>
+<rect x="6.00" y="217.33" width="83.16" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_L9xLd0gqOc_00000_00215_00071703: 5 robots</title></rect>
+<rect x="6.00" y="134.00" width="83.16" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>MNDU: 11/21</title></rect>
+<text x="10.0" y="148.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MNDU</text>
+<rect x="6.00" y="234.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00021450: 6 robots</title></rect>
+<rect x="26.79" y="234.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00029826: 6 robots</title></rect>
+<rect x="47.58" y="234.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00038201: 7 robots</title></rect>
+<rect x="68.37" y="234.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00054953: 7 robots</title></rect>
+<rect x="6.00" y="250.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00063328: 7 robots</title></rect>
+<rect x="26.79" y="250.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00071704: 8 robots</title></rect>
+<rect x="47.58" y="250.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00021450: 7 robots</title></rect>
+<rect x="68.37" y="250.67" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00029826: 7 robots</title></rect>
+<rect x="6.00" y="267.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00038201: 7 robots</title></rect>
+<rect x="26.79" y="267.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00046577: 7 robots</title></rect>
+<rect x="47.58" y="267.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00054953: 9 robots</title></rect>
+<rect x="68.37" y="267.33" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00063329: 7 robots</title></rect>
+<rect x="6.00" y="284.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JiVe5Eih0nM_00000_00215_00071704: 9 robots</title></rect>
+<rect x="26.79" y="284.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00063329: 8 robots</title></rect>
+<rect x="47.58" y="284.00" width="20.79" height="16.67" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00071704: 8 robots</title></rect>
+<rect x="68.37" y="284.00" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>JCYKQvK58sk_00000_00215_00046577: 5 robots</title></rect>
+<rect x="6.00" y="300.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00021450: 5 robots</title></rect>
+<rect x="26.79" y="300.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00029826: 5 robots</title></rect>
+<rect x="47.58" y="300.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00038201: 5 robots</title></rect>
+<rect x="68.37" y="300.67" width="20.79" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00046577: 5 robots</title></rect>
+<rect x="6.00" y="317.33" width="83.16" height="16.67" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>feMJRFAO0Ps_00000_00215_00054953: 5 robots</title></rect>
+<rect x="6.00" y="234.00" width="83.16" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>MNDU2: 15/21</title></rect>
+<text x="10.0" y="248.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MNDU2</text>
+<rect x="89.16" y="34.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00021448: 6 robots</title></rect>
+<rect x="108.96" y="34.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00029823: 7 robots</title></rect>
+<rect x="128.76" y="34.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00046574: 6 robots</title></rect>
+<rect x="148.56" y="34.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00054949: 7 robots</title></rect>
+<rect x="89.16" y="54.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00063324: 8 robots</title></rect>
+<rect x="108.96" y="54.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00071699: 7 robots</title></rect>
+<rect x="128.76" y="54.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00021448: 6 robots</title></rect>
+<rect x="148.56" y="54.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00029823: 8 robots</title></rect>
+<rect x="89.16" y="74.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00046574: 8 robots</title></rect>
+<rect x="108.96" y="74.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00054949: 8 robots</title></rect>
+<rect x="128.76" y="74.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00063324: 9 robots</title></rect>
+<rect x="148.56" y="74.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00021449: 3 robots</title></rect>
+<rect x="89.16" y="94.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00029824: 3 robots</title></rect>
+<rect x="108.96" y="94.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00038200: 4 robots</title></rect>
+<rect x="128.76" y="94.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00046575: 5 robots</title></rect>
+<rect x="148.56" y="94.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00054951: 5 robots</title></rect>
+<rect x="89.16" y="114.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00063326: 4 robots</title></rect>
+<rect x="108.96" y="114.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1QMjM4xTGDI_00000_00215_00071701: 4 robots</title></rect>
+<rect x="128.76" y="114.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>UQ5ZP9G2qSM_00000_00215_00038198: 5 robots</title></rect>
+<rect x="148.56" y="114.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jd-o-OGicZs_00000_00215_00038198: 5 robots</title></rect>
+<rect x="89.16" y="34.00" width="79.20" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>COSP: 11/20</title></rect>
+<text x="93.2" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">COSP</text>
+<rect x="89.16" y="134.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00076417: 8 robots</title></rect>
+<rect x="108.96" y="134.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00028318: 7 robots</title></rect>
+<rect x="128.76" y="134.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00052340: 11 robots</title></rect>
+<rect x="148.56" y="134.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00060347: 7 robots</title></rect>
+<rect x="89.16" y="154.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00068354: 8 robots</title></rect>
+<rect x="108.96" y="154.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00076362: 9 robots</title></rect>
+<rect x="128.76" y="154.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00025412: 7 robots</title></rect>
+<rect x="148.56" y="154.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00033427: 9 robots</title></rect>
+<rect x="89.16" y="174.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00041441: 7 robots</title></rect>
+<rect x="108.96" y="174.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00049456: 11 robots</title></rect>
+<rect x="128.76" y="174.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00057470: 8 robots</title></rect>
+<rect x="148.56" y="174.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>v-em8cOpJWs_00000_00254_00065485: 10 robots</title></rect>
+<rect x="89.16" y="194.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00027077: 1 robots</title></rect>
+<rect x="108.96" y="194.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00035300: 1 robots</title></rect>
+<rect x="128.76" y="194.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00043524: 4 robots</title></rect>
+<rect x="148.56" y="194.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00051747: 1 robots</title></rect>
+<rect x="89.16" y="214.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00059971: 4 robots</title></rect>
+<rect x="108.96" y="214.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>AL4QJQi-bjY_00000_00271_00068194: 3 robots</title></rect>
+<rect x="128.76" y="214.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00036326: 5 robots</title></rect>
+<rect x="148.56" y="214.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>NnQTdEPUEaE_00000_00283_00044333: 5 robots</title></rect>
+<rect x="89.16" y="134.00" width="79.20" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>GADAL: 12/20</title></rect>
+<text x="93.2" y="148.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">GADAL</text>
+<rect x="89.16" y="234.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00021440: 7 robots</title></rect>
+<rect x="108.96" y="234.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00021443: 6 robots</title></rect>
+<rect x="128.76" y="234.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00029816: 6 robots</title></rect>
+<rect x="148.56" y="234.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00054936: 6 robots</title></rect>
+<rect x="89.16" y="254.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00021442: 6 robots</title></rect>
+<rect x="108.96" y="254.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00029814: 6 robots</title></rect>
+<rect x="128.76" y="254.00" width="19.80" height="20.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00038187: 6 robots</title></rect>
+<rect x="148.56" y="254.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00029812: 5 robots</title></rect>
+<rect x="89.16" y="274.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00038184: 4 robots</title></rect>
+<rect x="108.96" y="274.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00046555: 4 robots</title></rect>
+<rect x="128.76" y="274.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00054927: 3 robots</title></rect>
+<rect x="148.56" y="274.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00063299: 3 robots</title></rect>
+<rect x="89.16" y="294.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>499cjHigjF8_00000_00214_00071671: 4 robots</title></rect>
+<rect x="108.96" y="294.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00038190: 5 robots</title></rect>
+<rect x="128.76" y="294.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00046563: 5 robots</title></rect>
+<rect x="148.56" y="294.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00063309: 5 robots</title></rect>
+<rect x="89.16" y="314.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MVWGYfZpvSA_00000_00215_00071682: 4 robots</title></rect>
+<rect x="108.96" y="314.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00046559: 4 robots</title></rect>
+<rect x="128.76" y="314.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00054932: 2 robots</title></rect>
+<rect x="148.56" y="314.00" width="19.80" height="20.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>s8c4trP8GPc_00000_00215_00063304: 4 robots</title></rect>
+<rect x="89.16" y="234.00" width="79.20" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>MILAK: 7/20</title></rect>
+<text x="93.2" y="248.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MILAK</text>
+<rect x="168.36" y="34.00" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00021448: 9 robots</title></rect>
+<rect x="187.83" y="34.00" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00029823: 10 robots</title></rect>
+<rect x="207.30" y="34.00" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00038198: 7 robots</title></rect>
+<rect x="226.77" y="34.00" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00046574: 7 robots</title></rect>
+<rect x="168.36" y="54.34" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00054949: 6 robots</title></rect>
+<rect x="187.83" y="54.34" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00071699: 7 robots</title></rect>
+<rect x="207.30" y="54.34" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00021448: 6 robots</title></rect>
+<rect x="226.77" y="54.34" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00029823: 8 robots</title></rect>
+<rect x="168.36" y="74.68" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00046574: 9 robots</title></rect>
+<rect x="187.83" y="74.68" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00054949: 9 robots</title></rect>
+<rect x="207.30" y="74.68" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00063324: 7 robots</title></rect>
+<rect x="226.77" y="74.68" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00071699: 8 robots</title></rect>
+<rect x="168.36" y="95.02" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00021446: 7 robots</title></rect>
+<rect x="187.83" y="95.02" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00029820: 7 robots</title></rect>
+<rect x="207.30" y="95.02" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00038194: 9 robots</title></rect>
+<rect x="226.77" y="95.02" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00046568: 9 robots</title></rect>
+<rect x="168.36" y="115.36" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00054942: 8 robots</title></rect>
+<rect x="187.83" y="115.36" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gdGcU6tHceg_00000_00215_00063317: 10 robots</title></rect>
+<rect x="207.30" y="115.36" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>9eZQvprbIUk_00000_00215_00063324: 5 robots</title></rect>
+<rect x="226.77" y="115.36" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>MsvkIOW_EM0_00000_00215_00038198: 5 robots</title></rect>
+<rect x="168.36" y="34.00" width="77.88" height="101.69" fill="none" stroke="#0d1117" stroke-width="2"><title>MNWI: 18/20</title></rect>
+<text x="172.4" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MNWI</text>
+<rect x="168.36" y="135.69" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00021442: 7 robots</title></rect>
+<rect x="187.83" y="135.69" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00029814: 6 robots</title></rect>
+<rect x="207.30" y="135.69" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00038187: 7 robots</title></rect>
+<rect x="226.77" y="135.69" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00046559: 9 robots</title></rect>
+<rect x="168.36" y="156.03" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00054932: 6 robots</title></rect>
+<rect x="187.83" y="156.03" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00063304: 7 robots</title></rect>
+<rect x="207.30" y="156.03" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>SXv0EpLXEkQ_00000_00215_00071676: 9 robots</title></rect>
+<rect x="226.77" y="156.03" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00029812: 7 robots</title></rect>
+<rect x="168.36" y="176.37" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00038184: 6 robots</title></rect>
+<rect x="187.83" y="176.37" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00063299: 7 robots</title></rect>
+<rect x="207.30" y="176.37" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00071671: 8 robots</title></rect>
+<rect x="226.77" y="176.37" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00021442: 10 robots</title></rect>
+<rect x="168.36" y="196.71" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00029814: 9 robots</title></rect>
+<rect x="187.83" y="196.71" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00038187: 8 robots</title></rect>
+<rect x="207.30" y="196.71" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00046559: 8 robots</title></rect>
+<rect x="226.77" y="196.71" width="19.47" height="20.34" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00063304: 8 robots</title></rect>
+<rect x="168.36" y="217.05" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00021440: 5 robots</title></rect>
+<rect x="187.83" y="217.05" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00046555: 5 robots</title></rect>
+<rect x="207.30" y="217.05" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>fMSSL1Iy_ig_00000_00215_00054927: 4 robots</title></rect>
+<rect x="226.77" y="217.05" width="19.47" height="20.34" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>lVJcv7iW0BA_00000_00215_00054932: 4 robots</title></rect>
+<rect x="168.36" y="135.69" width="77.88" height="101.69" fill="none" stroke="#0d1117" stroke-width="2"><title>TUIS: 16/20</title></rect>
+<text x="172.4" y="149.7" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">TUIS</text>
+<rect x="168.36" y="237.39" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00021450: 6 robots</title></rect>
+<rect x="187.83" y="237.39" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00038201: 10 robots</title></rect>
+<rect x="207.30" y="237.39" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00046577: 6 robots</title></rect>
+<rect x="226.77" y="237.39" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00054953: 6 robots</title></rect>
+<rect x="168.36" y="256.71" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00063329: 7 robots</title></rect>
+<rect x="187.83" y="256.71" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00021479: 9 robots</title></rect>
+<rect x="207.30" y="256.71" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00029484: 8 robots</title></rect>
+<rect x="226.77" y="256.71" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00037490: 9 robots</title></rect>
+<rect x="168.36" y="276.03" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00053501: 9 robots</title></rect>
+<rect x="187.83" y="276.03" width="19.47" height="19.32" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00061507: 8 robots</title></rect>
+<rect x="207.30" y="276.03" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00021473: 2 robots</title></rect>
+<rect x="226.77" y="276.03" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00029476: 1 robots</title></rect>
+<rect x="168.36" y="295.36" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00037479: 1 robots</title></rect>
+<rect x="187.83" y="295.36" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00045483: 1 robots</title></rect>
+<rect x="207.30" y="295.36" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00053486: 1 robots</title></rect>
+<rect x="226.77" y="295.36" width="19.47" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00061489: 1 robots</title></rect>
+<rect x="168.36" y="314.68" width="25.96" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Hw4BEIedNwA_00000_00215_00069493: 1 robots</title></rect>
+<rect x="194.32" y="314.68" width="25.96" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>nTeAyXap2M8_00000_00215_00029826: 5 robots</title></rect>
+<rect x="220.28" y="314.68" width="25.96" height="19.32" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>oMWrh-JY8s4_00000_00215_00045496: 4 robots</title></rect>
+<rect x="168.36" y="237.39" width="77.88" height="96.61" fill="none" stroke="#0d1117" stroke-width="2"><title>BRBA: 10/19</title></rect>
+<text x="172.4" y="251.4" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">BRBA</text>
+<rect x="246.24" y="34.00" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00021448: 8 robots</title></rect>
+<rect x="264.17" y="34.00" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00029823: 7 robots</title></rect>
+<rect x="282.09" y="34.00" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00038198: 7 robots</title></rect>
+<rect x="300.02" y="34.00" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00046574: 7 robots</title></rect>
+<rect x="317.94" y="34.00" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00054949: 7 robots</title></rect>
+<rect x="246.24" y="54.99" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00063324: 8 robots</title></rect>
+<rect x="264.17" y="54.99" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00021452: 8 robots</title></rect>
+<rect x="282.09" y="54.99" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00029828: 7 robots</title></rect>
+<rect x="300.02" y="54.99" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00046581: 6 robots</title></rect>
+<rect x="317.94" y="54.99" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00054957: 7 robots</title></rect>
+<rect x="246.24" y="75.97" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00063333: 6 robots</title></rect>
+<rect x="264.17" y="75.97" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00021450: 9 robots</title></rect>
+<rect x="282.09" y="75.97" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00029826: 6 robots</title></rect>
+<rect x="300.02" y="75.97" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00038201: 7 robots</title></rect>
+<rect x="317.94" y="75.97" width="17.93" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00046577: 6 robots</title></rect>
+<rect x="246.24" y="96.96" width="22.41" height="20.99" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00054953: 6 robots</title></rect>
+<rect x="268.65" y="96.96" width="22.41" height="20.99" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Cf6VGEfT2ro_00000_00215_00071699: 4 robots</title></rect>
+<rect x="291.06" y="96.96" width="22.41" height="20.99" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>ktR5jFhLHGQ_00000_00215_00038204: 5 robots</title></rect>
+<rect x="313.46" y="96.96" width="22.41" height="20.99" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>vWpbUt-f5Lw_00000_00215_00063328: 3 robots</title></rect>
+<rect x="246.24" y="34.00" width="89.63" height="83.94" fill="none" stroke="#0d1117" stroke-width="2"><title>OKOK: 16/19</title></rect>
+<text x="250.2" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">OKOK</text>
+<rect x="335.87" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00021450: 8 robots</title></rect>
+<rect x="357.88" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00029826: 9 robots</title></rect>
+<rect x="379.90" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00038201: 10 robots</title></rect>
+<rect x="335.87" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00046577: 7 robots</title></rect>
+<rect x="357.88" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00063328: 6 robots</title></rect>
+<rect x="379.90" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00021448: 9 robots</title></rect>
+<rect x="335.87" y="67.58" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00029823: 8 robots</title></rect>
+<rect x="357.88" y="67.58" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00038198: 8 robots</title></rect>
+<rect x="379.90" y="67.58" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00054949: 8 robots</title></rect>
+<rect x="335.87" y="84.37" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00063324: 6 robots</title></rect>
+<rect x="357.88" y="84.37" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00071699: 7 robots</title></rect>
+<rect x="379.90" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00054953: 4 robots</title></rect>
+<rect x="335.87" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>DeHjkiT3Cn0_00000_00215_00071704: 5 robots</title></rect>
+<rect x="368.89" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>JQDgB_R0Q2M_00000_00215_00046574: 3 robots</title></rect>
+<rect x="335.87" y="34.00" width="66.04" height="83.94" fill="none" stroke="#0d1117" stroke-width="2"><title>CAHAL: 11/14</title></rect>
+<text x="339.9" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">CAHAL</text>
+<rect x="401.91" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00029814: 6 robots</title></rect>
+<rect x="423.93" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00038186: 7 robots</title></rect>
+<rect x="445.94" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00046559: 9 robots</title></rect>
+<rect x="401.91" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00054931: 10 robots</title></rect>
+<rect x="423.93" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00063303: 6 robots</title></rect>
+<rect x="445.94" y="50.79" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00071676: 8 robots</title></rect>
+<rect x="401.91" y="67.58" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00046559: 6 robots</title></rect>
+<rect x="423.93" y="67.58" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00063304: 7 robots</title></rect>
+<rect x="445.94" y="67.58" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>1EmXuPKOUkE_00000_00215_00021441: 5 robots</title></rect>
+<rect x="401.91" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00021442: 4 robots</title></rect>
+<rect x="423.93" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00029814: 4 robots</title></rect>
+<rect x="445.94" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00038187: 5 robots</title></rect>
+<rect x="401.91" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00054932: 4 robots</title></rect>
+<rect x="434.94" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>bjmNLVt0Q-g_00000_00214_00071676: 5 robots</title></rect>
+<rect x="401.91" y="34.00" width="66.04" height="83.94" fill="none" stroke="#0d1117" stroke-width="2"><title>NCCAB: 8/14</title></rect>
+<text x="405.9" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">NCCAB</text>
+<rect x="467.96" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00038183: 7 robots</title></rect>
+<rect x="489.97" y="34.00" width="22.01" height="16.79" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00045649: 6 robots</title></rect>
+<rect x="511.99" y="34.00" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00021440: 3 robots</title></rect>
+<rect x="467.96" y="50.79" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00029811: 3 robots</title></rect>
+<rect x="489.97" y="50.79" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00046555: 2 robots</title></rect>
+<rect x="511.99" y="50.79" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00054927: 4 robots</title></rect>
+<rect x="467.96" y="67.58" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00063298: 5 robots</title></rect>
+<rect x="489.97" y="67.58" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>8tB-1f1zOOI_00000_00214_00071670: 5 robots</title></rect>
+<rect x="511.99" y="67.58" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00020470: 5 robots</title></rect>
+<rect x="467.96" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00028863: 3 robots</title></rect>
+<rect x="489.97" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00037256: 5 robots</title></rect>
+<rect x="511.99" y="84.37" width="22.01" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00054042: 3 robots</title></rect>
+<rect x="467.96" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00062435: 3 robots</title></rect>
+<rect x="500.98" y="101.16" width="33.02" height="16.79" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>chlj5LYjZhU_00000_00205_00070828: 3 robots</title></rect>
+<rect x="467.96" y="34.00" width="66.04" height="83.94" fill="none" stroke="#0d1117" stroke-width="2"><title>NCWAK: 2/14</title></rect>
+<text x="472.0" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">NCWAK</text>
+<rect x="246.24" y="117.94" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00019803: 6 robots</title></rect>
+<rect x="264.57" y="117.94" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00027922: 9 robots</title></rect>
+<rect x="282.90" y="117.94" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00036041: 7 robots</title></rect>
+<rect x="301.23" y="117.94" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00044160: 10 robots</title></rect>
+<rect x="246.24" y="136.85" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00060398: 8 robots</title></rect>
+<rect x="264.57" y="136.85" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00068517: 9 robots</title></rect>
+<rect x="282.90" y="136.85" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00041745: 6 robots</title></rect>
+<rect x="301.23" y="136.85" width="18.33" height="18.90" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00066431: 6 robots</title></rect>
+<rect x="246.24" y="155.75" width="18.33" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>C6Eps0jpGas_00000_00198_00052279: 5 robots</title></rect>
+<rect x="264.57" y="155.75" width="18.33" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00017059: 1 robots</title></rect>
+<rect x="282.90" y="155.75" width="18.33" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00025288: 2 robots</title></rect>
+<rect x="301.23" y="155.75" width="18.33" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00033516: 4 robots</title></rect>
+<rect x="246.24" y="174.66" width="36.66" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00049974: 4 robots</title></rect>
+<rect x="282.90" y="174.66" width="36.66" height="18.90" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Dp02oPqMUYY_00000_00171_00058202: 4 robots</title></rect>
+<rect x="246.24" y="117.94" width="73.31" height="75.62" fill="none" stroke="#0d1117" stroke-width="2"><title>TXBEL: 8/14</title></rect>
+<text x="250.2" y="131.9" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">TXBEL</text>
+<rect x="246.24" y="193.56" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00038201: 7 robots</title></rect>
+<rect x="264.57" y="193.56" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00071704: 6 robots</title></rect>
+<rect x="282.90" y="193.56" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00038201: 6 robots</title></rect>
+<rect x="301.23" y="193.56" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00046577: 9 robots</title></rect>
+<rect x="246.24" y="211.12" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00054953: 7 robots</title></rect>
+<rect x="264.57" y="211.12" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00021450: 5 robots</title></rect>
+<rect x="282.90" y="211.12" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00029826: 5 robots</title></rect>
+<rect x="301.23" y="211.12" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00046577: 4 robots</title></rect>
+<rect x="246.24" y="228.67" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00054952: 4 robots</title></rect>
+<rect x="264.57" y="228.67" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>HTyXupJQTBU_00000_00215_00063328: 3 robots</title></rect>
+<rect x="282.90" y="228.67" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00021450: 4 robots</title></rect>
+<rect x="301.23" y="228.67" width="18.33" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00029826: 4 robots</title></rect>
+<rect x="246.24" y="246.23" width="73.31" height="17.55" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>hqor8-YVJ6k_00000_00215_00063329: 5 robots</title></rect>
+<rect x="246.24" y="193.56" width="73.31" height="70.22" fill="none" stroke="#0d1117" stroke-width="2"><title>CAPOH: 5/13</title></rect>
+<text x="250.2" y="207.6" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">CAPOH</text>
+<rect x="246.24" y="263.78" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00019397: 11 robots</title></rect>
+<rect x="264.57" y="263.78" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00027768: 11 robots</title></rect>
+<rect x="282.90" y="263.78" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00036139: 7 robots</title></rect>
+<rect x="301.23" y="263.78" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00044510: 8 robots</title></rect>
+<rect x="246.24" y="281.34" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00052881: 8 robots</title></rect>
+<rect x="264.57" y="281.34" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00061253: 9 robots</title></rect>
+<rect x="282.90" y="281.34" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>fq5jn9GI6PA_00000_00194_00069624: 8 robots</title></rect>
+<rect x="301.23" y="281.34" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00019397: 10 robots</title></rect>
+<rect x="246.24" y="298.89" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00027768: 11 robots</title></rect>
+<rect x="264.57" y="298.89" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00036139: 8 robots</title></rect>
+<rect x="282.90" y="298.89" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00044510: 9 robots</title></rect>
+<rect x="301.23" y="298.89" width="18.33" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00052881: 9 robots</title></rect>
+<rect x="246.24" y="316.45" width="73.31" height="17.55" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>iPwHgKX7bsA_00000_00194_00061253: 10 robots</title></rect>
+<rect x="246.24" y="263.78" width="73.31" height="70.22" fill="none" stroke="#0d1117" stroke-width="2"><title>INMIS: 13/13</title></rect>
+<text x="250.2" y="277.8" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">INMIS</text>
+<rect x="319.55" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00022902: 9 robots</title></rect>
+<rect x="337.43" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00031067: 7 robots</title></rect>
+<rect x="355.30" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00047396: 6 robots</title></rect>
+<rect x="373.17" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00055561: 7 robots</title></rect>
+<rect x="319.55" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00063726: 9 robots</title></rect>
+<rect x="337.43" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00071891: 8 robots</title></rect>
+<rect x="355.30" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00022303: 7 robots</title></rect>
+<rect x="373.17" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00030616: 8 robots</title></rect>
+<rect x="319.55" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00038929: 9 robots</title></rect>
+<rect x="337.43" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00047243: 7 robots</title></rect>
+<rect x="355.30" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00055556: 7 robots</title></rect>
+<rect x="373.17" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>wV_MTyS4PHE_00000_00223_00063869: 10 robots</title></rect>
+<rect x="319.55" y="171.96" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>QxEFGnGjrNA_00000_00229_00039232: 5 robots</title></rect>
+<rect x="319.55" y="117.94" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>MABIL: 12/13</title></rect>
+<text x="323.6" y="131.9" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MABIL</text>
+<rect x="391.04" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00038219: 7 robots</title></rect>
+<rect x="408.91" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00046599: 7 robots</title></rect>
+<rect x="426.78" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00054978: 8 robots</title></rect>
+<rect x="444.65" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00071738: 9 robots</title></rect>
+<rect x="391.04" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00021458: 6 robots</title></rect>
+<rect x="408.91" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00029837: 6 robots</title></rect>
+<rect x="426.78" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00038216: 6 robots</title></rect>
+<rect x="444.65" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00063353: 8 robots</title></rect>
+<rect x="391.04" y="153.95" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00021460: 5 robots</title></rect>
+<rect x="408.91" y="153.95" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00029840: 5 robots</title></rect>
+<rect x="426.78" y="153.95" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>_654t8aV27U_00000_00215_00063358: 4 robots</title></rect>
+<rect x="444.65" y="153.95" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00046595: 5 robots</title></rect>
+<rect x="391.04" y="171.96" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>lmMHpB2TXmY_00000_00215_00054974: 4 robots</title></rect>
+<rect x="391.04" y="117.94" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>MEFAL: 8/13</title></rect>
+<text x="395.0" y="131.9" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MEFAL</text>
+<rect x="462.52" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00021440: 8 robots</title></rect>
+<rect x="480.39" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00029812: 8 robots</title></rect>
+<rect x="498.26" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00038184: 6 robots</title></rect>
+<rect x="516.13" y="117.94" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00046555: 11 robots</title></rect>
+<rect x="462.52" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00054927: 9 robots</title></rect>
+<rect x="480.39" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00063299: 9 robots</title></rect>
+<rect x="498.26" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eRLNAUnMliU_00000_00215_00071671: 9 robots</title></rect>
+<rect x="516.13" y="135.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00021442: 10 robots</title></rect>
+<rect x="462.52" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00029814: 7 robots</title></rect>
+<rect x="480.39" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00038187: 10 robots</title></rect>
+<rect x="498.26" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00046559: 8 robots</title></rect>
+<rect x="516.13" y="153.95" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00054932: 7 robots</title></rect>
+<rect x="462.52" y="171.96" width="71.48" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ulD5ox6pFdU_00000_00215_00063304: 9 robots</title></rect>
+<rect x="462.52" y="117.94" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>MICHE: 13/13</title></rect>
+<text x="466.5" y="131.9" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MICHE</text>
+<rect x="319.55" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00021442: 6 robots</title></rect>
+<rect x="337.43" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00038187: 6 robots</title></rect>
+<rect x="355.30" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00054932: 6 robots</title></rect>
+<rect x="373.17" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00063304: 6 robots</title></rect>
+<rect x="319.55" y="207.97" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00071676: 6 robots</title></rect>
+<rect x="337.43" y="207.97" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00038187: 7 robots</title></rect>
+<rect x="355.30" y="207.97" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00046559: 6 robots</title></rect>
+<rect x="373.17" y="207.97" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00054932: 6 robots</title></rect>
+<rect x="319.55" y="225.97" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00063304: 7 robots</title></rect>
+<rect x="337.43" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00029814: 5 robots</title></rect>
+<rect x="355.30" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>3oxpBEDwusE_00000_00215_00046559: 5 robots</title></rect>
+<rect x="373.17" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00021442: 3 robots</title></rect>
+<rect x="319.55" y="243.98" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>gCwU-jdw2VU_00000_00215_00029814: 3 robots</title></rect>
+<rect x="319.55" y="189.96" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>MIMTP: 9/13</title></rect>
+<text x="323.6" y="204.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">MIMTP</text>
+<rect x="319.55" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00024982: 6 robots</title></rect>
+<rect x="337.43" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00033176: 7 robots</title></rect>
+<rect x="355.30" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00041370: 7 robots</title></rect>
+<rect x="373.17" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00049564: 9 robots</title></rect>
+<rect x="319.55" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00057758: 7 robots</title></rect>
+<rect x="337.43" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00065951: 8 robots</title></rect>
+<rect x="355.30" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00038220: 7 robots</title></rect>
+<rect x="373.17" y="279.99" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Q0an3vTcecA_00000_00250_00074145: 4 robots</title></rect>
+<rect x="319.55" y="297.99" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00046256: 4 robots</title></rect>
+<rect x="337.43" y="297.99" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00054292: 5 robots</title></rect>
+<rect x="355.30" y="297.99" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00062328: 4 robots</title></rect>
+<rect x="373.17" y="297.99" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00070364: 5 robots</title></rect>
+<rect x="319.55" y="316.00" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>jS0STyOceB0_00000_00382_00078400: 5 robots</title></rect>
+<rect x="319.55" y="261.98" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>NJWAS: 7/13</title></rect>
+<text x="323.6" y="276.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">NJWAS</text>
+<rect x="391.04" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00038187: 6 robots</title></rect>
+<rect x="408.91" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00046559: 6 robots</title></rect>
+<rect x="426.78" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00054932: 6 robots</title></rect>
+<rect x="444.65" y="189.96" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00021442: 5 robots</title></rect>
+<rect x="391.04" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00029814: 3 robots</title></rect>
+<rect x="408.91" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00054932: 4 robots</title></rect>
+<rect x="426.78" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00063304: 5 robots</title></rect>
+<rect x="444.65" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>a06OcIoltYI_00000_00215_00071676: 5 robots</title></rect>
+<rect x="391.04" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00021442: 4 robots</title></rect>
+<rect x="408.91" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00029814: 3 robots</title></rect>
+<rect x="426.78" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00038187: 5 robots</title></rect>
+<rect x="444.65" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00046559: 5 robots</title></rect>
+<rect x="391.04" y="243.98" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xtFDPlLNEaU_00000_00215_00063304: 5 robots</title></rect>
+<rect x="391.04" y="189.96" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>ORSAL: 3/13</title></rect>
+<text x="395.0" y="204.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">ORSAL</text>
+<rect x="462.52" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00062542: 6 robots</title></rect>
+<rect x="480.39" y="189.96" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00070683: 6 robots</title></rect>
+<rect x="498.26" y="189.96" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00021840: 4 robots</title></rect>
+<rect x="516.13" y="189.96" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00029981: 4 robots</title></rect>
+<rect x="462.52" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00038121: 5 robots</title></rect>
+<rect x="480.39" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00046261: 5 robots</title></rect>
+<rect x="498.26" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>c0jV6AxYVMQ_00000_00218_00054402: 5 robots</title></rect>
+<rect x="516.13" y="207.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00021778: 2 robots</title></rect>
+<rect x="462.52" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00029896: 5 robots</title></rect>
+<rect x="480.39" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00038013: 5 robots</title></rect>
+<rect x="498.26" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00046131: 5 robots</title></rect>
+<rect x="516.13" y="225.97" width="17.87" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00054248: 4 robots</title></rect>
+<rect x="462.52" y="243.98" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>xXE0ggC2GkQ_00000_00218_00062365: 5 robots</title></rect>
+<rect x="462.52" y="189.96" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>PAHAT: 2/13</title></rect>
+<text x="466.5" y="204.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">PAHAT</text>
+<rect x="391.04" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00021442: 8 robots</title></rect>
+<rect x="408.91" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00029814: 7 robots</title></rect>
+<rect x="426.78" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00038187: 9 robots</title></rect>
+<rect x="444.65" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00054932: 6 robots</title></rect>
+<rect x="391.04" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00063304: 7 robots</title></rect>
+<rect x="408.91" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00071676: 6 robots</title></rect>
+<rect x="426.78" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00021442: 7 robots</title></rect>
+<rect x="444.65" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00029814: 7 robots</title></rect>
+<rect x="391.04" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00038187: 6 robots</title></rect>
+<rect x="408.91" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00046559: 7 robots</title></rect>
+<rect x="426.78" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00054932: 9 robots</title></rect>
+<rect x="444.65" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>gtay9oUJGZA_00000_00215_00063304: 8 robots</title></rect>
+<rect x="391.04" y="316.00" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>eVSIOxtU6gM_00000_00215_00046559: 4 robots</title></rect>
+<rect x="391.04" y="261.98" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>TUIS2: 12/13</title></rect>
+<text x="395.0" y="276.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">TUIS2</text>
+<rect x="462.52" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00021453: 6 robots</title></rect>
+<rect x="480.39" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00029830: 7 robots</title></rect>
+<rect x="498.26" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00038207: 8 robots</title></rect>
+<rect x="516.13" y="261.98" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00046584: 7 robots</title></rect>
+<rect x="462.52" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00054961: 7 robots</title></rect>
+<rect x="480.39" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00063338: 6 robots</title></rect>
+<rect x="498.26" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00021453: 10 robots</title></rect>
+<rect x="516.13" y="279.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00029830: 8 robots</title></rect>
+<rect x="462.52" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00038207: 6 robots</title></rect>
+<rect x="480.39" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00046584: 9 robots</title></rect>
+<rect x="498.26" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00054961: 11 robots</title></rect>
+<rect x="516.13" y="297.99" width="17.87" height="18.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>g0F_M07aU-M_00000_00215_00063338: 8 robots</title></rect>
+<rect x="462.52" y="316.00" width="71.48" height="18.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>ZdnRWkxv6ME_00000_00215_00071715: 5 robots</title></rect>
+<rect x="462.52" y="261.98" width="71.48" height="72.02" fill="none" stroke="#0d1117" stroke-width="2"><title>VAALE: 12/13</title></rect>
+<text x="466.5" y="276.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">VAALE</text>
+<text x="564.0" y="24.0" font-size="16" fill="#ffffff" text-anchor="start">Strategy features: 58.6% (17/29)</text>
+<rect x="564.00" y="34.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Zone dwell map: share of teleop in each zone: built 2026-10-12</title></rect>
+<text x="568.0" y="103.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Zones</text>
+<rect x="636.83" y="34.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Preferred lane: built 2026-10-12</title></rect>
+<text x="640.8" y="103.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Lanes</text>
+<rect x="709.66" y="34.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Distance driven, typical and top speed: built 2026-10-12</title></rect>
+<text x="713.7" y="103.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Speed</text>
+<rect x="564.00" y="109.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Time stationary vs moving: built 2026-10-12</title></rect>
+<text x="568.0" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Still</text>
+<rect x="636.83" y="109.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Own half vs opponent half: built 2026-10-12</title></rect>
+<text x="640.8" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Half</text>
+<rect x="709.66" y="109.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Heat map per team, aggregated across matches: not built yet</title></rect>
+<text x="713.7" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Heat</text>
+<rect x="564.00" y="34.00" width="218.48" height="150.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Positioning: 5/6</title></rect>
+<text x="568.0" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Positioning</text>
+<rect x="564.00" y="184.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Shooting spots, clustered: built 2026-10-12</title></rect>
+<text x="568.0" y="253.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Spots</text>
+<rect x="636.83" y="184.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Dwell at the shooting spot: built 2026-10-12</title></rect>
+<text x="640.8" y="253.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Dwell</text>
+<rect x="709.66" y="184.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Shots per volley: built 2026-10-12</title></rect>
+<text x="713.7" y="253.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Volley</text>
+<rect x="564.00" y="259.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Shoot on the move vs stop to shoot: built 2026-10-12</title></rect>
+<text x="568.0" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Moving</text>
+<rect x="636.83" y="259.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Shooting range from the hub: built 2026-10-12</title></rect>
+<text x="640.8" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Range</text>
+<rect x="709.66" y="259.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Made/missed per spot, where ball tracking is confident: not built yet</title></rect>
+<text x="713.7" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Made</text>
+<rect x="564.00" y="184.00" width="218.48" height="150.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Scoring: 5/6</title></rect>
+<text x="568.0" y="198.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Scoring</text>
+<rect x="782.48" y="34.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Defense time near opponents: built 2026-10-12</title></rect>
+<text x="786.5" y="103.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Time</text>
+<rect x="855.31" y="34.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Who it defends: built 2026-10-12</title></rect>
+<text x="859.3" y="103.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Marked</text>
+<rect x="782.48" y="109.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Cycle time when defended against: not built yet</title></rect>
+<text x="786.5" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Response</text>
+<rect x="855.31" y="109.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Contact and pin events: not built yet</title></rect>
+<text x="859.3" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Contact</text>
+<rect x="782.48" y="34.00" width="145.66" height="150.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Defense: 2/4</title></rect>
+<text x="786.5" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Defense</text>
+<rect x="782.48" y="184.00" width="72.83" height="75.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>When it stops scoring for the endgame: built 2026-10-12</title></rect>
+<text x="786.5" y="253.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Leaves</text>
+<rect x="855.31" y="184.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Endgame position and success: not built yet</title></rect>
+<text x="859.3" y="253.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Climb</text>
+<rect x="782.48" y="259.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Immobile periods: not built yet</title></rect>
+<text x="786.5" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Dead</text>
+<rect x="855.31" y="259.00" width="72.83" height="75.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Consistency across matches: not built yet</title></rect>
+<text x="859.3" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Steady</text>
+<rect x="782.48" y="184.00" width="145.66" height="150.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Endgame: 1/4</title></rect>
+<text x="786.5" y="198.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Endgame</text>
+<rect x="928.14" y="34.00" width="81.93" height="50.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Volley interval (cycle-time proxy): built 2026-10-12</title></rect>
+<text x="932.1" y="78.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Interval</text>
+<rect x="1010.07" y="34.00" width="81.93" height="50.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Pick-up source preference: not built yet</title></rect>
+<text x="1014.1" y="78.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Source</text>
+<rect x="928.14" y="84.00" width="163.86" height="50.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Cycles per match and late-match slowdown: not built yet</title></rect>
+<text x="932.1" y="128.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Fatigue</text>
+<rect x="928.14" y="34.00" width="163.86" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Cycling: 1/3</title></rect>
+<text x="932.1" y="48.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Cycling</text>
+<rect x="928.14" y="134.00" width="81.93" height="50.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Starting position: built 2026-10-12</title></rect>
+<text x="932.1" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Start</text>
+<rect x="1010.07" y="134.00" width="81.93" height="50.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Auto path fingerprint: built 2026-10-12</title></rect>
+<text x="1014.1" y="178.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Path</text>
+<rect x="928.14" y="184.00" width="163.86" height="50.00" fill="#2ea043" stroke="#0d1117" stroke-width="0.5"><title>Auto variants across matches: built 2026-10-12</title></rect>
+<text x="932.1" y="228.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Routines</text>
+<rect x="928.14" y="134.00" width="163.86" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Auto: 3/3</title></rect>
+<text x="932.1" y="148.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Auto</text>
+<rect x="928.14" y="234.00" width="81.93" height="50.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Role: scorer, feeder, defender: not built yet</title></rect>
+<text x="932.1" y="278.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Role</text>
+<rect x="1010.07" y="234.00" width="81.93" height="50.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Alliance coordination and spacing: not built yet</title></rect>
+<text x="1014.1" y="278.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Coord</text>
+<rect x="928.14" y="284.00" width="163.86" height="50.00" fill="#6e7681" stroke="#0d1117" stroke-width="0.5"><title>Congestion at shared spots: not built yet</title></rect>
+<text x="932.1" y="328.0" font-size="11" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Crowd</text>
+<rect x="928.14" y="234.00" width="163.86" height="100.00" fill="none" stroke="#0d1117" stroke-width="2"><title>Alliance: 0/3</title></rect>
+<text x="932.1" y="248.0" font-size="12" fill="#ffffff" text-anchor="start" paint-order="stroke" stroke="#0d1117" stroke-width="3">Alliance</text>
+<polyline points="60.0,730.0 960.0,730.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="734.0" font-size="12" fill="#ffffff" text-anchor="end">0%</text>
+<polyline points="60.0,694.0 960.0,694.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="698.0" font-size="12" fill="#ffffff" text-anchor="end">10%</text>
+<polyline points="60.0,658.0 960.0,658.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="662.0" font-size="12" fill="#ffffff" text-anchor="end">20%</text>
+<polyline points="60.0,622.0 960.0,622.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="626.0" font-size="12" fill="#ffffff" text-anchor="end">30%</text>
+<polyline points="60.0,586.0 960.0,586.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="590.0" font-size="12" fill="#ffffff" text-anchor="end">40%</text>
+<polyline points="60.0,550.0 960.0,550.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="554.0" font-size="12" fill="#ffffff" text-anchor="end">50%</text>
+<polyline points="60.0,514.0 960.0,514.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="518.0" font-size="12" fill="#ffffff" text-anchor="end">60%</text>
+<polyline points="60.0,478.0 960.0,478.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="482.0" font-size="12" fill="#ffffff" text-anchor="end">70%</text>
+<polyline points="60.0,442.0 960.0,442.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="446.0" font-size="12" fill="#ffffff" text-anchor="end">80%</text>
+<polyline points="60.0,406.0 960.0,406.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="410.0" font-size="12" fill="#ffffff" text-anchor="end">90%</text>
+<polyline points="60.0,370.0 960.0,370.0" fill="none" stroke="#30363d" stroke-width="1.0"/>
+<text x="52.0" y="374.0" font-size="12" fill="#ffffff" text-anchor="end">100%</text>
+<polyline points="60.0,370.0 60.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="58.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 58.0 742.0)">09-01</text>
+<polyline points="81.4,370.0 81.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="79.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 79.4 742.0)">09-02</text>
+<polyline points="102.9,370.0 102.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="100.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 100.9 742.0)">09-03</text>
+<polyline points="124.3,370.0 124.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="122.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 122.3 742.0)">09-04</text>
+<polyline points="145.7,370.0 145.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="143.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 143.7 742.0)">09-05</text>
+<polyline points="167.1,370.0 167.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="165.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 165.1 742.0)">09-06</text>
+<polyline points="188.6,370.0 188.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="186.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 186.6 742.0)">09-07</text>
+<polyline points="210.0,370.0 210.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="208.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 208.0 742.0)">09-08</text>
+<polyline points="231.4,370.0 231.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="229.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 229.4 742.0)">09-09</text>
+<polyline points="252.9,370.0 252.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="250.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 250.9 742.0)">09-10</text>
+<polyline points="274.3,370.0 274.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="272.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 272.3 742.0)">09-11</text>
+<polyline points="295.7,370.0 295.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="293.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 293.7 742.0)">09-12</text>
+<polyline points="317.1,370.0 317.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="315.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 315.1 742.0)">09-13</text>
+<polyline points="338.6,370.0 338.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="336.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 336.6 742.0)">09-14</text>
+<polyline points="360.0,370.0 360.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="358.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 358.0 742.0)">09-15</text>
+<polyline points="381.4,370.0 381.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="379.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 379.4 742.0)">09-16</text>
+<polyline points="402.9,370.0 402.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="400.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 400.9 742.0)">09-17</text>
+<polyline points="424.3,370.0 424.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="422.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 422.3 742.0)">09-18</text>
+<polyline points="445.7,370.0 445.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="443.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 443.7 742.0)">09-19</text>
+<polyline points="467.1,370.0 467.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="465.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 465.1 742.0)">09-20</text>
+<polyline points="488.6,370.0 488.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="486.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 486.6 742.0)">09-21</text>
+<polyline points="510.0,370.0 510.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="508.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 508.0 742.0)">09-22</text>
+<polyline points="531.4,370.0 531.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="529.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 529.4 742.0)">09-23</text>
+<polyline points="552.9,370.0 552.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="550.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 550.9 742.0)">09-24</text>
+<polyline points="574.3,370.0 574.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="572.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 572.3 742.0)">09-25</text>
+<polyline points="595.7,370.0 595.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="593.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 593.7 742.0)">09-26</text>
+<polyline points="617.1,370.0 617.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="615.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 615.1 742.0)">09-27</text>
+<polyline points="638.6,370.0 638.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="636.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 636.6 742.0)">09-28</text>
+<polyline points="660.0,370.0 660.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="658.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 658.0 742.0)">09-29</text>
+<polyline points="681.4,370.0 681.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="679.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 679.4 742.0)">09-30</text>
+<polyline points="702.9,370.0 702.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="700.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 700.9 742.0)">10-01</text>
+<polyline points="724.3,370.0 724.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="722.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 722.3 742.0)">10-02</text>
+<polyline points="745.7,370.0 745.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="743.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 743.7 742.0)">10-03</text>
+<polyline points="767.1,370.0 767.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="765.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 765.1 742.0)">10-04</text>
+<polyline points="788.6,370.0 788.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="786.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 786.6 742.0)">10-05</text>
+<polyline points="810.0,370.0 810.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="808.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 808.0 742.0)">10-06</text>
+<polyline points="831.4,370.0 831.4,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="829.4" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 829.4 742.0)">10-07</text>
+<polyline points="852.9,370.0 852.9,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="850.9" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 850.9 742.0)">10-08</text>
+<polyline points="874.3,370.0 874.3,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="872.3" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 872.3 742.0)">10-09</text>
+<polyline points="895.7,370.0 895.7,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="893.7" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 893.7 742.0)">10-10</text>
+<polyline points="917.1,370.0 917.1,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="915.1" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 915.1 742.0)">10-11</text>
+<polyline points="938.6,370.0 938.6,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="936.6" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 936.6 742.0)">10-12</text>
+<polyline points="960.0,370.0 960.0,730.0" fill="none" stroke="#30363d" stroke-width="0.5"/>
+<text x="958.0" y="742.0" font-size="11" fill="#8b949e" text-anchor="end" transform="rotate(-60 958.0 742.0)">10-13</text>
+<polygon points="60.0,582.4 81.4,582.4 102.9,680.5 124.3,680.5 145.7,497.8 167.1,497.8 188.6,497.8 210.0,497.8 231.4,497.8 252.9,497.8 274.3,497.8 295.7,497.8 317.1,497.8 338.6,497.8 360.0,497.8 381.4,497.8 402.9,497.8 424.3,497.8 445.7,497.8 467.1,497.8 488.6,497.8 510.0,497.8 531.4,497.8 552.9,497.8 574.3,497.8 595.7,497.8 617.1,497.8 638.6,497.8 660.0,497.8 681.4,497.8 702.9,497.8 724.3,497.8 745.7,497.8 767.1,497.8 788.6,497.8 810.0,497.8 831.4,497.8 852.9,497.8 874.3,497.8 895.7,497.8 917.1,497.8 938.6,497.8 960.0,497.8 960.0,730.0 60.0,730.0" fill="#388bfd" fill-opacity="0.12"/>
+<polyline points="60.0,582.4 81.4,582.4 102.9,680.5 124.3,680.5 145.7,497.8 167.1,497.8 188.6,497.8 210.0,497.8 231.4,497.8 252.9,497.8 274.3,497.8 295.7,497.8 317.1,497.8 338.6,497.8 360.0,497.8 381.4,497.8 402.9,497.8 424.3,497.8 445.7,497.8 467.1,497.8 488.6,497.8 510.0,497.8 531.4,497.8 552.9,497.8 574.3,497.8 595.7,497.8 617.1,497.8 638.6,497.8 660.0,497.8 681.4,497.8 702.9,497.8 724.3,497.8 745.7,497.8 767.1,497.8 788.6,497.8 810.0,497.8 831.4,497.8 852.9,497.8 874.3,497.8 895.7,497.8 917.1,497.8 938.6,497.8 960.0,497.8" fill="none" stroke="#388bfd" stroke-width="2"/>
+<circle cx="60.0" cy="582.4" r="3" fill="#388bfd"/>
+<circle cx="81.4" cy="582.4" r="3" fill="#388bfd"/>
+<circle cx="102.9" cy="680.5" r="3" fill="#388bfd"/>
+<circle cx="124.3" cy="680.5" r="3" fill="#388bfd"/>
+<circle cx="145.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="167.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="188.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="210.0" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="231.4" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="252.9" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="274.3" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="295.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="317.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="338.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="360.0" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="381.4" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="402.9" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="424.3" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="445.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="467.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="488.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="510.0" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="531.4" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="552.9" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="574.3" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="595.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="617.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="638.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="660.0" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="681.4" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="702.9" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="724.3" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="745.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="767.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="788.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="810.0" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="831.4" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="852.9" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="874.3" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="895.7" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="917.1" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="938.6" cy="497.8" r="3" fill="#388bfd"/>
+<circle cx="960.0" cy="497.8" r="3" fill="#388bfd"/>
+<text x="970.0" y="501.8" font-size="13" fill="#388bfd" text-anchor="start" font-weight="600">Model 64.5%</text>
+<polygon points="60.0,730.0 81.4,730.0 102.9,730.0 124.3,730.0 145.7,730.0 167.1,730.0 188.6,730.0 210.0,730.0 231.4,730.0 252.9,730.0 274.3,730.0 295.7,730.0 317.1,730.0 338.6,730.0 360.0,730.0 381.4,730.0 402.9,730.0 424.3,730.0 445.7,730.0 467.1,730.0 488.6,730.0 510.0,730.0 531.4,730.0 552.9,730.0 574.3,730.0 595.7,730.0 617.1,730.0 638.6,730.0 660.0,730.0 681.4,730.0 702.9,730.0 724.3,730.0 745.7,730.0 767.1,730.0 788.6,730.0 810.0,730.0 831.4,730.0 852.9,730.0 874.3,730.0 895.7,730.0 917.1,730.0 938.6,519.0 960.0,519.0 960.0,730.0 60.0,730.0" fill="#2ea043" fill-opacity="0.12"/>
+<polyline points="60.0,730.0 81.4,730.0 102.9,730.0 124.3,730.0 145.7,730.0 167.1,730.0 188.6,730.0 210.0,730.0 231.4,730.0 252.9,730.0 274.3,730.0 295.7,730.0 317.1,730.0 338.6,730.0 360.0,730.0 381.4,730.0 402.9,730.0 424.3,730.0 445.7,730.0 467.1,730.0 488.6,730.0 510.0,730.0 531.4,730.0 552.9,730.0 574.3,730.0 595.7,730.0 617.1,730.0 638.6,730.0 660.0,730.0 681.4,730.0 702.9,730.0 724.3,730.0 745.7,730.0 767.1,730.0 788.6,730.0 810.0,730.0 831.4,730.0 852.9,730.0 874.3,730.0 895.7,730.0 917.1,730.0 938.6,519.0 960.0,519.0" fill="none" stroke="#2ea043" stroke-width="2"/>
+<circle cx="60.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="81.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="102.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="124.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="145.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="167.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="188.6" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="210.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="231.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="252.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="274.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="295.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="317.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="338.6" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="360.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="381.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="402.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="424.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="445.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="467.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="488.6" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="510.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="531.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="552.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="574.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="595.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="617.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="638.6" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="660.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="681.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="702.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="724.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="745.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="767.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="788.6" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="810.0" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="831.4" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="852.9" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="874.3" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="895.7" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="917.1" cy="730.0" r="3" fill="#2ea043"/>
+<circle cx="938.6" cy="519.0" r="3" fill="#2ea043"/>
+<circle cx="960.0" cy="519.0" r="3" fill="#2ea043"/>
+<text x="970.0" y="523.0" font-size="13" fill="#2ea043" text-anchor="start" font-weight="600">Features 58.6%</text>
+</svg>

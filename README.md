@@ -3,9 +3,8 @@
 ### `Project Tengen`
 
 [![CI](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml)
-[![Model](docs/status/badge-model.svg)](docs/MODELS.md)
 [![Held-out](docs/status/badge-heldout.svg)](docs/MODELS.md)
-[![Tracking](docs/status/badge-tracking.svg)](docs/MODELS.md)
+[![Features](docs/status/badge-features.svg)](docs/STRATEGY-PLAN.md#the-feature-catalogue-layer-3)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sZqMP3JEbb)
 
 Tengen watches FRC match video and works out **how each team plays, and how to beat it**:
@@ -48,20 +47,19 @@ path and shot (yellow) of the match from above, from the field's own AprilTags.<
 
 ## Status
 
-[![model](docs/status/badge-model.svg)](docs/MODELS.md)
-[![held-out](docs/status/badge-heldout.svg)](docs/MODELS.md)
-[![tracking](docs/status/badge-tracking.svg)](docs/MODELS.md)
-[![models](docs/status/badge-models.svg)](docs/MODELS.md)
+[![held-out](docs/status/badge-heldout.svg)](docs/MODELS.md) [![features](docs/status/badge-features.svg)](docs/STRATEGY-PLAN.md#the-feature-catalogue-layer-3) [![tracked](docs/status/badge-tracking.svg)](docs/MODELS.md) [![model](docs/status/badge-model.svg)](docs/MODELS.md)
 
-[![held-out map](docs/status/model-map.svg)](docs/MODELS.md)
+[![status](docs/status/status.svg)](docs/MODELS.md)
 
-[![model history](docs/status/history.svg)](docs/MODELS.md)
+[Every model and its scores](docs/MODELS.md)
 
-<sub>* Held-out: 400 frames of real 2026 broadcasts that no model has trained on, the same frames
-for every version. Each square is one frame, coloured by how many robots the current model finds;
-each block is one broadcast. Tracking: share of a real match with all six robots tracked at
-once. Every number is generated from [`training/registry`](training/registry) by
-`python -m tools.models evaluate` and `python -m tools.status`, never typed in.</sub>
+<sub>* Held-out: the share of 400 frames of real 2026 broadcasts, from 25 events no model has
+trained on, where the current model finds all six robots. One cell per frame, one block per event;
+hover a cell for its frame. Features: the strategy features of the
+[plan's catalogue](docs/STRATEGY-PLAN.md#the-feature-catalogue-layer-3) that are built, one cell
+each. Tracked: share of a real match with all six robots tracked at once. Everything is generated
+from [`training/registry`](training/registry) and
+[`catalogue.py`](ingest/strategy/catalogue.py) by `python -m tools.status`, never typed in.</sub>
 
 ## Quick start
 

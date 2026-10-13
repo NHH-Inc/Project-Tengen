@@ -151,7 +151,7 @@ tracked" measures the whole pipeline (detector plus tracking and identity) on on
 
 {markdown()}
 
-![held-out map](status/model-map.svg)
+![status](status/status.svg)
 
 {chr(10).join(details)}
 ## Adding a model

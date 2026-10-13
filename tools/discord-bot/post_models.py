@@ -5,8 +5,8 @@
 
 Two places, because #model-training is private to the team:
 
-  #model-scoreboard  public and read-only. Holds ONE scoreboard message, the table plus the
-                     held-out map and history. The bot deletes its own previous scoreboard
+  #model-scoreboard  public and read-only. Holds ONE scoreboard message: the table and the
+                     status picture (treemaps and history). The bot deletes its own previous scoreboard
                      before posting, so the channel is always exactly the current state.
   #model-training    private. A fuller update for the team: every model's facts and the
                      newest model's training curves. Appended, never deleted, as a record.
@@ -69,8 +69,8 @@ def scoreboard_embed(models: list[dict]) -> dict:
                         "broadcasts that no model trained on. **all 6 found** is the share of frames "
                         "where the model finds every robot.\n" + "\n".join(lines)),
         "fields": fields,
-        "image": {"url": "attachment://model-map.png"},
-        "footer": {"text": "Generated from training/registry · python -m tools.models"},
+        "image": {"url": "attachment://status.png"},
+        "footer": {"text": "Generated from training/registry · python -m tools.status"},
     }
 
 
@@ -100,9 +100,9 @@ def training_update(models: list[dict]) -> tuple[str, list[dict], list[Path]]:
                         f"not the best held-out score. And v2's 1,017 machine-labelled frames took it from "
                         f"v1's 41.0% to 13.8%: unreviewed labels made the model worse. Next: the loop in "
                         f"{REPO}/blob/main/docs/IMPROVING-THE-MODEL.md"),
-        "image": {"url": "attachment://history.png"},
+        "image": {"url": "attachment://status.png"},
     })
-    files = [STATUS / "history.png"]
+    files = [STATUS / "status.png"]
     run = current.get("run")
     if run and (ROOT / run).is_file():
         files.append(ROOT / run)
@@ -130,13 +130,15 @@ def ensure_scoreboard(guild_id: str, send: bool) -> dict | None:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--send", action="store_true", help="actually post (default: preview only)")
+    parser.add_argument("--new-team-post", action="store_true",
+                        help="post a new team update instead of editing the last one (e.g. for a new model)")
     args = parser.parse_args(argv)
 
     models = models_with_scores()
     missing = [m["id"] for m in models if not m["heldout"]]
     if missing:
         print(f"note: no held-out score yet for {', '.join(missing)}")
-    for name in ("model-map.png", "history.png"):
+    for name in ("status.png",):
         if not (STATUS / name).is_file():
             raise SystemExit(f"docs/status/{name} is missing: run python -m tools.status first")
 
@@ -146,7 +148,7 @@ def main(argv=None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
         print(f"#{SCOREBOARD}: {board['title']}\n{board['description']}\n" +
               "\n".join(f"  {f['name']}: {f['value']}" for f in board["fields"]) +
-              "\n  attachments: model-map.png, history.png")
+              "\n  attachments: status.png")
         print(f"\n#{TRAINING}: {content}\n" + "\n".join(f"  [{e['title']}]" for e in embeds) +
               f"\n  attachments: {', '.join(f.name for f in files)}")
         print("\nPreview only. Re-run with --send to post.")
@@ -158,18 +160,27 @@ def main(argv=None) -> int:
     for message in api.messages(channel["id"], 50):
         if message["author"]["id"] == me:
             api.request("DELETE", f"/channels/{channel['id']}/messages/{message['id']}")
-    history = {"title": "History", "color": BLUE, "image": {"url": "attachment://history.png"}}
-    api.request("POST", f"/channels/{channel['id']}/messages", {"embeds": [board, history]},
-                files=[STATUS / "model-map.png", STATUS / "history.png"])
+    api.request("POST", f"/channels/{channel['id']}/messages", {"embeds": [board]},
+                files=[STATUS / "status.png"])
     print(f"posted the scoreboard to #{SCOREBOARD}")
 
     training = api.channel_named(guild_id, TRAINING)
     if training is None:
         print(f"#{TRAINING} not found; skipped the team update")
         return 0
-    api.request("POST", f"/channels/{training['id']}/messages", {"content": content, "embeds": embeds},
-                files=files)
-    print(f"posted the team update to #{TRAINING}")
+    payload = {"content": content, "embeds": embeds}
+    previous = next((m for m in api.messages(training["id"], 50)
+                     if m["author"]["id"] == me and m["content"].startswith("**Model registry update.**")), None)
+    if previous and not args.new_team_post:
+        # Edit the bot's last update in place: the team channel keeps people's own messages, and a
+        # second near-identical post every time the numbers move would bury them. `attachments: []`
+        # drops the old files; the new ones are attached.
+        api.request("PATCH", f"/channels/{training['id']}/messages/{previous['id']}",
+                    {**payload, "attachments": []}, files=files)
+        print(f"updated the team post in #{TRAINING}")
+    else:
+        api.request("POST", f"/channels/{training['id']}/messages", payload, files=files)
+        print(f"posted the team update to #{TRAINING}")
     return 0
 
 

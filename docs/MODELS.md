@@ -16,7 +16,7 @@ tracked" measures the whole pipeline (detector plus tracking and identity) on on
 | **v2** | retired | 2026-09-03 | Justin | YOLO11n @ 960 | 13.8% | 3.47 | 13 | — | 0.900 / 0.595 |
 | **v1** | retired | 2026-09-01 | Robert | YOLO11n @ 960 | 41.0% | 5.00 | 5 | — | 0.908 / 0.602 |
 
-![held-out map](status/model-map.svg)
+![status](status/status.svg)
 
 ### v3 — robot-v3 (current)
 

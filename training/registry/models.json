@@ -41,6 +41,7 @@
       "id": "v3-640",
       "name": "robot-v3 (640 export)",
       "status": "retired",
+      "export_of": "v3",
       "file": "data/robot-v3-640.onnx",
       "weights": "data/robot-v3.pt",
       "architecture": "YOLO11n",
