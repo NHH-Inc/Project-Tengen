@@ -127,11 +127,19 @@ class FeatureTests(unittest.TestCase):
     def test_no_positions_means_unavailable_not_zero(self):
         match = Match()
         match.tracks = [track(1, 254, "red", positioned=False)]
+        for t in (20.0, 20.5, 31.0, 31.5):
+            match.shoot(1, t)
         f = features_of(match.write())["team:254"]
         self.assertIsNone(f["positions"])
         self.assertNotIn("movement", f)
         self.assertGreater(f["coverage"]["observed_s"], 0)
         self.assertEqual(f["coverage"]["positioned_s"], 0)
+        # When it shot needs no calibration, so it survives; where it shot from does not.
+        self.assertEqual(f["shooting"]["volleys"], 2)
+        self.assertEqual(f["shooting"]["median_volley_interval_s"], 11.0)
+        self.assertEqual(f["shooting"]["spots"], [])
+        self.assertIsNone(f["shooting"]["median_dwell_s"])
+        self.assertIsNone(f["endgame"]["final_position"])
 
     def test_a_parked_robot_with_jitter_did_not_drive(self):
         match = Match()

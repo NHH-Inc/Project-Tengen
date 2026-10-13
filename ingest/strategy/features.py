@@ -61,7 +61,12 @@ def robot_features(timeline, rows, all_timelines, all_rows, geometry, season) ->
         "launches": _launch_counts(timeline["launches"]),
     }
     if not positioned:
+        # No calibration: where it went is unknown, but when it shot is not. A broadcast that
+        # cannot be calibrated (Space Coast Showdown's top view, at 720p) still gives volley
+        # timing and when the robot stopped scoring, so those are kept and only places are null.
         features["positions"] = None
+        features["shooting"] = _shooting(timeline["launches"], rows, geometry)
+        features["endgame"] = _endgame(timeline["launches"], positioned, season, match_seconds)
         return features
 
     teleop = [r for r in positioned if r["phase"] in ("teleop", "endgame")]
@@ -277,10 +282,10 @@ def _defense(timeline, rows, all_timelines, all_rows, geometry, step) -> dict:
 def _endgame(launches, positioned, season, match_seconds) -> dict:
     endgame_from = match_seconds - float(season.get("endgame_seconds", 0))
     last = max((l["mt"] for l in launches if l["mt"] is not None), default=None)
-    final = positioned[-1]
+    final = positioned[-1] if positioned else None
     return {
         "last_launch_mt": last,
         "stopped_scoring_before_endgame_s": round(endgame_from - last, 1) if last is not None else None,
         "final_position": {"ax": final["ax"], "ay": final["ay"], "zone": final["zone"],
-                           "lane": final["lane"], "mt": final["mt"]},
+                           "lane": final["lane"], "mt": final["mt"]} if final else None,
     }

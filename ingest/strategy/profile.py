@@ -83,6 +83,15 @@ def build_profile(team_matches: list[dict]) -> dict:
         "n_matches": len(matches),
         "n_with_positions": len(located),
         "launches_per_match": _median(m["launches"]["total"] for m in matches),
+        # Timing needs no calibration, so it is summarised over every match, located or not.
+        "timing": {
+            "median_volley_interval_s": _median((m.get("shooting") or {}).get("median_volley_interval_s")
+                                                for m in matches),
+            "median_launches_per_volley": _median((m.get("shooting") or {}).get("median_launches_per_volley")
+                                                  for m in matches),
+            "median_stopped_scoring_before_endgame_s": _median(
+                (m.get("endgame") or {}).get("stopped_scoring_before_endgame_s") for m in matches),
+        },
     }
     if not located:
         profile["tendencies"] = None
