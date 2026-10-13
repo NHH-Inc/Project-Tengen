@@ -404,12 +404,53 @@ in the 2027 season. **Rough owners are suggestions; adjust them in Discord.**
 - **Done when:** a match is analysed in under its own length on a laptop, and a briefing comes
   out as a PDF and a QR code.
 
-### Continuous: the detector keeps improving (every milestone)
-- Every analysed match feeds **hard-example mining**: frames where a track breaks, a robot
-  vanishes mid-field, or a box appears for under a second go into the next label pack.
-- Retrain on this PC once the 5070 Ti is in. Keep the 400-frame held-out viewpoint pack as the
-  yardstick, and never report a val-split number as progress.
-- From kickoff, add 2027 robots: week-0 and early-event footage is labelled first.
+### Continuous: the models keep improving (every milestone)
+
+The loop, once a week during the season and whenever new footage arrives:
+
+```
+analyse matches ──▶ mine their mistakes ──▶ label ──▶ retrain ──▶ score on held-out packs ──▶ ship only if better
+      ▲                (hard_examples.py)     (every robot,          (this PC,      (never a val split)
+      └─────────────────────────────────────── or skip the frame)    5070 Ti)
+```
+
+**1. Yardsticks first.** One held-out pack per kind of footage, never trained on, and a model
+ships only if it is no worse on every pack:
+- the 400-frame viewpoint pack (Championship/regional stacked broadcasts), as now;
+- **a Space Coast pack** (off-season, three-camera layout, low wide view): about 150 frames;
+- an own-camera pack, as soon as we have our own recordings.
+
+Report recall, false boxes per frame, and blind frames, plus two tracking numbers per analysed
+match: **share of match time with all six robots tracked**, and **identity swaps** (on a few
+matches where a person has marked who is who).
+
+**2. Mine, do not sample.** `python -m ingest.collection.hard_examples` turns each analysed match
+into a label pack of its own failures. Space Coast Final 2 (2026-10-13) showed which kinds matter:
+- false boxes on **roof trusses and lights**, on **piles of fuel**, and on **people's hands**;
+- **missed robots**: far and small in wide views, half-hidden behind hubs, referees and
+  spectators, or cut by a panel edge;
+- **negatives**: frames with no robot at all (rafters, crowd shots) are real labels (empty
+  files) and are what teach the model that a truss is not a robot.
+
+**3. Label for the footage we will actually use.** Venue count beats frame count. Add off-season
+broadcast layouts (low, wide, three panels), our own stands-angle recordings, and in January
+week-0 footage of 2027 robots, labelled first.
+
+**4. Bigger model, bigger input, on the 5070 Ti.** v3 is trained at 960 px. Robots in a wide top
+view are 40-60 px across. Try a larger YOLO11 variant at 1280 px, and compare it on the held-out
+packs, speed included: a model too slow for near-live is not better.
+
+**5. The biggest lever for strategy is identity, not boxes.** On Space Coast the boxes were
+mostly right, but the six identities swapped between same-alliance robots, so per-team numbers
+were wrong while per-alliance numbers matched the official score. Two models, trained from the
+same loop:
+- **a bumper-number reader**: bumper crops from analysed matches, with the match roster (six
+  candidates, three per alliance, from TBA or the scoreboard) turning it into a 1-of-3 choice;
+- **a robot appearance embedding** replacing the colour histogram in re-identification, trained
+  on crops whose team is known (from the bumper reader or a person's correction).
+
+**6. Version everything.** `robot-v4`, `-v5`, ... with a short model card: training data, input
+size, and its numbers on every held-out pack. Keep the previous model until the new one wins.
 
 ### M5: port to the 2027 game (January, after kickoff)
 - New season file and zones. Check the detector still finds 2027 robots. Bumpers are
