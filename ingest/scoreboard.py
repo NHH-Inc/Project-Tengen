@@ -35,6 +35,7 @@ except ImportError:  # pragma: no cover
     pytesseract = None
 
 STRIP_SHARE = 0.20    #: top fraction of the frame the graphic can occupy
+BOTTOM_STRIP_SHARE = 0.25  #: bottom fraction, for broadcasts that put the bar at the bottom
 MIN_RUN = 120         #: px; a narrower band of colour is an icon or a side panel, not a cell
 UPSCALE = 4
 TEAM_DIGITS = (3, 5)  #: an FRC team number, so not a score and not a fragment
@@ -62,8 +63,20 @@ def find_cells(frame):
     import cv2
     import numpy as np
 
-    h, w = frame.shape[:2]
-    strip = frame[0:int(h * STRIP_SHARE)]
+    h = frame.shape[0]
+    # FIRST's Championship and regional broadcasts put the bar at the top; others (Space Coast
+    # Showdown 2026) put it across the bottom. Look at the top first, then the bottom.
+    cells = _find_cells_in(frame, 0, int(h * STRIP_SHARE))
+    if cells is None:
+        cells = _find_cells_in(frame, int(h * (1.0 - BOTTOM_STRIP_SHARE)), h)
+    return cells
+
+
+def _find_cells_in(frame, top: int, bottom: int):
+    import cv2
+
+    w = frame.shape[1]
+    strip = frame[top:bottom]
     hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
     hh, ss, vv = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     strong = (ss > 120) & (vv > 70)
@@ -83,7 +96,7 @@ def find_cells(frame):
     # The bar is the red run and the blue run that touch. Side panels sit far from both.
     r, b = min(((r, b) for r in red_runs for b in blue_runs),
                key=lambda rb: min(abs(rb[0][1] - rb[1][0]), abs(rb[1][1] - rb[0][0])))
-    return {"red": (r[0], r[1], y0, y1), "blue": (b[0], b[1], y0, y1)}
+    return {"red": (r[0], r[1], top + y0, top + y1), "blue": (b[0], b[1], top + y0, top + y1)}
 
 
 def read_cell(frame, cell) -> list[int]:
