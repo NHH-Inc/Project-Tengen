@@ -17,6 +17,9 @@ records where those are:
   * **undersized**: a track whose boxes are far smaller than this match's robots. On a real
     Championship match one sat at the alliance wall for 70 s at a fifth of a robot's width,
     holding one of the six identity slots while a real robot went untracked.
+  * **static**: a robot-sized track that does not move for twenty seconds or more. On Space
+    Coast Showdown three tracks sat on the roof trusses for most of the match. A robot that
+    truly parks that long is rare, and a frame of it costs a labeller one box.
 
 Moments are ranked, spread out in time (consecutive frames teach one thing many times), and
 written as an ordinary label pack. The same rule applies as for every pack: every robot boxed, or
@@ -49,11 +52,14 @@ FLICKER_S = 1.0
 COUNT_DROP = 2
 #: A track whose median box width is below this share of the match's median is not a robot.
 UNDERSIZED_SHARE = 0.4
+#: A track whose box centre stays within this distance (frame shares) for STATIC_S is static.
+STATIC_SPREAD = 0.02
+STATIC_S = 20.0
 #: Frames chosen from one match are at least this far apart.
 MIN_GAP_S = 2.0
 
 #: Higher first: a missed robot that later reappears is the clearest lesson.
-PRIORITY = {"hole": 0, "vanished": 1, "undersized": 2, "count_drop": 3, "flicker": 4}
+PRIORITY = {"hole": 0, "vanished": 1, "undersized": 2, "static": 3, "count_drop": 4, "flicker": 5}
 
 
 @dataclass(frozen=True)
@@ -97,6 +103,9 @@ def find_moments(tracks: list[dict], duration: float, sample_rate: float | None 
                 moments.append(Moment(round(first["t"] + (k + 0.5) * length / max(1, int(length // 10)), 3),
                                       "undersized", track.get("track_id"), 1 - own_width / typical_width))
             continue
+        for start, end in _still_spans(boxes):
+            moments.append(Moment(round((start + end) / 2, 3), "static", track.get("track_id"),
+                                  end - start))
         if first["t"] > CLIP_MARGIN_S and not _near_edge(first):
             moments.append(Moment(first["t"], "vanished", track.get("track_id"), 1.0))
         if last["t"] < duration - CLIP_MARGIN_S and not _near_edge(last):
@@ -125,6 +134,20 @@ def find_moments(tracks: list[dict], duration: float, sample_rate: float | None 
             if typical - count >= COUNT_DROP:
                 moments.append(Moment(t, "count_drop", None, float(typical - count)))
     return moments
+
+
+def _still_spans(boxes: list[dict]) -> list[tuple[float, float]]:
+    """Stretches of at least STATIC_S where the box centre stays within STATIC_SPREAD."""
+    spans, anchor = [], 0
+    centres = [(b["x"] + b["w"] / 2, b["y"] + b["h"] / 2) for b in boxes]
+    for i in range(1, len(boxes) + 1):
+        moved = i == len(boxes) or max(abs(centres[i][0] - centres[anchor][0]),
+                                       abs(centres[i][1] - centres[anchor][1])) > STATIC_SPREAD
+        if moved:
+            if boxes[i - 1]["t"] - boxes[anchor]["t"] >= STATIC_S:
+                spans.append((boxes[anchor]["t"], boxes[i - 1]["t"]))
+            anchor = i
+    return spans
 
 
 def select(moments: list[Moment], limit: int, gap: float = MIN_GAP_S) -> list[Moment]:

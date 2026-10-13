@@ -1,16 +1,19 @@
 """The miner must point at the detector's mistakes, not at the clip's or the camera's."""
 
+import math
 import unittest
 
 from ingest.collection.hard_examples import Moment, find_moments, select
 
 
-def boxes(start, end, x=0.5, rate=10, skip=()):
+def boxes(start, end, x=0.5, rate=10, skip=(), still=False):
+    """A robot's boxes. Real robots wander, so these do too, unless `still`."""
     out = []
     for i in range(int((end - start) * rate) + 1):
         t = round(start + i / rate, 3)
+        wander = 0.0 if still else 0.04 * math.sin(t / 3)
         if not any(a < t < b for a, b in skip):
-            out.append({"t": t, "x": x - 0.03, "y": 0.47, "w": 0.06, "h": 0.06})
+            out.append({"t": t, "x": x - 0.03 + wander, "y": 0.47, "w": 0.06, "h": 0.06})
     return out
 
 
@@ -50,6 +53,14 @@ class FindMomentsTests(unittest.TestCase):
             box["w"] = box["h"] = 0.012
         moments = find_moments([track(i, 0, 60) for i in range(5)] + [tiny], duration=60)
         self.assertEqual(sorted({m.reason for m in moments}), ["undersized"])
+        self.assertTrue(all(m.track_id == 9 for m in moments))
+
+    def test_a_box_that_never_moves_is_static(self):
+        """Roof trusses on Space Coast Showdown: robot-sized, long-lived, and perfectly still."""
+        moving = [track(i, 0, 60) for i in range(5)]
+        truss = track(9, 0, 60, x=0.8, still=True)
+        moments = find_moments(moving + [truss], duration=60)
+        self.assertEqual({m.reason for m in moments}, {"static"})
         self.assertTrue(all(m.track_id == 9 for m in moments))
 
     def test_several_robots_missing_at_once_is_a_count_drop(self):
