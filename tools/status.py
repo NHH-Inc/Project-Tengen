@@ -234,21 +234,54 @@ def chart(scene: Scene, x: float, y: float, w: float, h: float, days: list,
                        fill=colour_hex, bold=True))
 
 
-def build_scene(models: list[dict], today: date | None = None) -> Scene:
+def _titles(models: list[dict]) -> tuple[str, str]:
     current = next(m for m in models if m["status"] == "current")
     h = current["heldout"]
+    n = built()
+    return (f"Held-out frames: {current['id']} finds all six in {h['full_share']:.1%} ({h['full_frames']}/{h['frames']})",
+            f"Strategy features: {n / len(FEATURES):.1%} ({n}/{len(FEATURES)})")
+
+
+def _history(models: list[dict], today: date | None):
+    first = min(date.fromisoformat(m["trained_on"]) for m in models)
+    return history_series(models, first, today or date.today())
+
+
+def _treemaps(scene: Scene, models: list[dict], top: float = 34) -> None:
+    current = next(m for m in models if m["status"] == "current")
+    held, features = _titles(models)
+    treemap(scene, 6, top, 528, 300, held, event_groups(current["heldout"]["per_frame"]))
+    treemap(scene, 564, top, 528, 300, features, feature_groups())
+
+
+def _chart(scene: Scene, models: list[dict], top: float, today: date | None) -> None:
+    days, model_values, feature_values = _history(models, today)
+    chart(scene, 60, top, 900, 360, days,
+          [("Model", MODEL_COLOUR, model_values), ("Features", FEATURE_COLOUR, feature_values)])
+
+
+def build_scene(models: list[dict], today: date | None = None) -> Scene:
+    """Treemaps above the history chart: the README and Discord picture."""
     scene = Scene(WIDTH, HEIGHT)
     scene.add(Rect(0, 0, WIDTH, HEIGHT, BACKGROUND, stroke=BACKGROUND, stroke_width=0))
-    treemap(scene, 6, 34, 528, 300,
-            f"Held-out frames: {current['id']} finds all six in {h['full_share']:.1%} ({h['full_frames']}/{h['frames']})",
-            event_groups(h["per_frame"]))
-    n = built()
-    treemap(scene, 564, 34, 528, 300,
-            f"Strategy features: {n / len(FEATURES):.1%} ({n}/{len(FEATURES)})", feature_groups())
-    first = min(date.fromisoformat(m["trained_on"]) for m in models)
-    days, model_values, feature_values = history_series(models, first, today or date.today())
-    chart(scene, 60, 370, 900, 360, days,
-          [("Model", MODEL_COLOUR, model_values), ("Features", FEATURE_COLOUR, feature_values)])
+    _treemaps(scene, models)
+    _chart(scene, models, 370, today)
+    return scene
+
+
+def treemap_scene(models: list[dict]) -> Scene:
+    """The two treemaps alone: the site's progress page, like AnyPS5's progress.svg."""
+    scene = Scene(WIDTH, 344)
+    scene.add(Rect(0, 0, WIDTH, 344, BACKGROUND, stroke=BACKGROUND, stroke_width=0))
+    _treemaps(scene, models)
+    return scene
+
+
+def history_scene(models: list[dict], today: date | None = None) -> Scene:
+    """The history chart alone: the site's history page."""
+    scene = Scene(WIDTH, 440)
+    scene.add(Rect(0, 0, WIDTH, 440, BACKGROUND, stroke=BACKGROUND, stroke_width=0))
+    _chart(scene, models, 20, today)
     return scene
 
 
@@ -377,8 +410,12 @@ def build() -> list:
         written.append(OUT / name)
 
     write("status.svg", to_svg(scene))
-    to_png(scene, OUT / "status.png")
-    written.append(OUT / "status.png")
+    try:
+        to_png(scene, OUT / "status.png")
+        written.append(OUT / "status.png")
+    except ImportError:
+        # Pillow is only needed for Discord's PNG; the site and README use the SVG.
+        print("Pillow not installed: skipped status.png")
     share = current["heldout"]["full_share"]
     features = built() / len(FEATURES)
     write("badge-heldout.svg", badge("held-out*", f"{share:.1%}", score_colour(share)))

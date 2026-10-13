@@ -3,8 +3,8 @@
 ### `Project Tengen`
 
 [![CI](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NHH-Inc/Project-Tengen/actions/workflows/ci.yml)
-[![Held-out](docs/status/badge-heldout.svg)](docs/MODELS.md)
-[![Features](docs/status/badge-features.svg)](docs/STRATEGY-PLAN.md#the-feature-catalogue-layer-3)
+[![Held-out](docs/status/badge-heldout.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html)
+[![Features](docs/status/badge-features.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html#features)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sZqMP3JEbb)
 
 Tengen watches FRC match video and works out **how each team plays, and how to beat it**:
@@ -12,6 +12,8 @@ where a robot shoots from and how long it sits there, its auto, its cycles, its 
 heads for the endgame. It runs offline on a laptop in the stands.
 
 <div flex="true">
+  <a href="https://nhh-inc.github.io/Project-Tengen/">Website</a>
+  •
   <a href="docs/DESKTOP.md">Run it</a>
   •
   <a href="docs/STRATEGY-PLAN.md">The plan</a>
@@ -47,11 +49,11 @@ path and shot (yellow) of the match from above, from the field's own AprilTags.<
 
 ## Status
 
-[![held-out](docs/status/badge-heldout.svg)](docs/MODELS.md) [![features](docs/status/badge-features.svg)](docs/STRATEGY-PLAN.md#the-feature-catalogue-layer-3) [![tracked](docs/status/badge-tracking.svg)](docs/MODELS.md) [![model](docs/status/badge-model.svg)](docs/MODELS.md)
+[![held-out](https://nhh-inc.github.io/Project-Tengen/badge-heldout.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html) [![features](https://nhh-inc.github.io/Project-Tengen/badge-features.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html#features) [![tracked](https://nhh-inc.github.io/Project-Tengen/badge-tracking.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html#models) [![model](https://nhh-inc.github.io/Project-Tengen/badge-model.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html#models)
 
-[![status](docs/status/status.svg)](docs/MODELS.md)
+[![status](https://nhh-inc.github.io/Project-Tengen/status.svg)](https://nhh-inc.github.io/Project-Tengen/progress.html)
 
-[Every model and its scores](docs/MODELS.md)
+[Progress page](https://nhh-inc.github.io/Project-Tengen/progress.html) · [Progress history](https://nhh-inc.github.io/Project-Tengen/history.html) · [Every model and its scores](docs/MODELS.md)
 
 <sub>* Held-out: the share of 400 frames of real 2026 broadcasts, from 25 events no model has
 trained on, where the current model finds all six robots. One cell per frame, one block per event;

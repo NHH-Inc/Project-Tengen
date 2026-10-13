@@ -1,0 +1,44 @@
+# Publish https://nhh-inc.github.io/Project-Tengen/ from main.
+#
+# The site is generated, never edited: tools/site.py builds it from training/registry and
+# ingest/strategy/catalogue.py, so it always shows the state of main. Only the standard library is
+# needed (the PNG for Discord is made locally, where Pillow is installed).
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build the site
+        run: python -m tools.site _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
