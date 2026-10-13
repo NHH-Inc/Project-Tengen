@@ -26,7 +26,8 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     try:
         path = analyze(AnalysisOptions(**read_json(args.options)),
-                       lambda value, stage: emit(progress=value, stage=stage))
+                       lambda value, stage: emit(progress=value, stage=stage),
+                       created=lambda directory: emit(run=str(directory)))
         emit(complete=str(path))
     except Exception as exc:
         traceback.print_exc(file=sys.stderr)

@@ -14,7 +14,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "data" / "desktop" / "runs"
-DEFAULT_MODEL = ROOT / "data/models/yolo-v3-960-20260906/weights/best.pt"
+#: The same v3 weights live at different paths on different machines: Robert's training output on
+#: his Mac, `data/robot-v3.pt` on Justin's PC. Use the first that exists, so the default works on
+#: both; if neither does, the error names the first.
+MODEL_CANDIDATES = (ROOT / "data/models/yolo-v3-960-20260906/weights/best.pt", ROOT / "data/robot-v3.pt")
+DEFAULT_MODEL = next((path for path in MODEL_CANDIDATES if path.is_file()), MODEL_CANDIDATES[0])
 DEFAULT_BALL_CONFIG = ROOT / "analysis/config/ball_scouting.example.json"
 FIXTURE = ROOT / "fixtures/2026casf_qm42"
 
@@ -67,7 +71,8 @@ class AnalysisOptions:
     annotated: bool = True
 
 
-def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: Path = RUNS) -> Path:
+def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: Path = RUNS,
+            created=lambda directory: None) -> Path:
     from ingest.yolo_orchestrator import YoloAnalysisOrchestrator
     video = Path(options.video).expanduser().resolve()
     model = Path(options.model).expanduser().resolve()
@@ -86,6 +91,9 @@ def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: 
                **metadata)
     write_json(directory / "job.json", job)
     write_json(directory / "options.json", vars(options))
+    # Tell the caller where the run lives before any long work starts. On Windows a cancel is a
+    # hard kill that this process never sees, so the caller must be able to close the run itself.
+    created(directory)
     engine = YoloAnalysisOrchestrator(
         repo_root=ROOT, python_path=sys.executable, model_path=model, output_base_dir=runs,
         device=options.device, confidence=options.confidence, image_size=options.image_size,
@@ -105,6 +113,17 @@ def analyze(options: AnalysisOptions, progress=lambda value, stage: None, runs: 
         job.update(status="failed", error=str(exc))
         write_json(directory / "job.json", job)
         raise
+
+
+def mark_canceled(directory: Path) -> None:
+    """Record a cancel for a run whose worker was killed before it could record one itself."""
+    path = Path(directory) / "job.json"
+    if not path.exists():
+        return
+    job = read_json(path)
+    if job.get("status") == "analyzing":
+        job.update(status="failed", error="Analysis canceled")
+        write_json(path, job)
 
 
 def box_at(track: dict, t: float, hold: float = 0.0) -> dict | None:

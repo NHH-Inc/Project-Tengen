@@ -180,7 +180,13 @@ native_analysis_orchestrator = orchestrator.AnalysisOrchestrator(
     output_base_dir=os.path.join(data_dir, "jobs"),
 )
 
-_yolo_model_default = REPO_ROOT / "data" / "models" / "yolo-v3-960-20260906" / "weights" / "best.pt"
+# The same v3 weights live at Robert's training-output path on his Mac and at data/robot-v3.pt
+# elsewhere. Prefer whichever exists; YOLO_MODEL_PATH still overrides both.
+_yolo_model_candidates = (
+    REPO_ROOT / "data" / "models" / "yolo-v3-960-20260906" / "weights" / "best.pt",
+    REPO_ROOT / "data" / "robot-v3.pt",
+)
+_yolo_model_default = next((p for p in _yolo_model_candidates if p.is_file()), _yolo_model_candidates[0])
 yolo_analysis_orchestrator = yolo_orchestrator.YoloAnalysisOrchestrator(
     repo_root=REPO_ROOT,
     python_path=os.environ.get("YOLO_PYTHON"),

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop.core import (AnalysisOptions, DEFAULT_MODEL, DEFAULT_BALL_CONFIG, FIXTURE, ROOT, RUNS, Review,
-                          read_json, write_json)
+                          mark_canceled, read_json, write_json)
 from ingest.yolo_orchestrator import phase_at, MODEL_CROP
 from desktop.rendering import VideoCanvas, HeatMap, FULL_FRAME
 
@@ -590,6 +590,7 @@ class MainWindow(QMainWindow):
         self.cancelled = False
         self.worker_error = None
         self.completed_path = None
+        self.run_path = None
         self.buffer = ""
         self.stderr = ""
         self.request_path = RUNS.parent / f"request-{uuid.uuid4()}.json"
@@ -628,6 +629,8 @@ class MainWindow(QMainWindow):
                     self.progress.setRange(0, 100)
                     self.progress.setValue(round(progress * 100))
                 self.statusBar().showMessage(f"Analyzing · {message['stage']}")
+            if "run" in message:
+                self.run_path = Path(message["run"])
             if "complete" in message:
                 self.completed_path = Path(message["complete"])
             if "error" in message:
@@ -648,6 +651,8 @@ class MainWindow(QMainWindow):
         self.analyze_button.setEnabled(bool(self.source))
         self.progress.setRange(0, 100)
         self.progress.setValue(100 if self.completed_path else 0)
+        if self.cancelled and self.run_path:
+            mark_canceled(self.run_path)
         self.refresh_history()
         if self.cancelled:
             self.statusBar().showMessage("Analysis canceled. Original video is unchanged.")
