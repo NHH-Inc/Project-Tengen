@@ -14,6 +14,9 @@ records where those are:
     missed at once, usually a crowd or an occlusion the model has not learned.
   * **flicker**: a track shorter than a second. Almost always a false positive on a field
     element, a person, or a bumper reflection.
+  * **undersized**: a track whose boxes are far smaller than this match's robots. On a real
+    Championship match one sat at the alliance wall for 70 s at a fifth of a robot's width,
+    holding one of the six identity slots while a real robot went untracked.
 
 Moments are ranked, spread out in time (consecutive frames teach one thing many times), and
 written as an ordinary label pack. The same rule applies as for every pack: every robot boxed, or
@@ -44,11 +47,13 @@ HOLE_S = 0.8
 FLICKER_S = 1.0
 #: Robot count this far below the match's median count is a drop.
 COUNT_DROP = 2
+#: A track whose median box width is below this share of the match's median is not a robot.
+UNDERSIZED_SHARE = 0.4
 #: Frames chosen from one match are at least this far apart.
 MIN_GAP_S = 2.0
 
 #: Higher first: a missed robot that later reappears is the clearest lesson.
-PRIORITY = {"hole": 0, "vanished": 1, "count_drop": 2, "flicker": 3}
+PRIORITY = {"hole": 0, "vanished": 1, "undersized": 2, "count_drop": 3, "flicker": 4}
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,8 @@ def find_moments(tracks: list[dict], duration: float, sample_rate: float | None 
     """Every moment worth a human look in one match, unranked."""
     moments: list[Moment] = []
     sightings = []
+    widths = sorted(b["w"] for track in tracks for b in track.get("boxes", []))
+    typical_width = widths[len(widths) // 2] if widths else 0.0
     for track in tracks:
         boxes = sorted(track.get("boxes", []), key=lambda b: b["t"])
         if not boxes:
@@ -82,6 +89,13 @@ def find_moments(tracks: list[dict], duration: float, sample_rate: float | None 
         length = last["t"] - first["t"]
         if length < FLICKER_S:
             moments.append(Moment(first["t"], "flicker", track.get("track_id"), FLICKER_S - length))
+            continue
+        own_width = sorted(b["w"] for b in boxes)[len(boxes) // 2]
+        if typical_width and own_width < UNDERSIZED_SHARE * typical_width:
+            # One frame per ten seconds of its life: the lesson is the same object, so a few will do.
+            for k in range(max(1, int(length // 10))):
+                moments.append(Moment(round(first["t"] + (k + 0.5) * length / max(1, int(length // 10)), 3),
+                                      "undersized", track.get("track_id"), 1 - own_width / typical_width))
             continue
         if first["t"] > CLIP_MARGIN_S and not _near_edge(first):
             moments.append(Moment(first["t"], "vanished", track.get("track_id"), 1.0))

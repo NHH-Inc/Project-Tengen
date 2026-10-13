@@ -44,6 +44,14 @@ class FindMomentsTests(unittest.TestCase):
     def test_a_sub_second_track_is_a_flicker(self):
         self.assertEqual(reasons(find_moments([track(1, 0, 60), track(2, 10, 10.4)], 60)), ["flicker"])
 
+    def test_a_tiny_persistent_box_is_not_a_robot(self):
+        tiny = track(9, 0, 60, x=0.5)
+        for box in tiny["boxes"]:
+            box["w"] = box["h"] = 0.012
+        moments = find_moments([track(i, 0, 60) for i in range(5)] + [tiny], duration=60)
+        self.assertEqual(sorted({m.reason for m in moments}), ["undersized"])
+        self.assertTrue(all(m.track_id == 9 for m in moments))
+
     def test_several_robots_missing_at_once_is_a_count_drop(self):
         tracks = [track(i, 0, 60) for i in range(6)]
         for t in tracks[:3]:
