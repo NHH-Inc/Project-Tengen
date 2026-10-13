@@ -79,9 +79,11 @@ isolation bug was fixed in `0ca1708` (see its message).
 2. `data/models/yolo-v3-960-20260906/` exists only on Robert's Mac. Here the same weights are
    `data/robot-v3.pt`. Fixed in `82e4e9c`: the desktop and API defaults use whichever exists.
 3. **2026 match timing was wrong in the season file** (15 s auto / 135 / 20). The scoreboard
-   clock on two real matches and WPILib's 2026 game data agree: **20 s auto, 110 s teleop, 30 s
-   endgame** (2:20 of teleop in total). Fixed in `291b764`; Robert and Nathaniel should confirm,
-   since it is a contract value. Every phase label on 2026 footage had been wrong.
+   clock on two real matches and WPILib's 2026 game data agree: **20 s auto, then 2:20 of teleop
+   whose last 30 s are the endgame**. Under Doc 0's phase rule (`teleop_seconds` includes the
+   endgame) that is **20 / 140 / 30**. A first fix wrote 110 for teleop, following `phase_at` in
+   the YOLO path, which turned out to be the one implementation that disagreed with Doc 0; it
+   was corrected instead. Robert and Nathaniel should confirm: it is a contract value.
 4. **Clips do not start at match time zero.** A typical upload has a title card, a frozen
    clock until ~7 s, and a ~4 s pause between auto and teleop. Match time now comes from the
    scoreboard clock, fitted robustly (`ingest/strategy/clock.py`); a Championship broadcast had
@@ -316,7 +318,7 @@ A UI built around the new questions, not around the analyzer's output:
 | D1 | **Desktop is the primary app; the web app stays too.** The desktop app is the offline analysis station at events. The web app remains for viewing and sharing between our own machines, and reads the same files and contracts, so neither forks the data. | **Decided** |
 | D2 | **One analysis engine: the Python/Ultralytics pipeline** (`track_yolo` + launch detection + six-robot re-ID). The C++ RF-DETR analyzer and `fuel_tracker` are frozen as reference. | **Decided** |
 | D3 | **Video source: our own camera if the event allows, broadcast otherwise.** Both must work. The broadcast path cannot be an afterthought, so calibration and identity work targets broadcast footage first. | **Depends on the event** |
-| D4 | Doc 0 rewrite for `desktop/` and the strategy layer. Keep "components talk through files." | To do (M1) |
+| D4 | Doc 0 rewrite for `desktop/` and the strategy layer. Keep "components talk through files." | **Done 2026-10-13**; Robert and Nathaniel to confirm |
 | D5 | Stop investing in made/missed and goal counting. **Keep launch detection.** | **Decided** |
 | D6 | The dead Supabase DB: leave it down until the web app needs a shared store again. | **Decided** |
 
@@ -429,9 +431,10 @@ in the 2027 season. **Rough owners are suggestions; adjust them in Discord.**
 
 ---
 
-## Appendix: proposed Doc 0 amendment (D4, needs all three to agree)
+## Appendix: the Doc 0 amendment (D4)
 
-Doc 0 is normative, so it is not edited until Justin, Robert and Nathaniel agree. Proposed text:
+Applied on 2026-10-13 at Justin's request, as Doc 0's "2026-10-13 revision". Robert and Nathaniel
+still need to confirm it. The text proposed here, for reference:
 
 **Repository layout.** Replace "one repo, three top-level directories, no cross-imports" with:
 

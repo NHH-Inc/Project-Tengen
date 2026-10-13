@@ -6,7 +6,9 @@ Read this before any of the other three documents. Every person and every AI ses
 
 The other three documents describe *what* each component does. This one defines *how they connect*. If three people build against these definitions independently, the pieces fit together on the first try. If anyone deviates, they do not.
 
-Version 2 resolved thirteen open questions raised by component 3. Version 3 adds the optional, season-configured `goal` field to Contract B after all three component owners agreed. The rulings are listed in the changelog at the bottom. Where this document and documents 1, 2 or 3 disagree, **this document wins.**
+Version 2 resolved thirteen open questions raised by component 3. Version 3 adds the optional, season-configured `goal` field to Contract B after all three component owners agreed. The 2026-10-13 revision records the move to a strategy predictor: the desktop app, the strategy layer and its timeline contract, the field-coordinate convention the code actually uses, and the real 2026 match timing. Record formats are unchanged, so `SCHEMA_VERSION` stays 3. The rulings are listed in the changelog at the bottom. Where this document and documents 1, 2 or 3 disagree, **this document wins.**
+
+What Tengen is for, as of that revision: **how does this team play, and how do we beat it?** See `docs/STRATEGY-PLAN.md`.
 
 ## The rule
 
@@ -20,28 +22,32 @@ If you need something added to a contract here, that is a conversation, not a co
 
 | # | Component | Language | Owns | Document |
 |---|-----------|----------|------|----------|
-| 1 | Analysis backend | C++ | Detection, tracking, OCR, event extraction | `frc-scouting-1-ai.md` |
-| 2 | Ingest service | Python | yt-dlp, TBA/YouTube APIs, job queue, HTTP API | `frc-scouting-2-youtube.md` |
-| 3 | Web app | TypeScript | UI, player, overlay, corrections, Sheets export | `frc-scouting-3-webapp.md` |
+| 1 | Analysis backend | C++ | Detection, tracking, OCR, event extraction. **Frozen as reference** since 2026-10-13: the Python/Ultralytics engine (`training/track_yolo.py`, run by `ingest/yolo_orchestrator.py`) is the one analysis engine. | `frc-scouting-1-ai.md` |
+| 2 | Ingest service | Python | yt-dlp, TBA/YouTube APIs, job queue, HTTP API, analysis orchestration, **strategy layer** (`ingest/strategy/`) | `frc-scouting-2-youtube.md` |
+| 3 | Web app | TypeScript | UI, player, overlay, corrections, Sheets export. Kept alongside the desktop app, for viewing and sharing. | `frc-scouting-3-webapp.md` |
+| 4 | Desktop app | Python (PySide6) | **The primary app**: the offline analysis station at events. Local video, analysis, review, corrections, strategy, export. | `DESKTOP.md` |
 
-Component 2 is also the orchestrator. It owns the database and the HTTP API. Component 1 is a command-line binary it invokes. Component 3 only ever talks to component 2 over HTTP. Component 1 and component 3 never touch each other.
+Component 2 is also the orchestrator. It owns the database and the HTTP API. Component 1 is a command-line binary it invokes. Component 3 only ever talks to component 2 over HTTP. Component 1 and component 3 never touch each other. Component 4 runs the same analysis engine and strategy layer as component 2, in-process, and keeps its runs as files; it needs no server, database or network.
 
 ```
-[3] Web app  ──HTTP──▶  [2] Ingest service  ──exec──▶  [1] Analysis binary
+[3] Web app  ──HTTP──▶  [2] Ingest service  ──exec──▶  analysis engine (Python; C++ frozen)
                               │                              │
-                              ├── yt-dlp                     └── writes events.jsonl
-                              ├── TBA API                                tracks.jsonl
-                              └── Postgres                               result.json
+[4] Desktop  ──import──▶  strategy layer, orchestrator      └── writes events.jsonl, tracks.jsonl,
+                              │                                    shots.jsonl, result.json
+                              ├── yt-dlp, TBA API, Postgres  (service only)
+                              └── reads analyzer files ──▶ timeline.jsonl ──▶ features, profiles
 ```
 
 ## Repository layout
 
-Monorepo. One repo, three top-level directories, no cross-imports.
+Monorepo. `/desktop` may import `/ingest`; nothing imports `/desktop`. `/ingest` and `/desktop` never import `/training` at runtime: analyzer output crosses that line as files, the same way the C++ binary's always did. `/web` talks to `/ingest` over HTTP only. Tests may import across these lines; running code may not.
 
 ```
-/analysis/        C++ — component 1
-/ingest/          Python — component 2
+/analysis/        C++ — component 1 (frozen reference)
+/ingest/          Python — component 2, including /ingest/strategy/
 /web/             TypeScript — component 3
+/desktop/         Python — component 4
+/training/        Python — the analysis engine and model training; run as a subprocess
 /contracts/       shared schemas, owned by everyone
   events.schema.json
   tracks.schema.json
@@ -49,8 +55,11 @@ Monorepo. One repo, three top-level directories, no cross-imports.
   result.schema.json
   correction.schema.json
   enums.md
+  timeline.schema.json
   seasons/
     2025.json
+    2026.json
+  strategy/
     2026.json
 /fixtures/        golden test data, owned by everyone
 /docs/            these four documents
@@ -71,6 +80,15 @@ Use these exact terms in code, comments, and column names. Do not invent synonym
 - **event** — a single timestamped thing that happened.
 - **detection** — one box in one frame. Internal to component 1. Never crosses a boundary.
 - **cycle** — the interval between one `reload` event and the next `reload` event for the same **team**. Acquire to acquire, not acquire to score, so a missed shot still costs a cycle. Computed per team, never per track, because track ids are job-local and a re-identified robot may span several. An unterminated final cycle is discarded, not counted.
+- **match clock** — match time read off the scoreboard clock and fitted across many readings (`ingest/strategy/clock.py`). A clip is not a match: uploads open with title cards and pause between auto and teleop.
+- **timeline** — one robot's resampled positions, phases, zones and launches for one match (Contract G).
+- **alliance frame** — field feet with the robot's own alliance wall at x=0, x toward the opponent, y to the driver's left. Red positions are rotated 180° about the field centre, so one team's red and blue matches compare directly.
+- **zone / lane** — a named x-band / y-band of the alliance frame, defined per season in `contracts/strategy/<year>.json`.
+- **launch** — a game piece seen leaving a robot. Says nothing about whether it scored.
+- **spot** — a cluster of one team's launch positions (4 ft radius).
+- **volley** — launches from one robot less than 3 s apart. **Volley interval** is start-to-start time between volleys. It is not a **cycle**.
+- **profile** — one team's tendencies across matches, each with the number of matches behind it.
+- **counter** — advice derived from a profile, always shown with the evidence that produced it.
 
 ## Identifier formats
 
@@ -96,7 +114,9 @@ Getting these wrong is the most likely source of silent breakage, so they are fi
 
 **Image space.** Normalized floats, `0.0` to `1.0`. Origin at top-left. `x` right, `y` down. Never pixels, so overlays work at any player size and boxes survive a resolution change.
 
-**Field space.** Feet, float. Origin at the center of the field. `+x` toward the blue alliance wall, `+y` toward the scoring table side. Nominal field dimensions live in the season config, not in code.
+**Field space.** Feet, float. WPILib's field convention, which every implementation uses (Python and C++ homography, the web heat map, the vendored AprilTag layout): origin at the corner of the field on the **blue** alliance wall, `+x` along the length toward the red alliance wall, `+y` across the width. Nominal field dimensions live in the season config, not in code. *(Revisions before 2026-10-13 said the origin was the field centre. No code ever did that; the text was corrected to match the code, not the other way round.)*
+
+**Alliance frame.** Field space as seen by one alliance: blue positions unchanged, red positions rotated 180° about the field centre (`x' = length − x`, `y' = width − y`). Used by the strategy layer only; Contracts B and C stay in field space.
 
 **Rates.** Hertz, float. `box_sample_rate` is samples per second, not a frame interval.
 
@@ -144,7 +164,11 @@ t_match <= auto_seconds + teleop_seconds      → endgame
 otherwise                                     → unknown
 ```
 
-Nobody hardcodes 15, 135 or 20. Component 1 reads the season config and stamps the result on each event; component 3 reads the same config to draw timeline bands. If a season changes the structure, one file changes.
+Nobody hardcodes 20, 140 or 30. Component 1 reads the season config and stamps the result on each event; component 3 reads the same config to draw timeline bands. If a season changes the structure, one file changes.
+
+`teleop_seconds` **includes** the endgame, which is its last `endgame_seconds`. For 2026 that is 20 s auto, then 140 s of teleop (the 2:20 the scoreboard shows), the last 30 s of it endgame, as in WPILib's 2026 game data. Every implementation must use this function: the YOLO path's `phase_at` once placed the endgame after teleop instead, and disagreed with every other component until 2026-10-13.
+
+`t(match_start)` should come from the **match clock** when the scoreboard is readable. The strategy layer also marks the pause between auto and teleop as `transition`, holding match time at the end of auto, so that the pause is not counted as teleop. That label belongs to the timeline (Contract G), not to Contract B.
 
 ## Season config
 
@@ -155,9 +179,9 @@ Nobody hardcodes 15, 135 or 20. Component 1 reads the season config and stamps t
   "season": 2026,
   "field_length_ft": 54.0,
   "field_width_ft": 26.6,
-  "auto_seconds": 15,
-  "teleop_seconds": 135,
-  "endgame_seconds": 20,
+  "auto_seconds": 20,
+  "teleop_seconds": 140,
+  "endgame_seconds": 30,
   "game_pieces": ["ball"],
   "goals": ["high", "low"],
   "point_values": {
@@ -440,6 +464,16 @@ Corrections never overwrite model output. A correction is a new row referencing 
 
 Reads apply corrections on top of raw records. Deleting a correction undoes it.
 
+## Contract G — Robot timeline (strategy layer)
+
+`timeline.jsonl` beside the analyzer output, one object per robot per match, defined by `contracts/timeline.schema.json` (its own `schema_version: 1`). Produced only by `ingest/strategy/timeline.py`, from `tracks.jsonl`, `shots.jsonl`, the match clock and either UI's corrections. Everything strategic (features, profiles, counters, predictions) reads timelines and never raw boxes.
+
+- Positions are resampled to a fixed rate (10 Hz) and **never interpolated across a listed gap or a hole longer than 0.6 s**.
+- Samples carry field space (`x`, `y`) and the alliance frame (`ax`, `ay`), plus `zone` and `lane` from `contracts/strategy/<year>.json`.
+- `phase` adds `pre_match`, `transition` and `post_match` to Contract B's phases, because a clip runs past both ends of the match and pauses between auto and teleop.
+- A robot whose position is unknown has null positions. Features computed from it are null, never zero: "did not move" and "could not see it" must stay distinguishable.
+- `clock_source` says where match time came from: `scoreboard_clock`, `match_start_event`, or `clip_start`. The last means it was assumed.
+
 ## Database
 
 Component 2 owns the schema and is the only thing that writes to it. Postgres in production, SQLite acceptable locally.
@@ -484,6 +518,17 @@ These are arbitrary and can be changed once, together, at the start. After that,
 - Timestamps in metadata: ISO 8601, UTC, `Z` suffix. Timestamps within video: float seconds.
 
 ## Changelog
+
+### 2026-10-13 revision — strategy predictor (SCHEMA_VERSION stays 3)
+
+Proposed by Justin; Robert and Nathaniel to confirm. No existing record changes shape.
+
+1. **Purpose.** Tengen predicts how a team plays and how to counter it; shot counting is a minor input. `docs/STRATEGY-PLAN.md`.
+2. **Components.** Desktop app added as the primary app; the web app stays. One analysis engine (Python/Ultralytics); the C++ backend is frozen as reference. The repository rule now names which directories may import which.
+3. **Field space** corrected to the convention all code already used (WPILib, origin at a blue-wall corner). The centre-origin text had never been implemented.
+4. **2026 timing** corrected from 15/135/20 to 20/140/30, measured on two real matches' scoreboard clocks and matching WPILib's 2026 game data. `phase_at` in the YOLO path was corrected to this document's function.
+5. **Contract G** (robot timeline), the strategy geometry file, the match clock, and the strategy vocabulary added.
+6. A desktop job may carry an optional `model_crop` (four shares of the frame), because broadcast layouts differ between events. It is recorded in `result.json` as before.
 
 ### v3 — optional `goal` on Contract B
 
