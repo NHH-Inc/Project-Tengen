@@ -614,6 +614,72 @@ class AppearanceMemoryTests(unittest.TestCase):
         )[0]
         self.assertNotEqual(recycled, first)
 
+    @staticmethod
+    def sized(raw_id, descriptor, center, alliance="red", width=0.07):
+        return ReIDDetection(raw_id, descriptor, center, alliance, size=(width, width))
+
+    def six_robots(self, memory, t=0.0):
+        """Six robot-sized robots, three per alliance, each with its own appearance."""
+        return memory.resolve_frame(t, [
+            self.sized(raw_id, [1.0 if k == raw_id else 0.0 for k in range(1, 7)], (0.12 * raw_id, 0.5),
+                       "red" if raw_id <= 3 else "blue")
+            for raw_id in range(1, 7)
+        ])
+
+    def test_a_tiny_box_never_takes_a_robot_identity(self):
+        """Seen on a real match: a box a fifth of a robot's width held a slot for 70 s."""
+        memory = self.memory()
+        frame = [self.sized(1, [1.0, 0.0], (0.2, 0.5)), self.sized(2, [0.0, 1.0], (0.5, 0.5)),
+                 self.sized(3, [0.5, 0.5], (0.8, 0.5)), self.sized(9, [0.3, 0.7], (0.02, 0.3), width=0.014)]
+        resolved = memory.resolve_frame(0.0, frame)
+        self.assertEqual(resolved[:3], [1, 2, 3])
+        self.assertIsNone(resolved[3])
+        self.assertNotIn(4, memory.states)
+
+    def test_a_robot_hidden_past_the_memory_window_gets_its_identity_back(self):
+        """With all six slots taken, a long occlusion used to lose the robot for the match."""
+        memory = self.memory()
+        self.assertEqual(self.six_robots(memory), [1, 2, 3, 4, 5, 6])
+        # Robot 4 (blue) is hidden for 20 s while the other five keep being seen.
+        for step in range(1, 21):
+            memory.resolve_frame(float(step), [
+                self.sized(raw_id, [1.0 if k == raw_id else 0.0 for k in range(1, 7)],
+                           (0.12 * raw_id, 0.5), "red" if raw_id <= 3 else "blue")
+                for raw_id in (1, 2, 3, 5, 6)
+            ])
+        returned = memory.resolve_frame(21.0, [
+            self.sized(44, [0.0, 0.0, 0.0, 0.97, 0.03, 0.0], (0.9, 0.2), "blue")
+        ])[0]
+        self.assertEqual(returned, 4)
+        self.assertEqual(memory.recovered, 1)
+
+    def test_recovery_abstains_when_two_lost_robots_look_alike(self):
+        memory = self.memory()
+        self.six_robots(memory)
+        for step in range(1, 11):
+            memory.resolve_frame(float(step), [
+                self.sized(raw_id, [1.0 if k == raw_id else 0.0 for k in range(1, 7)],
+                           (0.12 * raw_id, 0.5), "red" if raw_id <= 3 else "blue")
+                for raw_id in (1, 2, 3, 6)
+            ])
+        # Robots 4 and 5 are both lost; this detection resembles both equally.
+        ambiguous = [0.0, 0.0, 0.0, 0.7, 0.7, 0.0]
+        self.assertIsNone(memory.resolve_frame(11.0, [self.sized(77, ambiguous, (0.5, 0.2), "blue")])[0])
+
+    def test_recovery_never_crosses_alliances(self):
+        memory = self.memory()
+        self.six_robots(memory)
+        for step in range(1, 11):
+            memory.resolve_frame(float(step), [
+                self.sized(raw_id, [1.0 if k == raw_id else 0.0 for k in range(1, 7)],
+                           (0.12 * raw_id, 0.5), "red" if raw_id <= 3 else "blue")
+                for raw_id in (1, 2, 3, 5, 6)
+            ])
+        for raw_id in (1, 2, 3, 4, 5, 6):  # lock alliances the way sustained evidence would
+            memory.states[raw_id].alliance = "red" if raw_id <= 3 else "blue"
+        red_newcomer = self.sized(55, [0.0, 0.0, 0.0, 1.0, 0.0, 0.0], (0.5, 0.2), "red")
+        self.assertIsNone(memory.resolve_frame(11.0, [red_newcomer])[0])
+
     def test_public_identity_pool_is_capped_at_six(self):
         memory = self.memory(max_robots=12)
         resolved = memory.resolve_frame(0.0, [

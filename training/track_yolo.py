@@ -304,6 +304,14 @@ class ReIDConfig:
     alliance_evidence_min_assignment_score: float = 0.70
     startup_position_seconds: float = DEFAULT_STARTUP_POSITION_SECONDS
     startup_split_x: float = DEFAULT_STARTUP_SPLIT_X
+    #: A box narrower than this share of the typical robot box may not claim an identity. On a
+    #: Championship match a box a fifth of a robot's width sat at the alliance wall for 70 s
+    #: holding one of the six slots, while a real robot went untracked.
+    new_identity_min_width_share: float = 0.4
+    #: When all six identities exist, a robot-sized detection that matches no live identity is
+    #: matched to one that has been unseen longer than `memory_seconds`, instead of being dropped
+    #: for the rest of the match.
+    recover_stale_identities: bool = True
 
 
 @dataclass(frozen=True)
@@ -316,6 +324,9 @@ class ReIDDetection:
     field_center: tuple[float, float] | None = None
     confidence: float = 1.0
     alliance_is_authoritative: bool = False
+    #: Normalised (width, height) of the box, when the caller knows it. Without it the size gate
+    #: is skipped, which keeps callers that pass only centres working as before.
+    size: tuple[float, float] | None = None
 
 
 @dataclass
@@ -365,6 +376,54 @@ class AppearanceTrackMemory:
         self.raw_to_stable: dict[int, int] = {}
         self.states: dict[int, _IdentityState] = {}
         self.camera_offset = (0.0, 0.0)
+        #: Widths of recently resolved robot boxes: the yardstick for "robot-sized".
+        self.recent_widths: list[float] = []
+        self.recovered = 0
+
+    def _typical_width(self, detections: list[ReIDDetection]) -> float | None:
+        widths = self.recent_widths
+        if len(widths) < 10:
+            # Early in the match the frame itself is the best sample of what a robot looks like.
+            widths = [d.size[0] for d in detections if d.size is not None]
+            if len(widths) < 3:
+                return None
+        ordered = sorted(widths)
+        return ordered[len(ordered) // 2]
+
+    def _robot_sized(self, detection: ReIDDetection, typical: float | None) -> bool:
+        if detection.size is None or typical is None:
+            return True
+        return detection.size[0] >= self.config.new_identity_min_width_share * typical
+
+    def _recover_stale(self, timestamp: float, detection: ReIDDetection, taken: set[int]) -> int | None:
+        """The identity this unmatched robot most plausibly is, among those lost for a while.
+
+        Six robots are on the field, so once six identities exist, a robot-sized detection that
+        no live identity explains is one of the identities that went unseen past the memory
+        window. Alliance must agree. With one such identity it is that one, unless appearance
+        clearly says otherwise; with several, appearance must pick one by a clear margin, or
+        the layer abstains rather than guess.
+        """
+        stale = []
+        for stable_id, state in self.states.items():
+            if stable_id in taken or timestamp - state.last_seen <= self.config.memory_seconds:
+                continue
+            if detection.alliance and state.alliance and detection.alliance != state.alliance:
+                continue
+            stale.append((stable_id, self._appearance(detection, state)))
+        if not stale:
+            return None
+        if len(stale) == 1:
+            stable_id, appearance = stale[0]
+            if appearance is not None and appearance < self.config.continuity_similarity:
+                return None
+            return stable_id
+        scored = sorted(((a, s) for s, a in stale if a is not None), reverse=True)
+        if not scored or scored[0][0] < self.config.appearance_threshold:
+            return None
+        if len(scored) > 1 and scored[0][0] - scored[1][0] < self.config.score_margin:
+            return None
+        return scored[0][1]
 
     def _available_identity(self) -> int | None:
         for stable_id in range(1, min(self.config.max_robots, MAX_ROBOTS) + 1):
@@ -664,6 +723,7 @@ class AppearanceTrackMemory:
             if best_total - alternative_total + 1e-12 >= self.config.score_margin:
                 accepted[row] = column
 
+        typical = self._typical_width(detections)
         resolved: list[int | None] = [None] * len(detections)
         for row, column in accepted.items():
             stable_id = candidate_ids[column]
@@ -679,13 +739,30 @@ class AppearanceTrackMemory:
             if any(score is not None for score in scores[row]):
                 self.raw_to_stable.pop(detection.raw_track_id, None)
                 continue
+            if not self._robot_sized(detection, typical):
+                # Too small to be a robot: never let it hold, or take back, a robot's identity.
+                self.raw_to_stable.pop(detection.raw_track_id, None)
+                continue
             stable_id = self._available_identity()
+            if stable_id is None and self.config.recover_stale_identities:
+                stable_id = self._recover_stale(
+                    timestamp, detection, {s for s in resolved if s is not None})
+                if stable_id is not None:
+                    # Its velocity is from before the gap and means nothing now.
+                    self.states[stable_id].velocity = (0.0, 0.0)
+                    self.states[stable_id].field_velocity = (0.0, 0.0)
+                    self.recovered += 1
             if stable_id is None:
                 self.raw_to_stable.pop(detection.raw_track_id, None)
                 continue
             resolved[row] = stable_id
             self.raw_to_stable[detection.raw_track_id] = stable_id
             self._update_state(stable_id, timestamp, detection, 1.0)
+
+        for row, stable_id in enumerate(resolved):
+            if stable_id is not None and detections[row].size is not None:
+                self.recent_widths.append(detections[row].size[0])
+        del self.recent_widths[:-300]
         return resolved
 
     def resolve(
@@ -1810,6 +1887,7 @@ def main() -> int:
                         reid_config.startup_position_seconds > 0.0
                         and 0.0 <= timestamp < reid_config.startup_position_seconds
                     ),
+                    size=(normalized_box[2], normalized_box[3]),
                 ))
                 frame_metadata[detection_index] = (
                     raw_track_id,
