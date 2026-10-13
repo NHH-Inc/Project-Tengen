@@ -173,7 +173,8 @@ def table(heading: str, anchor: str, column: str, groups: list[dict], unit: str)
     return "".join(rows)
 
 
-def progress_html(data: dict, models: list[dict]) -> str:
+def progress_html(data: dict, models: list[dict], progress_svg: str) -> str:
+    # The picture is inlined, not an <img>: hover titles on cells only work inside the page.
     feature_rows = "".join(
         f'<tr><td>{escape(c)}</td><td>{escape(label)}</td><td>{escape(desc)}</td>'
         f'<td>{"✅ " + added if added else "—"}</td></tr>' for c, label, desc, added in FEATURES)
@@ -192,7 +193,7 @@ def progress_html(data: dict, models: list[dict]) -> str:
 <h1>Progress</h1>
 <div class="badges"><img src="badge-heldout.svg" alt="held-out"><img src="badge-features.svg" alt="features">
 <img src="badge-tracking.svg" alt="tracked"><img src="badge-model.svg" alt="model"></div>
-<img src="progress.svg" alt="progress treemaps">
+{progress_svg}
 <p class="note">Hover a cell for its frame or feature. <a href="history.html">Progress history</a> (one point per day).</p>
 {table("Held-out frames by event", "heldout", "Event", data["heldout"]["groups"], "All six found")}
 <p class="note">The {data["heldout"]["total"]} frames of <code>{escape(data["heldout"]["pack"])}</code> are real 2026 broadcasts
@@ -215,12 +216,12 @@ columns do. Details in <a href="{SOURCE}/docs/MODELS.md">MODELS.md</a>, and how 
 """)
 
 
-def history_html(data: dict) -> str:
+def history_html(data: dict, history_svg: str) -> str:
     rows = "".join(f'<tr><td>{d["date"]}</td><td class="n">{"—" if d["model"] is None else f"{d["model"]:.1f}%"}</td>'
                    f'<td class="n">{d["features"]:.1f}%</td></tr>' for d in reversed(data["history"]))
     return page("Tengen progress history", "history.html", f"""
 <h1>Progress history</h1>
-<img src="history.svg" alt="progress over time">
+{history_svg}
 <p class="note"><b style="color:#388bfd">Model</b>: the held-out score of the model that was current that day.
 <b style="color:#2ea043">Features</b>: the share of the plan's strategy features built by that day.</p>
 <table><tr><th>Date</th><th class="n">Model: all six found</th><th class="n">Features built</th></tr>{rows}</table>
@@ -234,15 +235,17 @@ def build(out: Path, today: date | None = None) -> None:
     status.build()  # refreshes docs/status (badges, status.svg)
     data = collect(models, today)
     (out / "progress.json").write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    (out / "progress.svg").write_text(status.to_svg(status.treemap_scene(models)) + "\n", encoding="utf-8")
-    (out / "history.svg").write_text(status.to_svg(status.history_scene(models, today)) + "\n", encoding="utf-8")
+    progress_svg = status.to_svg(status.treemap_scene(models))
+    history_svg = status.to_svg(status.history_scene(models, today))
+    (out / "progress.svg").write_text(progress_svg + "\n", encoding="utf-8")
+    (out / "history.svg").write_text(history_svg + "\n", encoding="utf-8")
     for name in ("status.svg", "badge-heldout.svg", "badge-features.svg", "badge-tracking.svg", "badge-model.svg"):
         shutil.copyfile(status.OUT / name, out / name)
     shutil.copyfile(ROOT / "brand" / "tengen-mark.svg", out / "tengen-mark.svg")
     shutil.copyfile(ROOT / "docs" / "assets" / "hero.jpg", out / "hero.jpg")
     (out / "index.html").write_text(index_html(data, models), encoding="utf-8")
-    (out / "progress.html").write_text(progress_html(data, models), encoding="utf-8")
-    (out / "history.html").write_text(history_html(data), encoding="utf-8")
+    (out / "progress.html").write_text(progress_html(data, models, progress_svg), encoding="utf-8")
+    (out / "history.html").write_text(history_html(data, history_svg), encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     print(f"held-out {data['heldout']['done']}/{data['heldout']['total']} ({data['heldout']['percent']}%), "
           f"features {data['features']['done']}/{data['features']['total']} ({data['features']['percent']}%) -> {out}")
