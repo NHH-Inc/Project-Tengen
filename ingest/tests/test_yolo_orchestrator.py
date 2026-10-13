@@ -51,12 +51,16 @@ class YoloOrchestratorTests(unittest.TestCase):
             all(track["robot_name"] in {f"robot{i}" for i in range(1, 7)} for track in public)
         )
 
-    def test_phase_boundaries_are_season_configured(self):
-        season = {"auto_seconds": 15, "teleop_seconds": 135}
-        self.assertEqual(phase_at(15, season), "auto")
-        self.assertEqual(phase_at(15.01, season), "teleop")
-        self.assertEqual(phase_at(150, season), "teleop")
-        self.assertEqual(phase_at(150.01, season), "endgame")
+    def test_phase_boundaries_follow_doc_0(self):
+        """2026: 20 s auto, then 140 s of teleop whose last 30 s are the endgame."""
+        season = {"auto_seconds": 20, "teleop_seconds": 140, "endgame_seconds": 30}
+        self.assertEqual(phase_at(-0.1, season), "unknown")
+        self.assertEqual(phase_at(19.99, season), "auto")
+        self.assertEqual(phase_at(20, season), "teleop")
+        self.assertEqual(phase_at(129.99, season), "teleop")
+        self.assertEqual(phase_at(130, season), "endgame")
+        self.assertEqual(phase_at(160, season), "endgame")
+        self.assertEqual(phase_at(160.01, season), "unknown")
 
     def test_match_events_are_only_emitted_for_known_matches(self):
         season = {"auto_seconds": 15, "teleop_seconds": 135}

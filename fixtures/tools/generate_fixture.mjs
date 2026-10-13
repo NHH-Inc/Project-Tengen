@@ -36,7 +36,6 @@ const JOB_ID = 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6';
 const MATCH_ID = '2026casf_qm42';
 const VIDEO_ID = 'dQw4w9WgXcQ';
 const START_OFFSET = 120.0;
-const DURATION = 152.0;
 const FPS = 30;
 const W = 640;
 const H = 360;
@@ -50,6 +49,11 @@ const AUTO = SEASON.auto_seconds;
 const TELEOP = SEASON.teleop_seconds;
 const ENDGAME = SEASON.endgame_seconds;
 const T_MATCH_END = AUTO + TELEOP;
+// The clip is the match plus two seconds, from the season file rather than a constant: the
+// fixed 152 s was 2026's old 150 s match, and when the season was corrected to 160 s the
+// generator placed the last events past the end of the clip.
+const DURATION = T_MATCH_END + 2.0;
+const CLIP_SECONDS = String(Math.round(DURATION)).padStart(5, '0');
 
 // mulberry32, so the fixture is reproducible
 function makeRng(seed) {
@@ -323,7 +327,7 @@ writeFileSync(
     match_id: MATCH_ID,
     season: SEASON_YEAR,
     video_id: VIDEO_ID,
-    local_path: `/data/segments/${VIDEO_ID}_00120_00272.mp4`,
+    local_path: `/data/segments/${VIDEO_ID}_${String(Math.round(START_OFFSET)).padStart(5, "0")}_${String(Math.round(START_OFFSET + DURATION)).padStart(5, "0")}.mp4`,
     start_offset: START_OFFSET,
     duration: DURATION,
     fps: FPS,
@@ -445,9 +449,9 @@ writeFileSync(
     match_id: NO_TBA_MATCH,
     season: SEASON_YEAR,
     video_id: 'kJQP7kiw5Fk',
-    local_path: `/data/segments/kJQP7kiw5Fk_00000_00152.mp4`,
+    local_path: `/data/segments/kJQP7kiw5Fk_00000_${CLIP_SECONDS}.mp4`,
     start_offset: 0.0,
-    duration: 152.0,
+    duration: DURATION,
     fps: 30.0,
     width: 640,
     height: 360,

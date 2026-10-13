@@ -79,7 +79,7 @@ install the CUDA build of PyTorch into the same environment and choose compute d
 6. **Export…** saves a full JSON package or an event CSV. **Raw model output** shows/exports
    unchanged model results and disables corrections until unchecked.
 
-**Load demo** is explicitly synthetic: it uses the included 152-second video, seven tracks,
+**Load demo** is explicitly synthetic: it uses the included 162-second video, seven tracks,
 and known event stream. It is useful for exercising review controls without running inference.
 Demo edits are stored outside the fixture folder.
 

@@ -37,14 +37,24 @@ def utc_now() -> str:
 
 
 def phase_at(t_seconds: float, season: dict) -> str:
-    """Derive a season phase from match-relative time, matching the native backend."""
+    """Doc 0's phase function, as the C++ backend, the web app and extract_events compute it.
+
+    `teleop_seconds` INCLUDES the endgame, which is its last `endgame_seconds`. This used to put
+    the endgame after teleop instead, so the YOLO path disagreed with every other component
+    about which period an event was in, and labelled everything past the match "endgame".
+    """
     auto_seconds = float(season.get("auto_seconds", 0))
     teleop_seconds = float(season.get("teleop_seconds", 0))
-    if t_seconds <= auto_seconds:
+    endgame_seconds = float(season.get("endgame_seconds", 0))
+    if t_seconds < 0:
+        return "unknown"
+    if t_seconds < auto_seconds:
         return "auto"
-    if t_seconds <= auto_seconds + teleop_seconds:
+    if t_seconds < auto_seconds + teleop_seconds - endgame_seconds:
         return "teleop"
-    return "endgame"
+    if t_seconds <= auto_seconds + teleop_seconds:
+        return "endgame"
+    return "unknown"
 
 
 def match_events(job: dict, duration: float, season: dict) -> list[dict]:

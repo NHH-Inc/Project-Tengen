@@ -37,8 +37,8 @@ def match_features(timelines: list[dict], geometry: dict, season: dict) -> list[
 
 
 def robot_features(timeline, rows, all_timelines, all_rows, geometry, season) -> dict:
-    match_seconds = float(season.get("auto_seconds", 0)) + float(season.get("teleop_seconds", 0)) \
-        + float(season.get("endgame_seconds", 0))
+    # Doc 0: teleop_seconds already includes the endgame.
+    match_seconds = float(season.get("auto_seconds", 0)) + float(season.get("teleop_seconds", 0))
     # The pause between auto and teleop is part of the match (robots sit or drift), but it is
     # neither phase, so it counts toward coverage and movement and not toward teleop zones.
     in_match = [r for r in rows if r["phase"] in ("auto", "transition", "teleop", "endgame")]

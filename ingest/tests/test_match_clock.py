@@ -10,7 +10,7 @@ import unittest
 
 from ingest.strategy.clock import MatchClock, fit_clock, fixed_clock
 
-SEASON = {"auto_seconds": 20, "teleop_seconds": 110, "endgame_seconds": 30}
+SEASON = {"auto_seconds": 20, "teleop_seconds": 140, "endgame_seconds": 30}
 AUTO_START, PAUSE, TELEOP_START = 7.3, 4.2, 31.5  # teleop starts after auto's 20 s and a pause
 
 
@@ -63,11 +63,11 @@ class FitTests(unittest.TestCase):
         self.assertAlmostEqual(clock.teleop_start_t, TELEOP_START, delta=1.0)
         # Auto is not in the clip, so the pause before teleop cannot be measured: none is assumed.
         self.assertAlmostEqual(clock.match_start_t, TELEOP_START - 20, delta=1.0)
-        self.assertTrue(any("assumed" in note for note in clock.notes))
+        self.assertTrue(any("season file" in note for note in clock.notes))
         self.assertTrue(any("auto not found" in note for note in clock.notes))
 
     def test_the_clock_wins_over_a_wrong_season_file_and_says_so(self):
-        clock = fit_clock(readings(), {"auto_seconds": 15, "teleop_seconds": 135, "endgame_seconds": 20})
+        clock = fit_clock(readings(), {"auto_seconds": 15, "teleop_seconds": 150, "endgame_seconds": 20})
         self.assertEqual(clock.auto_seconds, 20)
         self.assertEqual(clock.teleop_seconds, 140)
         self.assertEqual(len(clock.notes), 2)

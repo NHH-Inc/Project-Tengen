@@ -90,14 +90,13 @@ class MatchClock:
 
 
 def season_lengths(season: dict) -> tuple[float, float, float]:
-    """(auto, teleop including endgame, endgame) as the clock shows them.
+    """(auto, teleop, endgame) as the clock shows them.
 
-    The season file's `teleop_seconds` excludes the endgame (that is how `phase_at` reads it), but
-    the clock runs one teleop period with the endgame at its end.
+    Doc 0: `teleop_seconds` includes the endgame, which is its last `endgame_seconds`; the clock
+    likewise runs one teleop period with the endgame at its end.
     """
-    auto = float(season.get("auto_seconds", 0))
-    endgame = float(season.get("endgame_seconds", 0))
-    return auto, float(season.get("teleop_seconds", 0)) + endgame, endgame
+    return (float(season.get("auto_seconds", 0)), float(season.get("teleop_seconds", 0)),
+            float(season.get("endgame_seconds", 0)))
 
 
 def frozen_values(readings: list[tuple[float, int | None]]) -> set[int]:
@@ -225,7 +224,9 @@ def fit_clock(readings: list[tuple[float, int | None]], season: dict) -> MatchCl
         if found and found[2] == "clock" and found[1] != expected:
             notes.append(f"clock shows {name} {found[1]:.0f} s; season file implies {expected:.0f} s")
         if found and found[2] == "assumed":
-            notes.append(f"{name} began before the clip; its length was assumed, not measured")
+            notes.append(f"{name} length taken from the season file ({found[1]:.0f} s): no frozen clock "
+                         f"was read before its countdown (the clip may start mid-period, or "
+                         f"the frozen clock was misread)")
     if auto is None and teleop is None:
         notes.append("no period found on the clock")
     elif auto is None:
