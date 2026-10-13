@@ -9,3 +9,5 @@
 *.mjs   text eol=lf
 
 *.mp4 binary
+# cmd.exe misparses labels and blocks in LF batch files.
+*.cmd   text eol=crlf

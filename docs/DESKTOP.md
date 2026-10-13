@@ -36,7 +36,22 @@ original high-frame-rate recording, not by upsampling the old 2 fps export.
 The existing `.venv` and `.robot-venv` are left intact.
 
 On other systems, create a Python 3.11 virtual environment, install
-`requirements-desktop.txt`, and run `python tengen.py`. Only macOS was verified here.
+`requirements-desktop.txt`, and run `python tengen.py`. Verified on macOS and on Windows 11.
+
+### Windows
+
+Verified 2026-10-12 on Windows 11 with Python 3.13 (all 12 desktop tests pass). From the project
+folder in PowerShell:
+
+```powershell
+py -3.13 -m venv .venv-desktop
+.venv-desktop\Scripts\python -m pip install -r requirements-desktop.txt
+.venv-desktop\Scripts\python tengen.py
+```
+
+Afterwards, double-click **`Launch Tengen.cmd`**. The default model is `data/robot-v3.pt` when
+Robert's training-output folder is not present. pip installs CPU PyTorch. For an NVIDIA GPU,
+install the CUDA build of PyTorch into the same environment and choose compute device `0`.
 
 ## Review a video
 
