@@ -468,7 +468,10 @@ class YoloAnalysisOrchestrator:
         job_homography = self._job_homography(
             video_path,
             job_dir,
-            region=(crop[1], crop[3]) if crop == FULL_FRAME else AUTO_HOMOGRAPHY_REGION,
+            # Calibrate from the part of the frame being analysed. With a custom crop (a top panel
+            # of a stacked broadcast), tags from the other panels belong to other cameras: mixing
+            # them gave a 245 px reprojection error on Space Coast Showdown Final 2.
+            region=AUTO_HOMOGRAPHY_REGION if crop == MODEL_CROP else (crop[1], crop[3]),
         )
         if self.ball_config_path is not None and ball_config_snapshot is not None:
             shutil.copyfile(self.ball_config_path, ball_config_snapshot)
