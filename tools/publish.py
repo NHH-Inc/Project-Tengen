@@ -6,9 +6,11 @@
 
 The server address and the team's write key live in data/tengen-server.json, which is
 git-ignored: `--setup` asks for the key without echoing it. Team numbers assigned in the desktop
-app are applied to the tracks before upload, so the website shows the same teams. Only the
-results go up, never the video: a run from a YouTube match (or `--youtube`) streams from YouTube
-on the website, and a local recording stays on the laptop that made it.
+app are applied to the tracks before upload, so the website shows the same teams.
+
+The video goes up as a small 480p copy (`--no-video` to skip it). The website cannot stream the
+original from YouTube, which refuses cloud servers, and a local recording would otherwise have no
+video online at all. The copy starts where the analysed clip starts, so the boxes line up.
 """
 
 from __future__ import annotations
@@ -17,7 +19,10 @@ import argparse
 import getpass
 import json
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 import uuid
@@ -70,6 +75,28 @@ def job_record(run: Path, youtube: str | None, offset: float | None) -> dict:
     }
 
 
+def video_copy(run: Path) -> bytes | None:
+    """The run's video at 480p, 30 fps, H.264: about 10-15 MB for a match. None if unavailable."""
+    job = json.loads((run / "job.json").read_text(encoding="utf-8"))
+    source = next((p for p in (run / "segment.mp4", Path(job.get("local_path") or ""))
+                   if str(p) not in ("", ".") and p.is_file()), None)
+    ffmpeg = shutil.which("ffmpeg")
+    if source is None or ffmpeg is None:
+        print("  (no video copy: " + ("source video not found" if source is None else "ffmpeg not installed") + ")")
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "preview.mp4"
+        command = [ffmpeg, "-nostdin", "-loglevel", "error", "-i", str(source),
+                   "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:480,fps=30",
+                   "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
+                   "-c:a", "aac", "-b:a", "64k", "-ac", "1", "-movflags", "+faststart", "-y", str(out)]
+        print(f"  encoding a 480p copy of {source.name}...")
+        if subprocess.run(command).returncode != 0 or not out.is_file():
+            print("  (video copy failed; publishing results only)")
+            return None
+        return out.read_bytes()
+
+
 def multipart(fields: dict[str, str], files: list[tuple[str, bytes]]) -> tuple[bytes, str]:
     boundary = uuid.uuid4().hex
     parts = []
@@ -82,12 +109,15 @@ def multipart(fields: dict[str, str], files: list[tuple[str, bytes]]) -> tuple[b
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def publish(run: Path, youtube: str | None = None, offset: float | None = None) -> dict:
+def publish(run: Path, youtube: str | None = None, offset: float | None = None, video: bool = True) -> dict:
     config = load_config()
     if not (run / "tracks.jsonl").is_file():
         raise SystemExit(f"{run} has no tracks.jsonl: analyse it first")
     files = [("tracks.jsonl", corrected_tracks(run))]
     files += [(name, (run / name).read_bytes()) for name in FILES[1:] if (run / name).is_file()]
+    copy = video_copy(run) if video else None
+    if copy:
+        files.append(("preview.mp4", copy))
     body, content_type = multipart({"job": json.dumps(job_record(run, youtube, offset))}, files)
     request = urllib.request.Request(f"{config['url']}/api/publish", data=body, method="POST", headers={
         "Content-Type": content_type, "X-Tengen-Key": config["key"], "User-Agent": "tengen-publish"})
@@ -106,16 +136,18 @@ def main(argv=None) -> int:
     parser.add_argument("--setup", metavar="URL", help="save the server address and team key")
     parser.add_argument("--youtube", help="YouTube id the run's video came from, so the website can play it")
     parser.add_argument("--offset", type=float, help="seconds into that YouTube video where the clip starts")
+    parser.add_argument("--no-video", action="store_true", help="publish results only, without a video copy")
     args = parser.parse_args(argv)
     if args.setup:
         setup(args.setup)
         return 0
     if not args.run:
         parser.error("give a run folder, or --setup URL")
-    summary = publish(args.run, args.youtube, args.offset)
+    summary = publish(args.run, args.youtube, args.offset, video=not args.no_video)
     config = load_config()
     print(f"Published {summary['match_id'] or summary['job_id']}: {summary['boxes']} boxes, "
-          f"{len(summary['artifacts'])} files. View it at {config.get('site', config['url'])}")
+          f"{len(summary['artifacts'])} files{', video copy' if summary.get('video') else ''}. "
+          f"View it at https://nhh-inc.github.io/Project-Tengen/app/")
     return 0
 
 

@@ -534,6 +534,10 @@ export class FixtureApi implements ScoutingApi {
     return null;
   }
 
+  async mediaToken(_jobId: string): Promise<string | null> {
+    return null;
+  }
+
   videoUrl(_job: Job): string {
     // Only the main fixture ships a real segment.
     return `/${MAIN_FIXTURE}/segment.mp4`;

@@ -28,9 +28,3 @@ export function currentKey(): string {
   return getTeamKey() || memory;
 }
 
-/** Media elements cannot send headers, so their URLs carry the key as a query parameter. */
-export function withKey(url: string): string {
-  const key = currentKey();
-  if (!key) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`;
-}

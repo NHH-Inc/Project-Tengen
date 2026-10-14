@@ -73,6 +73,8 @@ export interface WireJob {
   /** Additive API field; omitted by fixture files and older servers. */
   capture_mode?: 'recorded' | 'live' | 'local';
   local_path: string | null;
+  /** Additive: the server holds a video copy of this published run (ingest/hosted.py). */
+  hosted_video?: boolean;
   start_offset: number;
   duration: number | null;
   fps: number | null;
@@ -164,6 +166,8 @@ export interface Job {
    */
   captureMode: 'recorded' | 'live' | 'local';
   localPath: string | null;
+  /** The server holds a video copy of this published run, starting at the clip's t=0. */
+  hostedVideo: boolean;
   /** Seconds. Add to an event's tSeconds to get a position in the ORIGINAL video. */
   startOffset: number;
   duration: number | null;
@@ -330,6 +334,7 @@ export function parseJob(raw: WireJob, log: ViolationLog): Job | null {
     captureMode:
       raw.capture_mode === 'live' || raw.capture_mode === 'local' ? raw.capture_mode : 'recorded',
     localPath: raw.local_path ?? null,
+    hostedVideo: raw.hosted_video === true,
     startOffset: raw.start_offset,
     duration: raw.duration ?? null,
     fps: raw.fps ?? null,

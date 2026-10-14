@@ -80,6 +80,8 @@ export interface VideoPlayerProps {
   audioSrc?: string;
   /** Source-media timestamp corresponding to t=0 in the analyzed segment. */
   mediaStartSeconds?: number;
+  /** Shown instead of the browser's own error when the media cannot load (e.g. none on the server). */
+  unavailableHint?: string;
   tracks: Track[];
   events: ViewEvent[];
   shots: ShotRecord[];
@@ -104,6 +106,7 @@ export function VideoPlayer({
   season,
   src,
   audioSrc,
+  unavailableHint,
   mediaStartSeconds = 0,
   tracks,
   events,
@@ -692,6 +695,7 @@ export function VideoPlayer({
               const video = e.target as HTMLVideoElement;
               setReady(false);
               setMediaError(
+                unavailableHint ||
                 video.error?.message ||
                   'The downloaded file could not be played. Check that it uses a browser-supported MP4 codec.'
               );

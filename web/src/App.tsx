@@ -77,9 +77,12 @@ export default function App() {
       // still use the yt-dlp proxy and its separate DASH audio track.  Keeping this choice at
       // the API boundary lets the player stay agnostic about where the media came from while
       // keeping shot/ball overlay timestamps aligned to the analyzed segment.
-      const localMedia = Boolean(job.localPath);
-      setStreamVideoSrc(localMedia ? api.videoUrl(job) : api.streamVideoUrl(job));
-      setStreamAudioSrc(localMedia ? null : api.streamAudioUrl(job));
+      // A published run's video copy is served like a local file (ingest/hosted.py).
+      const localMedia = Boolean(job.localPath) || job.hostedVideo;
+      void api.mediaToken(job.jobId).catch(() => null).then((token) => {
+        setStreamVideoSrc(localMedia ? api.videoUrl(job, token) : api.streamVideoUrl(job, token));
+        setStreamAudioSrc(localMedia ? null : api.streamAudioUrl(job, token));
+      });
     });
   }, [job]);
 
@@ -227,7 +230,14 @@ export default function App() {
               season={season}
               src={streamVideoSrc}
               audioSrc={streamAudioSrc ?? undefined}
-              mediaStartSeconds={job.startOffset}
+              // A hosted copy starts at the clip's t=0, not at its place in the YouTube video.
+              mediaStartSeconds={job.hostedVideo ? 0 : job.startOffset}
+              unavailableHint={
+                apiMode === 'http' && !job.localPath && !job.hostedVideo
+                  ? 'No video for this match on the server. YouTube blocks cloud servers, so the website ' +
+                    'plays the copy uploaded when a match is published: republish it from the desktop app.'
+                  : undefined
+              }
               tracks={overlayTracks}
               events={match.events}
               shots={shotState.shots}

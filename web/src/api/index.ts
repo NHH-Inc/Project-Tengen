@@ -96,11 +96,16 @@ export interface ScoutingApi {
   /** One team's profile across its matches: tendencies, prediction, counters. */
   getTeamProfile(team: number): Promise<TeamProfileResponse | null>;
 
-  /** GET /api/video/:job_id -- the local segment file the player streams. */
-  videoUrl(job: Job): string;
+  /**
+   * A token for one job's media URLs, or null where none is needed. A <video> cannot send the
+   * team key as a header, and a key in a URL ends up in request logs, so media URLs carry this.
+   */
+  mediaToken(jobId: string): Promise<string | null>;
+  /** GET /api/video/:job_id -- the local segment file, or a published run's stored copy. */
+  videoUrl(job: Job, token?: string | null): string;
   /** yt-dlp-resolved DASH video and audio, proxied locally without a YouTube player. */
-  streamVideoUrl(job: Job): string;
-  streamAudioUrl(job: Job): string;
+  streamVideoUrl(job: Job, token?: string | null): string;
+  streamAudioUrl(job: Job, token?: string | null): string;
 }
 
 export class ApiError extends Error {

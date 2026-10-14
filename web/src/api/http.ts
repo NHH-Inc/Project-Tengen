@@ -50,7 +50,7 @@ import {
   type WireTrackList,
 } from './shapes';
 import { EMPTY_SHOT_RESPONSE, parseShotResponse, type ShotResponse, type WireShotResponse } from './shots';
-import { currentKey, withKey } from './key';
+import { currentKey } from './key';
 import type { MatchStrategy, StrategyTeam, TeamProfileResponse } from './strategy';
 
 export class HttpApi implements ScoutingApi {
@@ -331,16 +331,26 @@ export class HttpApi implements ScoutingApi {
     }
   }
 
-  // Media elements cannot send headers, so their URLs carry the key.
-  videoUrl(job: Job): string {
-    return withKey(`${this.base}/video/${encodeURIComponent(job.jobId)}`);
+  async mediaToken(jobId: string): Promise<string | null> {
+    if (!currentKey()) return null; // a server without keys needs no token
+    const raw = await this.request<{ token: string }>(`/jobs/${encodeURIComponent(jobId)}/media-token`);
+    return raw.token ?? null;
   }
 
-  streamVideoUrl(job: Job): string {
-    return withKey(`${this.base}/stream/${encodeURIComponent(job.jobId)}/video`);
+  // Media elements cannot send headers, so their URLs carry a short-lived token for that job.
+  videoUrl(job: Job, token?: string | null): string {
+    return withToken(`${this.base}/video/${encodeURIComponent(job.jobId)}`, token);
   }
 
-  streamAudioUrl(job: Job): string {
-    return withKey(`${this.base}/stream/${encodeURIComponent(job.jobId)}/audio`);
+  streamVideoUrl(job: Job, token?: string | null): string {
+    return withToken(`${this.base}/stream/${encodeURIComponent(job.jobId)}/video`, token);
   }
+
+  streamAudioUrl(job: Job, token?: string | null): string {
+    return withToken(`${this.base}/stream/${encodeURIComponent(job.jobId)}/audio`, token);
+  }
+}
+
+function withToken(url: string, token?: string | null): string {
+  return token ? `${url}?t=${encodeURIComponent(token)}` : url;
 }
