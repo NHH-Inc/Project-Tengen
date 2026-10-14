@@ -9,7 +9,10 @@ export default defineConfig({
   // /fixtures/ is served as the static root so the fixture client can fetch the golden set
   // -- and, importantly, so segment.mp4 is served by Vite's static handler, which answers
   // HTTP range requests. The <video> element cannot seek without them.
-  publicDir: resolve(__dirname, '..', 'fixtures'),
+  // VITE_BASE: where the build is served from; /Project-Tengen/app/ on GitHub Pages.
+  base: process.env.VITE_BASE ?? '/',
+  // An http-mode build talks to a server and never reads the fixtures, so it does not ship them.
+  publicDir: process.env.VITE_API_MODE === 'http' ? false : resolve(__dirname, '..', 'fixtures'),
 
   server: {
     port: 5173,

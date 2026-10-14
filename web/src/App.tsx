@@ -15,14 +15,18 @@ import { useShots } from './state/useShots';
 import { AccuracyPanel } from './views/Accuracy';
 import { AnalysisPanel } from './views/Analysis';
 import { HeatMap } from './views/HeatMap';
+import { StrategyPanel } from './views/Strategy';
+import { TeamProfiles } from './views/TeamProfiles';
 import { TeamStats } from './views/TeamStats';
 import { Timeline } from './views/Timeline';
 import { robotName } from './lib/tracks';
 import { fmtPercent } from './lib/format';
 
-type Tab = 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
+type Tab = 'strategy' | 'profiles' | 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
 
 const TABS: Array<[Tab, string]> = [
+  ['strategy', 'Strategy'],
+  ['profiles', 'Team profiles'],
   ['timeline', 'Timeline'],
   ['analysis', 'Analysis'],
   ['teams', 'Team stats'],
@@ -39,7 +43,8 @@ export default function App() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.5);
-  const [tab, setTab] = useState<Tab>('timeline');
+  const [tab, setTab] = useState<Tab>('strategy');
+  const [profileTeam, setProfileTeam] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [seekTo, setSeekTo] = useState<{ t: number; nonce: number } | null>(null);
   const [apiMode, setApiMode] = useState<'http' | 'fixture'>('fixture');
@@ -259,6 +264,19 @@ export default function App() {
 
             {analysisComplete && match.error && <p className="error">{match.error}</p>}
 
+            {analysisComplete && tab === 'strategy' && (
+              <StrategyPanel
+                jobId={job.jobId}
+                refreshKey={match.corrections.length}
+                onOpenTeam={(team) => {
+                  setProfileTeam(team);
+                  setTab('profiles');
+                }}
+              />
+            )}
+            {analysisComplete && tab === 'profiles' && (
+              <TeamProfiles team={profileTeam} onSelectTeam={setProfileTeam} />
+            )}
             {analysisComplete && tab === 'timeline' && (
               <Timeline
                 job={playable}

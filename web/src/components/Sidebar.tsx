@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { UploadJobInput } from '../api';
 import type { ContractViolation, Job } from '../contracts';
 import { STATUS_LABEL, fmtPercent, isMatchKey, parseVideoId } from '../lib/format';
+import { getTeamKey, setTeamKey } from '../api/key';
 
 // Doc 3: "Sidebar for pasting YouTube links, viewing queue status, and browsing extracted
 // results." A stored job can also be retried or deliberately re-run over its previous result.
@@ -65,6 +66,8 @@ export function Sidebar(props: SidebarProps) {
       </section>
 
       {violations.length > 0 && <ViolationList violations={violations} />}
+
+      {apiMode === 'http' && <TeamKey />}
     </aside>
   );
 }
@@ -315,6 +318,30 @@ function ViolationList({ violations }: { violations: ContractViolation[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** The team key a hosted Tengen asks for. Stored in this browser only; never sent anywhere else. */
+function TeamKey() {
+  const [value, setValue] = useState(getTeamKey());
+  const [saved, setSaved] = useState(Boolean(getTeamKey()));
+  return (
+    <section className="team-key">
+      <h2>Team key</h2>
+      <p className="muted">The shared server needs the team's key. Ask in #dev-general.</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setTeamKey(value.trim());
+          setSaved(Boolean(value.trim()));
+          window.location.reload();
+        }}
+      >
+        <input type="password" value={value} placeholder="team key" autoComplete="off"
+               onChange={(e) => setValue(e.target.value)} />
+        <button type="submit">{saved ? 'Update' : 'Save'}</button>
+      </form>
     </section>
   );
 }

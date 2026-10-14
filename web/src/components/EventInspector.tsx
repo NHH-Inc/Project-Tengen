@@ -53,6 +53,7 @@ export function EventInspector(props: EventInspectorProps) {
   const [onlyLow, setOnlyLow] = useState(false);
   const [onlyCorrected, setOnlyCorrected] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Suggestions, not a whitelist. TBA has no data for plenty of matches -- the first real match
   // analysed had alliances: null -- and when this list came only from there the dropdown was
@@ -84,10 +85,15 @@ export function EventInspector(props: EventInspectorProps) {
   const lowCount = events.filter((e) => e.confidence < confidenceThreshold).length;
   const selected = events.find((e) => e.eventId === selectedEventId) ?? null;
 
+  // A refused or failed correction must say so: swallowing it left the panel looking as if the
+  // edit simply had not been made.
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
+    setActionError(null);
     try {
       await fn();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -101,6 +107,7 @@ export function EventInspector(props: EventInspectorProps) {
           {shown.length} of {events.length} · {lowCount} below threshold
         </span>
       </div>
+      {actionError && <p className="error">{actionError}</p>}
 
       <TrackPanel
         tracks={tracks}

@@ -6,6 +6,7 @@
 // component 2 too. It loads all three fixture jobs, including the awkward ones (a match with
 // no TBA data, and a failed download carrying an error_code).
 
+import type { MatchStrategy, StrategyTeam, TeamProfileResponse } from './strategy';
 import {
   ViolationLog,
   eventToWire,
@@ -518,6 +519,19 @@ export class FixtureApi implements ScoutingApi {
       rowsWritten: rows,
       rowsSkipped: 0,
     };
+  }
+
+  // The fixtures predate the strategy layer; it needs a server (ingest/hosted.py).
+  async getStrategy(_jobId: string): Promise<MatchStrategy | null> {
+    return null;
+  }
+
+  async listStrategyTeams(): Promise<StrategyTeam[]> {
+    return [];
+  }
+
+  async getTeamProfile(_team: number): Promise<TeamProfileResponse | null> {
+    return null;
   }
 
   videoUrl(_job: Job): string {

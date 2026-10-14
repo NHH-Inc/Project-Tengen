@@ -445,3 +445,19 @@ td.warn { color: var(--amber); }
 .track-row .team-entry { width: 72px; margin-left: auto; font: inherit; padding: 2px 5px; }
 .track-row .tconf { font-family: var(--mono); font-size: 11px; }
 .track-row select { width: auto; margin-left: auto; font-size: 12px; padding: 3px 6px; }
+
+/* ---- strategy views */
+.field-sketch { margin: 14px 0 0; max-width: 640px; }
+.field-sketch figcaption { font-size: 12px; margin-top: 4px; }
+.team-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.team-picker button { border-radius: 999px; font-size: 13px; }
+.team-picker button.on { background: var(--accent); border-color: var(--accent); color: #08101f; font-weight: 600; }
+.profile-title { font-size: 18px; margin: 6px 0 2px; }
+.panel h3 { font-size: 13px; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.counters, .facts { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.counters li { margin-bottom: 8px; }
+td.red { color: var(--red); }
+td.blue { color: #79c0ff; }
+.team-key { margin-top: 18px; }
+.team-key form { display: flex; gap: 6px; }
+.team-key input { flex: 1; min-width: 0; }

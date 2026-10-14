@@ -50,6 +50,8 @@ import {
   type WireTrackList,
 } from './shapes';
 import { EMPTY_SHOT_RESPONSE, parseShotResponse, type ShotResponse, type WireShotResponse } from './shots';
+import { currentKey, withKey } from './key';
+import type { MatchStrategy, StrategyTeam, TeamProfileResponse } from './strategy';
 
 export class HttpApi implements ScoutingApi {
   readonly mode = 'http' as const;
@@ -64,6 +66,8 @@ export class HttpApi implements ScoutingApi {
         ...init,
         headers: {
           Accept: 'application/json',
+          // A hosted server asks for the team key (ingest/hosted.py); a local one ignores it.
+          ...(currentKey() ? { 'X-Tengen-Key': currentKey() } : {}),
           ...(typeof init?.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
           ...init?.headers,
         },
@@ -303,15 +307,40 @@ export class HttpApi implements ScoutingApi {
     return parseExportResult(raw);
   }
 
+  // ---- strategy (ingest/hosted.py)
+
+  async getStrategy(jobId: string): Promise<MatchStrategy | null> {
+    try {
+      return await this.request<MatchStrategy>(`/jobs/${encodeURIComponent(jobId)}/strategy`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  async listStrategyTeams(): Promise<StrategyTeam[]> {
+    return (await this.request<{ teams: StrategyTeam[] }>('/strategy/teams')).teams ?? [];
+  }
+
+  async getTeamProfile(team: number): Promise<TeamProfileResponse | null> {
+    try {
+      return await this.request<TeamProfileResponse>(`/strategy/teams/${team}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  // Media elements cannot send headers, so their URLs carry the key.
   videoUrl(job: Job): string {
-    return `${this.base}/video/${encodeURIComponent(job.jobId)}`;
+    return withKey(`${this.base}/video/${encodeURIComponent(job.jobId)}`);
   }
 
   streamVideoUrl(job: Job): string {
-    return `${this.base}/stream/${encodeURIComponent(job.jobId)}/video`;
+    return withKey(`${this.base}/stream/${encodeURIComponent(job.jobId)}/video`);
   }
 
   streamAudioUrl(job: Job): string {
-    return `${this.base}/stream/${encodeURIComponent(job.jobId)}/audio`;
+    return withKey(`${this.base}/stream/${encodeURIComponent(job.jobId)}/audio`);
   }
 }

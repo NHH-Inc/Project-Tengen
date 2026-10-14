@@ -7,6 +7,7 @@
 import type { ContractViolation, Correction, Job, ScoutEvent, Track } from '../contracts';
 import type { Accuracy, ExportResult, RunResult, TeamStatsSummary } from './shapes';
 import type { ShotResponse } from './shots';
+import type { MatchStrategy, StrategyTeam, TeamProfileResponse } from './strategy';
 
 export interface Parsed<T> {
   data: T;
@@ -87,6 +88,13 @@ export interface ScoutingApi {
 
   getTeamStats(team: number, eventKey?: string, minConfidence?: number): Promise<TeamStatsSummary>;
   exportSheets(input: ExportInput): Promise<ExportResult>;
+
+  /** The strategy layer over one job: every robot's behaviour (ingest/hosted.py). */
+  getStrategy(jobId: string): Promise<MatchStrategy | null>;
+  /** Every team with at least one analysed match. */
+  listStrategyTeams(): Promise<StrategyTeam[]>;
+  /** One team's profile across its matches: tendencies, prediction, counters. */
+  getTeamProfile(team: number): Promise<TeamProfileResponse | null>;
 
   /** GET /api/video/:job_id -- the local segment file the player streams. */
   videoUrl(job: Job): string;
