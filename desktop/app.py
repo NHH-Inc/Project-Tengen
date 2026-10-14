@@ -191,6 +191,7 @@ class MainWindow(QMainWindow):
         self.history.itemClicked.connect(lambda item: self.open_review(Path(item.data(Qt.ItemDataRole.UserRole))))
         side.addWidget(self.history, 1)
         side.addWidget(button("Show data folder", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(RUNS.parent)))))
+        side.addWidget(button("Publish to web", self.publish_run))
         root.addWidget(sidebar)
         main = QVBoxLayout()
         root.addLayout(main, 1)
@@ -562,6 +563,29 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Uncheck Raw model output to make review corrections.")
             return False
         return True
+
+    def publish_run(self):
+        """Send this run's results to the team's hosted Tengen (tools/publish.py), off the UI thread."""
+        if not self.review or self.review.directory == FIXTURE:
+            self.statusBar().showMessage("Open an analysed run to publish it.")
+            return
+        process = QProcess(self)
+        process.setWorkingDirectory(str(ROOT))
+        process.setProgram(sys.executable)
+        process.setArguments(["-m", "tools.publish", str(self.review.directory)])
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+
+        def finished(code, _status=None):
+            text = bytes(process.readAllStandardOutput()).decode(errors="replace").strip()
+            if code == 0:
+                self.statusBar().showMessage(text.splitlines()[-1] if text else "Published.")
+            else:
+                self.error(text or "Publishing failed.")
+            process.deleteLater()
+
+        process.finished.connect(finished)
+        self.statusBar().showMessage("Publishing to the team's Tengen server…")
+        process.start()
 
     def assign_team(self):
         if not self.can_correct():
