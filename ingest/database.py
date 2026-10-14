@@ -13,16 +13,21 @@ from .models import Base
 def normalise_url(url: str) -> str:
     """Accept every common way of writing a Postgres address, and use the driver installed here.
 
-    Supabase's dashboard offers `postgresql+psycopg://` (psycopg 3) for SQLAlchemy, Heroku-style
-    hosts say `postgres://`, and requirements.txt installs psycopg2. Pasting the dashboard's string
-    into a hosting provider crashed the server at import with "No module named 'psycopg'".
+    Supabase's dashboard offers `postgresql+psycopg://` (psycopg 3), Heroku-style hosts say
+    `postgres://`, SQLAlchemy 2.1 reads a bare `postgresql://` as psycopg 3, and requirements.txt
+    installs psycopg2. On Render that crashed the server at import: "No module named 'psycopg'".
     """
     import importlib.util
 
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
-    if url.startswith("postgresql+psycopg://") and importlib.util.find_spec("psycopg") is None:
-        url = "postgresql+psycopg2://" + url[len("postgresql+psycopg://"):]
+    if importlib.util.find_spec("psycopg") is None:
+        # SQLAlchemy 2.1 made psycopg 3 the default for a bare postgresql://, so the driver is
+        # named explicitly: a host that installs 2.1 must not go looking for a driver it lacks.
+        for prefix in ("postgresql+psycopg://", "postgresql://"):
+            if url.startswith(prefix):
+                url = "postgresql+psycopg2://" + url[len(prefix):]
+                break
     return url
 
 

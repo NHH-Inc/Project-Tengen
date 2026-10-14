@@ -3,7 +3,9 @@ uvicorn
 yt-dlp
 requests
 pydantic
-sqlalchemy
+# Pinned below 2.1: 2.1 changed the default Postgres driver. database.normalise_url also
+# names the driver explicitly, so either guard alone would do.
+sqlalchemy>=2.0,<2.1
 psycopg2-binary
 python-multipart
 httpx
