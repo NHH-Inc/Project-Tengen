@@ -551,6 +551,9 @@ def delete_job(job_id: str, db: Session = Depends(get_db)):
     # job removes its rows, and the segment file with them.
     db.query(models.Event).filter(models.Event.job_id == job_id).delete()
     db.query(models.Track).filter(models.Track.job_id == job_id).delete()
+    # A published run's stored files reference the job; on Postgres the delete failed without this.
+    db.query(models.RunArtifact).filter(models.RunArtifact.job_id == job_id).delete()
+    hosted.delete_video(job)
     if job.local_path and os.path.exists(job.local_path):
         try:
             os.remove(job.local_path)
@@ -1297,6 +1300,9 @@ def export_to_sheets(payload: dict, db: Session = Depends(get_db)):
 @app.get("/api/video/{job_id}")
 def get_video(job_id: str, db: Session = Depends(get_db)):
     job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
+    if job and job.media_ref:
+        # A published run's copy lives in object storage: send the browser a short-lived link.
+        return hosted.video_redirect(job)
     if not job or not job.local_path or not os.path.exists(job.local_path):
         raise HTTPException(status_code=404, detail="Video file not found")
     # FileResponse answers HTTP range requests, which <video> needs in order to seek.

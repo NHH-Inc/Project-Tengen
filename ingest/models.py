@@ -29,6 +29,9 @@ class Job(Base):
     video_id = Column(String(11), nullable=False)
     # Additive annotation: live jobs use the normal lifecycle once recording ends.
     capture_mode = Column(String, nullable=False, default="recorded", server_default="recorded")
+    #: Where a published run's video copy is stored (ingest/hosted.py), or None. YouTube refuses
+    #: cloud servers, so a hosted API cannot stream the original; publishing uploads a small copy.
+    media_ref = Column(String, nullable=True)
     local_path = Column(String, nullable=True)
     start_offset = Column(Float, default=0.0, nullable=False)
     # Stream jobs never materialize a media file, so this remains NULL. Media dimensions are

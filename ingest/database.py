@@ -58,6 +58,9 @@ def init_db():
             connection.execute(
                 text("ALTER TABLE jobs ADD COLUMN capture_mode VARCHAR DEFAULT 'recorded'")
             )
+    if "media_ref" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE jobs ADD COLUMN media_ref VARCHAR"))
 
     # Anything else that drifted gets named out loud. Without this, a model change that nobody
     # backfills surfaces as `column jobs.<x> does not exist` in the middle of an unrelated

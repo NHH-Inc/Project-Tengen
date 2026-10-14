@@ -16,6 +16,11 @@ Three pieces, installed onto the FastAPI app by `install()`:
   and its job record, stores events and tracks in their tables and the rest as RunArtifact rows.
   Tracks are thinned to 10 Hz first: plenty for the overlay and the strategy layer, and a tenth
   of the size of a 30 fps file.
+* **Video.** YouTube refuses cloud servers ("confirm you're not a bot"), so a hosted API cannot
+  stream a match from YouTube. Publishing uploads a small 480p copy instead, kept privately in
+  Supabase Storage (SUPABASE_URL, SUPABASE_SERVICE_KEY); /api/video sends a signed link that
+  expires. Media URLs carry a short-lived token for one job, never a key, so keys stay out of
+  request logs.
 * **Strategy.** /api/jobs/{id}/strategy, /api/strategy/teams and /api/strategy/teams/{team}
   run the same strategy layer as the desktop app, over published runs, with the web's own team
   corrections applied.
@@ -24,15 +29,18 @@ Three pieces, installed onto the FastAPI app by `install()`:
 from __future__ import annotations
 
 import gzip
+import hashlib
 import hmac
 import json
 import os
+import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from . import models
@@ -44,6 +52,10 @@ PUBLISHABLE = {
 }
 #: Stored as artifacts; events and tracks go to their tables instead.
 ARTIFACTS = PUBLISHABLE - {"tracks.jsonl", "events.jsonl"}
+VIDEO_FILE = "preview.mp4"
+VIDEO_BUCKET = os.environ.get("TENGEN_VIDEO_BUCKET", "tengen-video")
+MEDIA_TOKEN_SECONDS = 6 * 3600
+MEDIA_PATH = re.compile(r"^/api/(?:video|stream)/([^/]+)")
 PUBLISHED_RATE_HZ = 10.0
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -80,9 +92,13 @@ def access_middleware(get_key_exempt: Callable[[str], bool]):
             })
         if (read_key or write_key) and path.startswith("/api") and not get_key_exempt(path) \
                 and request.method != "OPTIONS":
-            given = request.headers.get("x-tengen-key") or request.query_params.get("key") or ""
+            given = request.headers.get("x-tengen-key") or ""
             writing = request.method not in READ_METHODS
             allowed = _matches(given, write_key) or (not writing and (not read_key or _matches(given, read_key)))
+            media = MEDIA_PATH.match(path)
+            if not allowed and media and not writing:
+                # A <video> cannot send headers, so media URLs carry a token for that one job.
+                allowed = check_media_token(media.group(1), request.query_params.get("t", ""))
             if not allowed:
                 return JSONResponse(status_code=401, content={
                     "error_code": "unauthorized",
@@ -90,6 +106,85 @@ def access_middleware(get_key_exempt: Callable[[str], bool]):
                 })
         return await call_next(request)
     return middleware
+
+
+def _token_secret() -> bytes:
+    read_key, write_key = _keys()
+    return (write_key or read_key).encode()
+
+
+def media_token(job_id: str, now: float | None = None) -> str:
+    """A token that opens one job's media for a few hours. Never the key itself."""
+    expires = int((now or time.time()) + MEDIA_TOKEN_SECONDS)
+    signature = hmac.new(_token_secret(), f"{job_id}:{expires}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{expires}.{signature}"
+
+
+def check_media_token(job_id: str, token: str, now: float | None = None) -> bool:
+    try:
+        expires_text, signature = token.split(".", 1)
+        expires = int(expires_text)
+    except ValueError:
+        return False
+    if expires < (now or time.time()) or not _token_secret():
+        return False
+    expected = hmac.new(_token_secret(), f"{job_id}:{expires}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(signature, expected)
+
+
+# ----------------------------------------------------------------------------- video storage
+
+def _storage() -> tuple[str, str] | None:
+    url, key = os.environ.get("SUPABASE_URL", "").rstrip("/"), os.environ.get("SUPABASE_SERVICE_KEY", "")
+    return (url, key) if url and key else None
+
+
+def store_video(job_id: str, data: bytes) -> str:
+    """Upload a published run's video copy; returns its storage reference."""
+    import httpx
+
+    storage = _storage()
+    if storage is None:
+        raise HTTPException(status_code=503, detail="Video storage is not configured on this server "
+                                                    "(SUPABASE_URL and SUPABASE_SERVICE_KEY)")
+    url, key = storage
+    path = f"{job_id}.mp4"
+    response = httpx.post(f"{url}/storage/v1/object/{VIDEO_BUCKET}/{path}", content=data, timeout=120,
+                          headers={"Authorization": f"Bearer {key}", "apikey": key,
+                                   "Content-Type": "video/mp4", "x-upsert": "true"})
+    if response.status_code >= 300:
+        raise HTTPException(status_code=502, detail=f"Video storage refused the upload: {response.text[:200]}")
+    return f"{VIDEO_BUCKET}/{path}"
+
+
+def video_redirect(job) -> RedirectResponse:
+    """A short-lived signed link to the stored copy; the browser seeks against storage directly."""
+    import httpx
+
+    storage = _storage()
+    if storage is None:
+        raise HTTPException(status_code=503, detail="Video storage is not configured on this server")
+    url, key = storage
+    response = httpx.post(f"{url}/storage/v1/object/sign/{job.media_ref}", json={"expiresIn": MEDIA_TOKEN_SECONDS},
+                          timeout=30, headers={"Authorization": f"Bearer {key}", "apikey": key})
+    if response.status_code >= 300:
+        raise HTTPException(status_code=502, detail="Could not sign the stored video")
+    signed = response.json().get("signedURL") or response.json().get("signedUrl")
+    return RedirectResponse(f"{url}/storage/v1{signed}", status_code=307)
+
+
+def delete_video(job) -> None:
+    import httpx
+
+    storage = _storage()
+    if storage is None or not getattr(job, "media_ref", None):
+        return
+    url, key = storage
+    try:
+        httpx.request("DELETE", f"{url}/storage/v1/object/{job.media_ref}", timeout=30,
+                      headers={"Authorization": f"Bearer {key}", "apikey": key})
+    except httpx.HTTPError:
+        pass  # an orphaned copy costs storage, not correctness
 
 
 # ----------------------------------------------------------------------------- artifacts
@@ -270,16 +365,29 @@ def router(get_db, base_dir: Callable[[], str | Path], local_video_id: Callable[
         payload, total = {}, 0
         for upload in files:
             name = Path(upload.filename or "").name
-            if name not in PUBLISHABLE:
+            if name not in PUBLISHABLE and name != VIDEO_FILE:
                 raise HTTPException(status_code=422, detail=f"{name} is not a publishable run file")
             data = await upload.read()
             total += len(data)
             if total > MAX_UPLOAD_BYTES:
                 raise HTTPException(status_code=413, detail="Run is too large to publish")
             payload[name] = data
+        video = payload.pop(VIDEO_FILE, None)
         summary = _publish(db, record, payload, local_video_id)
+        if video:
+            job_row = db.get(models.Job, summary["job_id"])
+            job_row.media_ref = store_video(summary["job_id"], video)
+            db.commit()
+            summary["video"] = True
         _feature_cache.clear()
         return summary
+
+    @api.get("/api/jobs/{job_id}/media-token")
+    def get_media_token(job_id: str, db: Session = Depends(get_db)):
+        """A token for this job's media URLs, fetched with the key in a header."""
+        if db.get(models.Job, job_id) is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {"token": media_token(job_id), "expires_in": MEDIA_TOKEN_SECONDS}
 
     @api.get("/api/jobs/{job_id}/strategy")
     def job_strategy(job_id: str, db: Session = Depends(get_db)):

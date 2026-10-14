@@ -64,6 +64,8 @@ def job_to_dict(job) -> dict:
         # Older web clients ignore this additive field; the current one labels live capture.
         "capture_mode": job.capture_mode or "recorded",
         "local_path": job.local_path,
+        # Additive: a published run whose video copy the server can hand out (ingest/hosted.py).
+        "hosted_video": bool(getattr(job, "media_ref", None)),
         "start_offset": job.start_offset,
         "duration": job.duration,
         "fps": job.fps,

@@ -88,7 +88,8 @@ class HostedTests(unittest.TestCase):
     def test_reading_needs_a_key_when_one_is_set(self):
         self.assertEqual(self.client.get("/api/jobs").status_code, 401)
         self.assertEqual(self.client.get("/api/jobs", headers={"X-Tengen-Key": "read-secret"}).status_code, 200)
-        self.assertEqual(self.client.get("/api/jobs?key=read-secret").status_code, 200)
+        # Keys never travel in URLs, where request logs keep them.
+        self.assertEqual(self.client.get("/api/jobs?key=read-secret").status_code, 401)
         self.assertEqual(self.client.get("/api/health").status_code, 200, "health stays open for monitors")
 
     def test_the_read_key_cannot_write(self):
@@ -138,6 +139,44 @@ class HostedTests(unittest.TestCase):
     def test_unknown_files_are_refused(self):
         files = run_files() | {"notes.txt": b"hello"}
         self.assertEqual(self.publish(files=files).status_code, 422)
+
+    # ------------------------------------------------------------------------- video
+
+    def test_media_urls_use_a_token_for_one_job_not_the_key(self):
+        self.publish()
+        token = self.client.get(f"/api/jobs/{JOB_ID}/media-token",
+                                headers={"X-Tengen-Key": "read-secret"}).json()["token"]
+        self.assertNotIn("read-secret", token)
+        self.assertTrue(hosted.check_media_token(JOB_ID, token))
+        self.assertFalse(hosted.check_media_token("another-job", token))
+        self.assertFalse(hosted.check_media_token(JOB_ID, token, now=10 ** 11), "tokens expire")
+        # The middleware lets the token through to the media route (404 here: no file), not 401.
+        self.assertEqual(self.client.get(f"/api/video/{JOB_ID}?t={token}").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/video/{JOB_ID}?t=1.bad").status_code, 401)
+        self.assertEqual(self.client.get(f"/api/jobs?t={token}").status_code, 401, "only media routes")
+
+    def test_a_published_video_copy_is_stored_and_served_by_redirect(self):
+        stored = {}
+        with patch.object(hosted, "store_video", side_effect=lambda job_id, data: stored.update({job_id: data}) or "tengen-video/x.mp4"),              patch.object(hosted, "video_redirect", side_effect=lambda job: __import__("fastapi").responses.RedirectResponse("https://storage.example/signed", 307)):
+            response = self.publish(files=run_files() | {"preview.mp4": b"fake mp4"})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertTrue(response.json()["video"])
+            self.assertEqual(stored[JOB_ID], b"fake mp4")
+            job = self.client.get(f"/api/jobs/{JOB_ID}", headers={"X-Tengen-Key": "read-secret"}).json()
+            self.assertTrue(job["hosted_video"])
+            moved = self.client.get(f"/api/video/{JOB_ID}", headers={"X-Tengen-Key": "read-secret"},
+                                    follow_redirects=False)
+            self.assertEqual(moved.status_code, 307)
+            self.assertEqual(moved.headers["location"], "https://storage.example/signed")
+
+    def test_deleting_a_published_match_removes_its_stored_files(self):
+        self.publish()
+        with patch.object(hosted, "delete_video") as deleted:
+            response = self.client.delete(f"/api/jobs/{JOB_ID}", headers={"X-Tengen-Key": "write-secret"})
+        self.assertEqual(response.status_code, 204, response.text)
+        deleted.assert_called_once()
+        with self.sessions() as db:
+            self.assertEqual(db.query(models.RunArtifact).count(), 0)
 
     # ------------------------------------------------------------------------- strategy
 
