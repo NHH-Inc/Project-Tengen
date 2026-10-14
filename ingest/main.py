@@ -46,6 +46,7 @@ from . import (
     tba,
     yolo_orchestrator,
 )
+from . import hosted
 from .corrections import apply_corrections, apply_track_corrections
 from .serializers import (
     normalize_public_track_labels,
@@ -116,6 +117,10 @@ _cors_origins = [
     if o.strip()
 ]
 
+# Team keys for a server on the internet (see ingest/hosted.py). Added before CORS, so CORS is the
+# outer layer and a 401 still carries the headers a browser needs to read it.
+app.middleware("http")(hosted.access_middleware(lambda path: path == "/api/health"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -171,6 +176,13 @@ def _clear_analysis_output(job_id: str) -> None:
 database.init_db()
 
 get_db = database.get_db
+
+# Published runs and strategy (ingest/hosted.py). The lambdas resolve names defined further down.
+app.include_router(hosted.router(
+    get_db,
+    lambda: analysis_orchestrator.output_base_dir,
+    lambda job_id: _local_video_id(job_id),
+))
 
 data_dir = os.environ.get("FRC_DATA_DIR", "./data")
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -847,6 +859,14 @@ def get_job_tracks(
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=503, detail=f"Could not read YOLO tracks: {exc}")
 
+    if not tracks and not partial_path.exists():
+        # A published run has no folder here; its tracks are rows (ingest/hosted.py).
+        tracks = [
+            {"schema_version": 3, "track_id": t.track_id, "team": t.team, "alliance": t.alliance,
+             "team_confidence": t.team_confidence, "boxes": t.boxes, "gaps": t.gaps or []}
+            for t in db.query(models.Track).filter(models.Track.job_id == job.job_id)
+            .order_by(models.Track.track_id).all()
+        ]
     result = _read_result(job) or {}
     sample_rate = float(result.get("box_sample_rate") or job.fps or 0.0)
     public_tracks = tracks if raw else normalize_public_track_labels(tracks)
@@ -854,7 +874,7 @@ def get_job_tracks(
         "box_sample_rate": sample_rate,
         "tracks": public_tracks,
         "suppressed_track_count": 0,
-        "complete": final_path.exists(),
+        "complete": final_path.exists() or job.status == "complete",
     }
 
 
@@ -868,7 +888,18 @@ def _result_path(job) -> Path | None:
 def _read_result(job) -> dict | None:
     path = _result_path(job)
     if path is None:
-        return None
+        if job is None:
+            return None
+        # A published run keeps its result.json in the database (ingest/hosted.py).
+        db = next(database.get_db())
+        try:
+            text = hosted.artifact_text(db, analysis_orchestrator.output_base_dir, job.job_id, "result.json")
+        finally:
+            db.close()
+        try:
+            return json.loads(text) if text else None
+        except json.JSONDecodeError:
+            return None
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)
@@ -900,27 +931,23 @@ def get_job_shots(job_id: str, db: Session = Depends(get_db)):
     job = db.query(models.Job).filter(models.Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    path = Path(analysis_orchestrator.output_base_dir) / job_id / "shots.jsonl"
-    if not path.is_file():
+    base = analysis_orchestrator.output_base_dir
+    shots_text = hosted.artifact_text(db, base, job_id, "shots.jsonl")
+    if shots_text is None:
         raise HTTPException(status_code=404, detail="No ball scouting result for that job")
     try:
-        shots = [
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-    except (OSError, json.JSONDecodeError) as exc:
+        shots = [json.loads(line) for line in shots_text.splitlines() if line.strip()]
+    except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail=f"Could not read shot records: {exc}")
-    config_path = path.with_name("ball_scouting.config.json")
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
-    except (OSError, json.JSONDecodeError):
+        config_text = hosted.artifact_text(db, base, job_id, "ball_scouting.config.json")
+        config = json.loads(config_text) if config_text else {}
+    except json.JSONDecodeError:
         config = {}
-    entries_path = path.with_name("goal_entries.jsonl")
     try:
-        entries = [json.loads(line) for line in entries_path.read_text(encoding="utf-8").splitlines()
-                   if line.strip()] if entries_path.is_file() else []
-    except (OSError, json.JSONDecodeError) as exc:
+        entries_text = hosted.artifact_text(db, base, job_id, "goal_entries.jsonl") or ""
+        entries = [json.loads(line) for line in entries_text.splitlines() if line.strip()]
+    except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail=f"Could not read goal entries: {exc}")
     return {
         "shots": shots,

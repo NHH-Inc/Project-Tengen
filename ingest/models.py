@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String
 from sqlalchemy.orm import declarative_base
 
 from .serializers import SCHEMA_VERSION
@@ -130,3 +130,21 @@ class Correction(Base):
     fields = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     created_by = Column(String, nullable=True)
+
+
+class RunArtifact(Base):
+    """One analyzer output file of a job, kept in the database rather than on disk.
+
+    A hosted API (Render's free tier) loses its disk on every restart, so a run published from
+    a laptop keeps the files the API serves -- result.json, shots.jsonl, the match clock -- here,
+    gzip-compressed. Endpoints read the job's folder first and fall back to these rows, so a
+    machine that analyses locally behaves exactly as before.
+    """
+
+    __tablename__ = "run_artifacts"
+
+    job_id = Column(String, ForeignKey("jobs.job_id"), primary_key=True)
+    name = Column(String, primary_key=True)
+    content = Column(LargeBinary, nullable=False)
+    size = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
