@@ -22,3 +22,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("FRC_DATA_DIR", tempfile.mkdtemp(prefix="frc-scouting-tests-"))
 
 collect_ignore = ["smoke_test.py"]
+
+# A developer's ingest/.env may carry the hosted server's team keys (ingest/hosted.py). Tests that
+# are not about keys must not need them, and dotenv never overrides a variable already set, so
+# blanking them here keeps the .env's values out. Key tests set their own with patch.dict.
+for _setting in ("TENGEN_READ_KEY", "TENGEN_WRITE_KEY", "TENGEN_REQUIRE_KEYS", "TENGEN_PUBLISH_ONLY"):
+    os.environ[_setting] = ""

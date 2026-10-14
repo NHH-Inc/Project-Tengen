@@ -36,7 +36,9 @@ os.environ["FRC_DATA_DIR"] = str(_tmp / "data")
 # is about the unconfigured path anyway, so the only correct environment for it is one with no
 # credentials at all.
 for _credential in ("SHEETS_SPREADSHEET_ID", "GOOGLE_APPLICATION_CREDENTIALS",
-                    "APPS_SCRIPT_URL", "APPS_SCRIPT_SECRET"):
+                    "APPS_SCRIPT_URL", "APPS_SCRIPT_SECRET",
+                    # A hosted server's team keys (ingest/hosted.py) would make every call 401.
+                    "TENGEN_READ_KEY", "TENGEN_WRITE_KEY", "TENGEN_REQUIRE_KEYS", "TENGEN_PUBLISH_ONLY"):
     os.environ[_credential] = ""
 
 from fastapi.testclient import TestClient  # noqa: E402

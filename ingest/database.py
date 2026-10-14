@@ -10,7 +10,23 @@ from .models import Base
 
 # Doc 0: "Postgres in production, SQLite acceptable locally." Default to the local SQLite
 # file; point DATABASE_URL at Postgres (:5432 per doc 0's defaults) in production.
-SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./frc_scouting.db")
+def normalise_url(url: str) -> str:
+    """Accept every common way of writing a Postgres address, and use the driver installed here.
+
+    Supabase's dashboard offers `postgresql+psycopg://` (psycopg 3) for SQLAlchemy, Heroku-style
+    hosts say `postgres://`, and requirements.txt installs psycopg2. Pasting the dashboard's string
+    into a hosting provider crashed the server at import with "No module named 'psycopg'".
+    """
+    import importlib.util
+
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql+psycopg://") and importlib.util.find_spec("psycopg") is None:
+        url = "postgresql+psycopg2://" + url[len("postgresql+psycopg://"):]
+    return url
+
+
+SQLALCHEMY_DATABASE_URL = normalise_url(os.environ.get("DATABASE_URL", "sqlite:///./frc_scouting.db"))
 
 # check_same_thread is a SQLite-only argument; passing it to Postgres raises.
 connect_args = (
