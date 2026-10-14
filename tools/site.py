@@ -65,7 +65,7 @@ footer{margin-top:48px;color:var(--muted);font-size:13px;border-top:1px solid va
 
 
 def page(title: str, here: str, body: str) -> str:
-    links = [("index.html", "Home"), ("progress.html", "Progress"), ("history.html", "History"),
+    links = [("index.html", "Home"), ("app/", "App"), ("progress.html", "Progress"), ("history.html", "History"),
              (REPO, "GitHub"), (DISCORD, "Discord")]
     nav = "".join(f'<a href="{href}"{" class=here" if href == here else ""}>{name}</a>' for href, name in links)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -142,7 +142,7 @@ def index_html(data: dict, models: list[dict]) -> str:
 <a href="progress.html#features"><img src="badge-features.svg" alt="features"></a>
 <a href="progress.html#models"><img src="badge-tracking.svg" alt="tracked"></a>
 <a href="progress.html#models"><img src="badge-model.svg" alt="model"></a></div>
-<div class="buttons"><a class="primary" href="{SOURCE}/docs/DESKTOP.md">Run it</a>
+<div class="buttons"><a class="primary" href="app/">Open the app</a><a href="{SOURCE}/docs/DESKTOP.md">Run it on a laptop</a>
 <a href="{REPO}">GitHub</a><a href="progress.html">Progress</a>
 <a href="{SOURCE}/docs/STRATEGY-PLAN.md">The plan</a><a href="{SOURCE}/docs/IMPROVING-THE-MODEL.md">Improve the model</a>
 <a href="{DISCORD}">Discord</a></div>

@@ -1,4 +1,4 @@
-# Publish https://nhh-inc.github.io/Project-Tengen/ from main.
+# Publish https://nhh-inc.github.io/Project-Tengen/ (and the app at /app/) from main.
 #
 # The site is generated, never edited: tools/site.py builds it from training/registry and
 # ingest/strategy/catalogue.py, so it always shows the state of main. Only the standard library is
@@ -29,6 +29,19 @@ jobs:
           python-version: "3.13"
       - name: Build the site
         run: python -m tools.site _site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # The scouting app itself, served at /app/, talking to the hosted API on Render.
+      - name: Build the web app
+        working-directory: web
+        env:
+          VITE_API_MODE: http
+          VITE_API_BASE: https://tengen-api.onrender.com/api
+          VITE_BASE: /Project-Tengen/app/
+        run: |
+          npm ci
+          npx vite build --outDir ../_site/app --emptyOutDir
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

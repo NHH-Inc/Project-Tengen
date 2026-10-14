@@ -41,7 +41,7 @@ export function Sidebar(props: SidebarProps) {
       <header className="brand">
         <h1>Project Tengen</h1>
         <span className={`mode ${apiMode}`}>
-          {apiMode === 'fixture' ? 'fixture data · no backend' : 'ingest :8080'}
+          {apiMode === 'fixture' ? 'fixture data · no backend' : 'team server'}
         </span>
       </header>
 

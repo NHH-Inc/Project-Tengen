@@ -12,6 +12,8 @@ where a robot shoots from and how long it sits there, its auto, its cycles, its 
 heads for the endgame. It runs offline on a laptop in the stands.
 
 <div flex="true">
+  <a href="https://nhh-inc.github.io/Project-Tengen/app/">Open the app</a>
+  •
   <a href="https://nhh-inc.github.io/Project-Tengen/">Website</a>
   •
   <a href="docs/DESKTOP.md">Run it</a>
