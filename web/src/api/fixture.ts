@@ -6,7 +6,7 @@
 // component 2 too. It loads all three fixture jobs, including the awkward ones (a match with
 // no TBA data, and a failed download carrying an error_code).
 
-import type { MatchStrategy, StrategyTeam, TeamProfileResponse } from './strategy';
+import type { MatchStrategy, StrategyTeam, TeamProfile, TeamProfileResponse } from './strategy';
 import {
   ViolationLog,
   eventToWire,
@@ -86,6 +86,97 @@ const PIPELINE: Array<[Job['status'], Job['stage'], number]> = [
   ['analyzing', 'events', 1500],
   ['complete', null, 0],
 ];
+
+// An illustrative team, so the strategy views have something to show with no backend. Positions
+// are in the alliance frame (feet): this team scores from the opponent-hub centre, with a left
+// secondary spot, and runs one dominant auto. Replaced by real matches whenever a server is up.
+const DEMO_MATCHES = ['2026demo_qm4', '2026demo_qm9', '2026demo_qm15', '2026demo_qm22',
+  '2026demo_qm27', '2026demo_qm33', '2026demo_qm38', '2026demo_sf1m1'];
+
+const DEMO_PROFILE: TeamProfile = {
+  team: 254,
+  matches: DEMO_MATCHES,
+  n_matches: 8,
+  n_with_positions: 7,
+  launches_per_match: 12,
+  scoring_map: {
+    cell_ft: 3.0,
+    recency_half_life_matches: 4,
+    n_matches: 8,
+    n_practice: 1,
+    hot_spot: { x: 40.5, y: 13.5 },
+    heatmap: [
+      { x: 40.5, y: 13.5, launches: 18, weight: 14.2, matches: 7, intensity: 1.0 },
+      { x: 37.5, y: 13.5, launches: 11, weight: 8.3, matches: 7, intensity: 0.58 },
+      { x: 40.5, y: 16.5, launches: 7, weight: 5.0, matches: 5, intensity: 0.35 },
+      { x: 37.5, y: 10.5, launches: 6, weight: 4.1, matches: 5, intensity: 0.29 },
+      { x: 40.5, y: 19.5, launches: 5, weight: 3.0, matches: 4, intensity: 0.21 },
+      { x: 43.5, y: 13.5, launches: 4, weight: 2.6, matches: 3, intensity: 0.18 },
+      { x: 15.5, y: 13.5, launches: 2, weight: 0.9, matches: 2, intensity: 0.06 },
+    ],
+    effective_zones: [
+      { zone: 'opponent_alliance_zone', lane: 'centre', launches: 35, weight: 27.1, matches: 7, share: 0.62, effective: true },
+      { zone: 'opponent_alliance_zone', lane: 'left', launches: 8, weight: 5.5, matches: 4, share: 0.17, effective: true },
+    ],
+    zones: [
+      { zone: 'opponent_alliance_zone', lane: 'centre', launches: 35, weight: 27.1, matches: 7, share: 0.62, effective: true },
+      { zone: 'opponent_alliance_zone', lane: 'left', launches: 8, weight: 5.5, matches: 4, share: 0.17, effective: true },
+      { zone: 'neutral_zone', lane: 'right', launches: 3, weight: 1.8, matches: 2, share: 0.08, effective: false },
+    ],
+  },
+  timing: {
+    median_volley_interval_s: 8.4,
+    median_launches_per_volley: 3,
+    median_stopped_scoring_before_endgame_s: 6,
+  },
+  tendencies: {
+    start: { lane: 'right', lane_matches: 6, known: 7, mean_ax: 1.5, mean_ay: 4.8 },
+    auto: {
+      routines: [
+        { matches: 6, match_ids: DEMO_MATCHES.slice(0, 6), path: [[1.5, 4.8], [6, 7], [11, 10], [15.2, 13]] },
+        { matches: 1, match_ids: [DEMO_MATCHES[6]], path: [[1.5, 5], [7, 4], [12, 6]] },
+      ],
+      median_distance_ft: 15.6,
+    },
+    shooting: {
+      spots: [
+        { ax: 39, ay: 13, launches: 35, matches: 7, share: 0.62, distance_to_hub_ft: 2.1 },
+        { ax: 40.5, ay: 19, launches: 8, matches: 4, share: 0.17, distance_to_hub_ft: 6.8 },
+      ],
+      median_volley_interval_s: 8.4,
+      median_dwell_s: 2.3,
+      on_the_move_share: 0.18,
+      median_distance_to_hub_ft: 3.4,
+    },
+    zones: { opponent_alliance_zone: 0.58, neutral_zone: 0.3, own_alliance_zone: 0.12 },
+    lanes: { centre: 0.5, right: 0.3, left: 0.2 },
+    movement: { top_speed_ftps: 14.2, stationary_share: 0.22 },
+    defense: { matches_played: 1, of: 7, median_near_opponent_s: 18 },
+    endgame: { median_stopped_scoring_before_endgame_s: 6 },
+  },
+  prediction: {
+    start_lane: 'right',
+    auto_routine: 0,
+    auto_routine_confidence: 0.8,
+    primary_spot: { ax: 39, ay: 13 },
+    launches: 12,
+    plays_defense: false,
+  },
+  counters: [
+    {
+      id: 'deny-opp-hub-centre',
+      advice: 'Deny the opponent-hub centre lane — it takes ~62% of its shots from (39, 13) ft.',
+      evidence: '35 launches across 7 matches, median 2.1 ft from the hub.',
+      matches: DEMO_MATCHES.slice(0, 7),
+    },
+    {
+      id: 'pressure-right-start',
+      advice: 'Contest the right lane early: it starts right in 6 of 7 matches and runs one auto.',
+      evidence: 'Auto routine #1 in 6 matches; right-lane start mean (1.5, 4.8) ft.',
+      matches: DEMO_MATCHES.slice(0, 6),
+    },
+  ],
+};
 
 export class FixtureApi implements ScoutingApi {
   readonly mode = 'fixture' as const;
@@ -521,17 +612,20 @@ export class FixtureApi implements ScoutingApi {
     };
   }
 
-  // The fixtures predate the strategy layer; it needs a server (ingest/hosted.py).
+  // Per-match strategy needs the server to build timelines from a job (ingest/hosted.py).
   async getStrategy(_jobId: string): Promise<MatchStrategy | null> {
     return null;
   }
 
+  // The cross-match team view ships a worked demo so the static site (and a fresh clone with no
+  // backend) shows what the strategy layer produces. The numbers are illustrative, not a real
+  // team -- a live server replaces them with analysed matches.
   async listStrategyTeams(): Promise<StrategyTeam[]> {
-    return [];
+    return [{ team: 254, matches: DEMO_MATCHES, with_positions: 7 }];
   }
 
-  async getTeamProfile(_team: number): Promise<TeamProfileResponse | null> {
-    return null;
+  async getTeamProfile(team: number): Promise<TeamProfileResponse | null> {
+    return { profile: { ...DEMO_PROFILE, team }, matches: [] };
   }
 
   async mediaToken(_jobId: string): Promise<string | null> {
