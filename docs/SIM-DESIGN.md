@@ -1,9 +1,11 @@
 # §2 Simulation / prediction testbed — design
 
-**Status (2026-10-31):** scope approved. **Target: T3 (full game physics + scoring).** Core language:
-**Python** (`ingest/sim/`), with a thin web view driving it. We build up the tiers in order, each a
-PR; **T0, T1 and T2 are shipped** (motion model, validation harness, turn-rate limit, and multi-robot
-blocking/defense). Next is T3. See the per-tier status in §3 and `ingest/sim/`.
+**Status (2026-10-31):** scope approved and **all four tiers (T0–T3) are shipped**, Python core in
+`ingest/sim/`. The sim now has real motion, realistic corners, robot-robot blocking (defense), and a
+**config-driven scoring framework** that reads goals + point values from the season config (today's
+values are placeholders — fill them in and scoring comes alive). What remains for §2 is not a tier
+but the **thin web view** to drive it interactively, and richer scoring once the 2026 rules are set.
+See the per-tier status in §3 and `ingest/sim/`.
 
 Decided in [PLAN-2026 §2](PLAN-2026.md): **the full physics field sim (b)**, not just the lightweight
 replay (a). This doc records how we get there in a way that pays off early and doesn't balloon.
@@ -50,7 +52,7 @@ Each tier is a superset of the one before. Higher tiers cost more and help fewer
 | **T0 — Kinematic replay** | Play predicted waypoint paths and actual tracks on one field, time-aligned. No forces. | S | High — the (a) stepping stone; makes everything else checkable. | ✅ shipped (`validate.py`) |
 | **T1 — Motion dynamics** | Robots as point masses with **max velocity + acceleration** (from each team's measured `top_speed`). Waypoint-following controller. Produces *realistic* trajectories and **arrival times**. | M | High — "can this auto reach 3 pieces in 15 s?" needs real accel limits. | ✅ shipped (`model.py`) |
 | **T2 — Interactions** | Robot–robot **collision/blocking** as soft bodies (separation + removing the velocity driving them together), so **defense** is simulable; plus a turn-rate limit for non-holonomic drive. | M–L | Medium — defense is the main multi-robot question. | ✅ shipped (`match.py`) |
-| **T3 — Game pieces & scoring** | Balls/pieces with trajectories, intake/launch, goal regions, a scoring model. | L–XL | Season-dependent; the approved end target. | planned |
+| **T3 — Game pieces & scoring** | Goals, pieces and point values **read from the season config**; a shooter scores while in range, defense-aware. | L–XL | Season-dependent; the approved end target. | ✅ shipped (`game.py`, `scoring.py`) |
 
 **Approved target: T3.** Build order is still T0 → T1 → T2 → T3, each independently useful, because
 each tier is the foundation (and the validation substrate) for the next. T0/T1 are done; T2 adds the
