@@ -413,9 +413,12 @@ def router(get_db, base_dir: Callable[[], str | Path], local_video_id: Callable[
     @api.get("/api/strategy/teams/{team}")
     def strategy_team(team: int, db: Session = Depends(get_db)):
         from .strategy.profile import build_profile
+        from .strategy.timeline import load_geometry
         matches = [f for f in _all_features(db, base_dir()) if f.get("team") == team]
         if not matches:
             raise HTTPException(status_code=404, detail=f"No analysed matches with team {team} yet")
-        return {"profile": build_profile(matches), "matches": matches}
+        season = next((int(m["match_id"][:4]) for m in matches
+                       if (m.get("match_id") or "")[:4].isdigit()), 2026)
+        return {"profile": build_profile(matches, load_geometry(season)), "matches": matches}
 
     return api

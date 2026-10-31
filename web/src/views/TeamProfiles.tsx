@@ -19,6 +19,10 @@ const endgameLine = (s: number | null) =>
     : s > 0 ? `Stops scoring ${s.toFixed(0)} s before the endgame`
       : `Keeps scoring ${Math.abs(s).toFixed(0)} s into the endgame`;
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+const zoneLabel = (zone: string, lane: string) => `${zone.replace(/_/g, ' ')} · ${lane} lane`;
+// Cool (yellow) to hot (red), by a cell's scoring intensity.
+const heatColour = (intensity: number) =>
+  `rgb(255, ${Math.round(220 - 150 * intensity)}, ${Math.round(96 - 40 * intensity)})`;
 
 export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
   const [teams, setTeams] = useState<StrategyTeam[]>([]);
@@ -49,6 +53,7 @@ export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
 
   const profile = data?.profile;
   const t = profile?.tendencies;
+  const sm = profile?.scoring_map;
   return (
     <div className="panel">
       <div className="panel-head">
@@ -85,6 +90,47 @@ export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
                 <li key={c.id}><b>{c.advice}</b><br /><span className="muted">{c.evidence}</span></li>
               ))}
             </ul>
+          )}
+
+          {sm && sm.heatmap.length > 0 && (
+            <>
+              <h3>Scoring heatmap</h3>
+              <p className="muted">
+                Where team {profile.team} scores, across {sm.n_matches} {sm.n_matches === 1 ? 'match' : 'matches'}
+                {sm.n_practice > 0 && ` (${sm.n_practice} practice)`}. Recent matches count for more
+                {` (half-life ${sm.recency_half_life_matches} matches).`}
+              </p>
+              <FieldSketch caption={`Scoring density in the team's alliance frame${sm.hot_spot ? `; hottest around (${sm.hot_spot.x}, ${sm.hot_spot.y}) ft` : ''}.`}>
+                {(toX, toY, scale) => {
+                  const cell = sm.cell_ft * scale;
+                  return (
+                    <>
+                      {sm.heatmap.map((c, i) => (
+                        <rect key={i} x={toX(c.x - sm.cell_ft / 2)} y={toY(c.y + sm.cell_ft / 2)}
+                              width={cell} height={cell} fill={heatColour(c.intensity)}
+                              fillOpacity={0.2 + 0.65 * c.intensity}>
+                          <title>{`${c.launches} shots in ${c.matches} ${c.matches === 1 ? 'match' : 'matches'}`}</title>
+                        </rect>
+                      ))}
+                      {sm.hot_spot && (
+                        <circle cx={toX(sm.hot_spot.x)} cy={toY(sm.hot_spot.y)} r={6} fill="none"
+                                stroke="#ffffff" strokeWidth={1.5} strokeOpacity={0.9}>
+                          <title>Hot spot</title>
+                        </circle>
+                      )}
+                    </>
+                  );
+                }}
+              </FieldSketch>
+              {sm.effective_zones.length > 0 && (
+                <ul className="facts">
+                  {sm.effective_zones.map((z, i) => (
+                    <li key={i}><b>{zoneLabel(z.zone, z.lane)}</b>: {z.launches} shots in {z.matches} matches
+                      {` (${pct(z.share)} of scoring)`}</li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
 
           {t && profile.prediction && (
