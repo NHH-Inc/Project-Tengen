@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Alliance, Track } from '../contracts';
 import { robotName, stationarySuppressionAt, visibleBoxes } from '../lib/tracks';
 import { fieldExtents, type SeasonConfig } from '../season';
@@ -30,6 +30,11 @@ export function HeatMap({
 }: HeatMapProps) {
   const FIELD = fieldExtents(season);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Playback shows paths only up to the current time, so a robot's route does not spoil ahead of
+  // the video. "Whole match" lifts that to overlay every robot's full path at once -- the report
+  // view the drive team reads between matches (docs/PLAN-2026.md section 3).
+  const [wholeMatch, setWholeMatch] = useState(false);
+  const cutoff = wholeMatch ? Infinity : currentTime;
 
   const { points, missing, sampleCount, positionedTracks, positionSources } = useMemo(() => {
     const points: Array<{
@@ -51,7 +56,7 @@ export function HeatMap({
       for (const box of track.boxes) {
         // The heat map is a playback view, not a full-match report: future samples must not
         // reveal where a robot will travel later in the match.
-        if (box.t > currentTime) continue;
+        if (box.t > cutoff) continue;
         if (track.alliance == null && suppressedAt != null && box.t >= suppressedAt) continue;
         sampleCount++;
         if (box.fieldX == null || box.fieldY == null) {
@@ -85,7 +90,7 @@ export function HeatMap({
       positionedTracks: positioned.size,
       positionSources: [...sources].sort(),
     };
-  }, [tracks, selectedTeam, currentTime, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
+  }, [tracks, selectedTeam, cutoff, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
 
   const liveRobots = useMemo(
     () => visibleBoxes(tracks, currentTime, 0.25).filter(({ track, box }) =>
@@ -209,7 +214,13 @@ export function HeatMap({
       <div className="panel-head">
         <h2>Field heat map</h2>
         <span className="muted">
-          {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · through {formatTime(currentTime)}
+          {selectedTeam ? `team ${selectedTeam}` : 'all robots'}
+          {' · '}{wholeMatch ? 'whole match' : `through ${formatTime(currentTime)}`}
+          <button type="button" className={`chip${wholeMatch ? ' on' : ''}`}
+                  onClick={() => setWholeMatch((on) => !on)}
+                  title="Overlay every robot's full path, instead of only up to the current time">
+            {wholeMatch ? 'Following playback' : 'Whole match'}
+          </button>
         </span>
       </div>
       <canvas

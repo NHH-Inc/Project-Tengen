@@ -337,6 +337,8 @@ td.warn { color: var(--amber); }
 }
 .chip.red { color: var(--red); border-color: rgba(224, 85, 95, 0.4); background: rgba(224, 85, 95, 0.08); }
 .chip.blue { color: var(--blue); border-color: rgba(76, 140, 240, 0.4); background: rgba(76, 140, 240, 0.08); }
+button.chip { cursor: pointer; margin-left: 8px; background: transparent; color: inherit; }
+button.chip.on { background: var(--accent); border-color: var(--accent); color: #08101f; font-weight: 600; }
 
 /* ---------------------------------------------------------------- heat map */
 
