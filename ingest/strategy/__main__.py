@@ -5,6 +5,7 @@
     python -m ingest.strategy features  RUN [RUN ...]
     python -m ingest.strategy profile   RUN [RUN ...] [--team 254] [--json out.json]
     python -m ingest.strategy heatmap   RUN [RUN ...] [--team 254] [--json out.json]
+    python -m ingest.strategy advantagescope RUN [RUN ...]   (write a .wpilog per match)
     python -m ingest.strategy evaluate  RUN [RUN ...]
 
 RUN is an analysed match folder (it contains job.json and tracks.jsonl), or a folder of them such
@@ -126,7 +127,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ingest.strategy", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command",
-                        choices=["clock", "timeline", "features", "profile", "heatmap", "evaluate"])
+                        choices=["clock", "timeline", "features", "profile", "heatmap",
+                                 "advantagescope", "evaluate"])
     parser.add_argument("runs", nargs="+")
     parser.add_argument("--team", type=int)
     parser.add_argument("--json", type=Path, help="also write the result here as JSON")
@@ -163,6 +165,18 @@ def main(argv=None) -> int:
             write_timelines(run, timelines)
             positioned = sum(1 for t in timelines if t["coverage"]["positioned_s"] > 0)
             print(f"{run.name}: {len(timelines)} robots, {positioned} with field positions")
+        return 0
+
+    if args.command == "advantagescope":
+        from .advantagescope import match_to_wpilog
+        for run in runs:
+            timelines = build_timelines(run)
+            match_id = timelines[0].get("match_id") if timelines else None
+            out = run / f"{match_id or run.name}.wpilog"
+            out.write_bytes(match_to_wpilog(timelines, match_id=match_id))
+            positioned = sum(1 for t in timelines if t["coverage"]["positioned_s"] > 0)
+            print(f"{run.name}: wrote {out.name} ({len(timelines)} robots, {positioned} positioned). "
+                  f"Open in AdvantageScope and drop each /Tengen/... field on the 2D Field as a Robot.")
         return 0
 
     per_match = [(run, analyse(run)) for run in runs]
