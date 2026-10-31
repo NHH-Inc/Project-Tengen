@@ -48,32 +48,63 @@ def ordered_with_recency(team_matches: list[dict]) -> list[tuple[dict, float]]:
     return [(m, 0.5 ** ((n - 1 - i) / RECENCY_HALF_LIFE)) for i, m in enumerate(ordered)]
 
 
-def scoring_heatmap(team_matches: list[dict], geometry: dict, cell_ft: float = CELL_FT) -> list[dict]:
-    """A grid of where the team scores. Each cell carries the raw launch count, the recency-
-    weighted weight, how many matches it spans, and a 0..1 intensity for rendering."""
-    length = float(geometry["field_length_ft"])
-    width = float(geometry["field_width_ft"])
+def official_with_recency(team_matches: list[dict]) -> list[tuple[dict, float]]:
+    """Official matches only, oldest -> newest, each with its recency weight. Used where practice
+    data cannot be trusted at all (movement/auto paths), unlike scoring, which survives practice."""
+    official = sorted((m for m in team_matches if not is_practice(m)), key=match_order)
+    n = len(official)
+    return [(m, 0.5 ** ((n - 1 - i) / RECENCY_HALF_LIFE)) for i, m in enumerate(official)]
+
+
+def _grid(samples: list[tuple[dict, float, float, object]], geometry: dict, cell_ft: float,
+          count_key: str) -> list[dict]:
+    """Bin (weight, ax, ay, match_id) samples into a field grid, recency-weighted, with a 0..1
+    intensity for rendering. Shared by the scoring and auto heatmaps so they stay comparable."""
+    length, width = float(geometry["field_length_ft"]), float(geometry["field_width_ft"])
     max_ix, max_iy = int(length // cell_ft), int(width // cell_ft)
     cells: dict[tuple[int, int], dict] = {}
-    for features, weight in ordered_with_recency(team_matches):
-        mid = features.get("match_id")
-        for point in _launch_points(features):
-            ax, ay = point.get("ax"), point.get("ay")
-            if ax is None or ay is None:
-                continue
-            key = (min(int(ax // cell_ft), max_ix), min(int(ay // cell_ft), max_iy))
-            cell = cells.setdefault(key, {"launches": 0, "weight": 0.0, "matches": set()})
-            cell["launches"] += 1
-            cell["weight"] += weight
-            cell["matches"].add(mid)
+    for weight, ax, ay, mid in samples:
+        if ax is None or ay is None:
+            continue
+        key = (min(int(ax // cell_ft), max_ix), min(int(ay // cell_ft), max_iy))
+        cell = cells.setdefault(key, {"count": 0, "weight": 0.0, "matches": set()})
+        cell["count"] += 1
+        cell["weight"] += weight
+        cell["matches"].add(mid)
     out = [{"x": round((ix + 0.5) * cell_ft, 1), "y": round((iy + 0.5) * cell_ft, 1),
-            "launches": cell["launches"], "weight": round(cell["weight"], 3),
+            count_key: cell["count"], "weight": round(cell["weight"], 3),
             "matches": len(cell["matches"])}
            for (ix, iy), cell in cells.items()]
     peak = max((c["weight"] for c in out), default=0.0)
     for c in out:
         c["intensity"] = round(c["weight"] / peak, 3) if peak else 0.0
     return sorted(out, key=lambda c: -c["weight"])
+
+
+def scoring_heatmap(team_matches: list[dict], geometry: dict, cell_ft: float = CELL_FT) -> list[dict]:
+    """A grid of where the team scores. Each cell carries the raw launch count, the recency-
+    weighted weight, how many matches it spans, and a 0..1 intensity for rendering. Practice
+    matches are included -- where a team scores is real signal even while it tests systems."""
+    samples = [(weight, point.get("ax"), point.get("ay"), features.get("match_id"))
+               for features, weight in ordered_with_recency(team_matches)
+               for point in _launch_points(features)]
+    return _grid(samples, geometry, cell_ft, count_key="launches")
+
+
+def _auto_points(features: dict) -> list[list]:
+    return [p for p in (features.get("auto_path") or {}).get("points", []) if p]
+
+
+def auto_heatmap(team_matches: list[dict], geometry: dict, cell_ft: float = CELL_FT) -> list[dict]:
+    """A grid of where the team drives during autonomous, over official matches, recency-weighted.
+
+    Practice matches are excluded, not merely down-weighted: in practice a team tests autos, so its
+    auto *movement* is noise. That is the same honesty rule that lets the scoring heatmap keep
+    practice data -- scoring location survives practice, driving behaviour does not."""
+    samples = [(weight, ax, ay, features.get("match_id"))
+               for features, weight in official_with_recency(team_matches)
+               for ax, ay in _auto_points(features)]
+    return _grid(samples, geometry, cell_ft, count_key="samples")
 
 
 def effective_zones(team_matches: list[dict], geometry: dict) -> list[dict]:
@@ -117,4 +148,21 @@ def scoring_map(team_matches: list[dict], geometry: dict) -> dict:
         "heatmap": heatmap,
         "effective_zones": [r for r in zones if r["effective"]],
         "zones": zones,
+    }
+
+
+def auto_map(team_matches: list[dict], geometry: dict) -> dict:
+    """Where the team goes in autonomous: the grid, plus how many matches stand behind it. Built
+    from official matches only (see auto_heatmap); a team with only practice data yields an empty
+    grid rather than a heatmap of noise."""
+    heatmap = auto_heatmap(team_matches, geometry)
+    n_official = sum(1 for m in team_matches if not is_practice(m))
+    busiest = heatmap[0] if heatmap else None
+    return {
+        "cell_ft": CELL_FT,
+        "recency_half_life_matches": RECENCY_HALF_LIFE,
+        "n_matches": n_official,
+        "n_excluded_practice": sum(1 for m in team_matches if is_practice(m)),
+        "busiest_cell": {"x": busiest["x"], "y": busiest["y"]} if busiest else None,
+        "heatmap": heatmap,
     }

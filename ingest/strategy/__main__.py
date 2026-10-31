@@ -120,6 +120,18 @@ def print_heatmap(team_map: dict) -> None:
         for c in top:
             print(f"    ({c['x']:>4}, {c['y']:>4}) ft  intensity {c['intensity']:.2f}  "
                   f"{c['launches']} launches / {c['matches']} matches")
+    auto = team_map.get("auto_map")
+    if auto:
+        cell = auto.get("busiest_cell")
+        print(f"  Auto map over {auto['n_matches']} official matches "
+              f"({auto['n_excluded_practice']} practice excluded):")
+        if cell and auto["heatmap"]:
+            print("    Busiest auto cells:")
+            for c in auto["heatmap"][:5]:
+                print(f"      ({c['x']:>4}, {c['y']:>4}) ft  intensity {c['intensity']:.2f}  "
+                      f"{c['samples']} samples / {c['matches']} matches")
+        else:
+            print("    No auto paths yet (needs an official match with field positions in auto).")
 
 
 def main(argv=None) -> int:
@@ -186,8 +198,9 @@ def main(argv=None) -> int:
             if not output:
                 print("No robot has a team number yet. Assign teams in review first.")
         elif args.command == "heatmap":
-            from .heatmap import scoring_map
-            output = [{"team": matches[0].get("team"), **scoring_map(matches, geometry)}
+            from .heatmap import auto_map, scoring_map
+            output = [{"team": matches[0].get("team"), **scoring_map(matches, geometry),
+                       "auto_map": auto_map(matches, geometry)}
                       for matches in by_team.values() if matches]
             for team_map in output:
                 print_heatmap(team_map)

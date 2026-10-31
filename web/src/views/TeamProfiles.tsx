@@ -23,6 +23,9 @@ const zoneLabel = (zone: string, lane: string) => `${zone.replace(/_/g, ' ')} ·
 // Cool (yellow) to hot (red), by a cell's scoring intensity.
 const heatColour = (intensity: number) =>
   `rgb(255, ${Math.round(220 - 150 * intensity)}, ${Math.round(96 - 40 * intensity)})`;
+// Auto density in blue, so it never reads as a scoring heatmap: pale blue (sparse) to deep blue (busy).
+const autoColour = (intensity: number) =>
+  `rgb(${Math.round(150 - 110 * intensity)}, ${Math.round(200 - 110 * intensity)}, 255)`;
 
 export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
   const [teams, setTeams] = useState<StrategyTeam[]>([]);
@@ -54,6 +57,7 @@ export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
   const profile = data?.profile;
   const t = profile?.tendencies;
   const sm = profile?.scoring_map;
+  const am = profile?.auto_map;
   return (
     <div className="panel">
       <div className="panel-head">
@@ -130,6 +134,40 @@ export function TeamProfiles({ team, onSelectTeam }: TeamProfilesProps) {
                   ))}
                 </ul>
               )}
+            </>
+          )}
+
+          {am && am.heatmap.length > 0 && (
+            <>
+              <h3>Auto heatmap</h3>
+              <p className="muted">
+                Where team {profile.team} drives in autonomous, across {am.n_matches} official
+                {am.n_matches === 1 ? ' match' : ' matches'}
+                {am.n_excluded_practice > 0 && ` (${am.n_excluded_practice} practice excluded — auto is being tested there, so its movement is noise)`}.
+                Recent matches count for more.
+              </p>
+              <FieldSketch caption={`Auto driving density in the team's alliance frame${am.busiest_cell ? `; busiest around (${am.busiest_cell.x}, ${am.busiest_cell.y}) ft` : ''}.`}>
+                {(toX, toY, scale) => {
+                  const cell = am.cell_ft * scale;
+                  return (
+                    <>
+                      {am.heatmap.map((c, i) => (
+                        <rect key={i} x={toX(c.x - am.cell_ft / 2)} y={toY(c.y + am.cell_ft / 2)}
+                              width={cell} height={cell} fill={autoColour(c.intensity)}
+                              fillOpacity={0.2 + 0.65 * c.intensity}>
+                          <title>{`${c.samples} auto points in ${c.matches} ${c.matches === 1 ? 'match' : 'matches'}`}</title>
+                        </rect>
+                      ))}
+                      {am.busiest_cell && (
+                        <circle cx={toX(am.busiest_cell.x)} cy={toY(am.busiest_cell.y)} r={6} fill="none"
+                                stroke="#ffffff" strokeWidth={1.5} strokeOpacity={0.9}>
+                          <title>Busiest auto cell</title>
+                        </circle>
+                      )}
+                    </>
+                  );
+                }}
+              </FieldSketch>
             </>
           )}
 
