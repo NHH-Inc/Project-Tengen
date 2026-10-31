@@ -193,6 +193,73 @@ const DEMO_PROFILE: TeamProfile = {
   ],
 };
 
+// A handful of distinct demo teams so the Match Plan and Pick List views have something to chew on
+// with no backend: varied shot rates, scoring zones, auto spots and one defender, chosen so the
+// engine finds real conflicts (254 and 1678 share an auto cell and a scoring zone) and a clear pick
+// order. A live server replaces all of this with analysed matches. Fields beyond what the engine
+// reads (counters, timing, tendencies) are inherited from DEMO_PROFILE.
+interface DemoOverride {
+  shots: number;
+  zones: Array<[string, string, number, number]>; // zone, lane, weight, share
+  auto: Array<[number, number, number]>;           // x, y, intensity (first entry = busiest)
+  defense?: [number, number];                       // matches_played, of
+}
+
+const DEMO_TEAM_OVERRIDES: Record<number, DemoOverride> = {
+  // 254 has no override: it keeps the rich DEMO_PROFILE (the Team Profiles showcase). Its hot auto
+  // cells are (4.5, 7.5) and (7.5, 7.5) and its best zone is opponent-centre, so 1678 is tuned to
+  // collide with exactly those -- a real, visible conflict in the Match Plan and Pick List demos.
+  1678: { shots: 11, zones: [['opponent_alliance_zone', 'centre', 22, 0.6]],
+          auto: [[4.5, 7.5, 0.9], [7.5, 7.5, 0.5]] }, // shares 254's auto cells AND scoring zone
+  148: { shots: 9, zones: [['own_alliance_zone', 'right', 14, 0.7]],
+         auto: [[40.5, 13.5, 1.0]], defense: [4, 6] },      // predictable auto, a defender
+  118: { shots: 7, zones: [['neutral_zone', 'centre', 9, 0.5]], auto: [[25.5, 13.5, 1.0]] },
+  2056: { shots: 14, zones: [['opponent_alliance_zone', 'right', 20, 0.66]], auto: [[40.5, 20.5, 1.0]] },
+  971: { shots: 4, zones: [], auto: [] },                   // weak, no effective zone
+};
+
+const DEMO_TEAMS = [254, 1678, 148, 118, 2056, 971];
+
+function demoProfileFor(team: number): TeamProfile {
+  const o = DEMO_TEAM_OVERRIDES[team];
+  if (!o) return { ...DEMO_PROFILE, team };
+  const effective = o.zones.map(([zone, lane, weight, share]) => ({
+    zone, lane, launches: Math.round(weight), weight, matches: 5, share, effective: true,
+  }));
+  const autoCells = o.auto.map(([x, y, intensity], i) => ({
+    x, y, samples: Math.round(10 * intensity), weight: round1(8 * intensity * (i === 0 ? 1 : 0.6)),
+    matches: 5, intensity,
+  }));
+  const scoreCells = effective.map((z, i) => ({
+    x: z.zone.startsWith('opponent') ? 40.5 : z.zone.startsWith('own') ? 15.5 : 27.5,
+    y: z.lane === 'centre' ? 13.5 : z.lane === 'left' ? 19.5 : 7.5,
+    launches: z.launches, weight: z.weight, matches: 5, intensity: i === 0 ? 1.0 : 0.5,
+  }));
+  return {
+    ...DEMO_PROFILE,
+    team,
+    launches_per_match: o.shots,
+    scoring_map: {
+      ...DEMO_PROFILE.scoring_map!,
+      n_matches: 7,
+      hot_spot: scoreCells[0] ? { x: scoreCells[0].x, y: scoreCells[0].y } : null,
+      heatmap: scoreCells,
+      effective_zones: effective,
+      zones: effective,
+    },
+    auto_map: {
+      ...DEMO_PROFILE.auto_map!,
+      busiest_cell: autoCells[0] ? { x: autoCells[0].x, y: autoCells[0].y } : null,
+      heatmap: autoCells,
+    },
+    tendencies: o.defense
+      ? { ...DEMO_PROFILE.tendencies!, defense: { matches_played: o.defense[0], of: o.defense[1], median_near_opponent_s: 18 } }
+      : DEMO_PROFILE.tendencies,
+  };
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 export class FixtureApi implements ScoutingApi {
   readonly mode = 'fixture' as const;
 
@@ -636,11 +703,11 @@ export class FixtureApi implements ScoutingApi {
   // backend) shows what the strategy layer produces. The numbers are illustrative, not a real
   // team -- a live server replaces them with analysed matches.
   async listStrategyTeams(): Promise<StrategyTeam[]> {
-    return [{ team: 254, matches: DEMO_MATCHES, with_positions: 7 }];
+    return DEMO_TEAMS.map((team) => ({ team, matches: DEMO_MATCHES, with_positions: 7 }));
   }
 
   async getTeamProfile(team: number): Promise<TeamProfileResponse | null> {
-    return { profile: { ...DEMO_PROFILE, team }, matches: [] };
+    return { profile: demoProfileFor(team), matches: [] };
   }
 
   async mediaToken(_jobId: string): Promise<string | null> {
