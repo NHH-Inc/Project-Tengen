@@ -15,6 +15,7 @@ import { useShots } from './state/useShots';
 import { AccuracyPanel } from './views/Accuracy';
 import { AnalysisPanel } from './views/Analysis';
 import { HeatMap } from './views/HeatMap';
+import { MatchLibrary } from './views/MatchLibrary';
 import { StrategyPanel } from './views/Strategy';
 import { TeamProfiles } from './views/TeamProfiles';
 import { TeamStats } from './views/TeamStats';
@@ -153,7 +154,17 @@ export default function App() {
       />
 
       <main className="main">
-        {!job && <div className="stage-empty">Queue a video, or pick one from the queue.</div>}
+        {!job && (
+          <MatchLibrary
+            jobs={jobs}
+            loading={jobsState.loading}
+            selectedJobId={selectedJobId}
+            onSelectJob={(id) => {
+              setSelectedJobId(id);
+              setSelectedEventId(null);
+            }}
+          />
+        )}
 
         {job && !playable && job.status !== 'complete' && (
           <div className="stage-empty">
@@ -254,6 +265,9 @@ export default function App() {
 
             {analysisComplete && (
               <nav className="tabs">
+                <button type="button" className="to-library"
+                        onClick={() => setSelectedJobId(null)}
+                        title="Back to the match library">← Library</button>
                 {TABS.map(([id, label]) => (
                   <button
                     key={id}

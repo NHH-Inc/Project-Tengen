@@ -463,3 +463,31 @@ td.blue { color: #79c0ff; }
 .team-key { margin-top: 18px; }
 .team-key form { display: flex; gap: 6px; }
 .team-key input { flex: 1; min-width: 0; }
+
+/* Match library (docs/PLAN-2026.md section 3): a match-first browse over the job list. */
+.library-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 4px 0 14px; }
+.library-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.library-controls select { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 4px 6px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { background: var(--panel-2); border: none; border-right: 1px solid var(--line); color: var(--muted); padding: 5px 10px; font-size: 12px; }
+.seg button:last-child { border-right: none; }
+.seg button.on { background: var(--line); color: var(--text); }
+.library-event { margin-bottom: 16px; }
+.library-event h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 8px; font-family: var(--mono); }
+.library-rows { display: grid; gap: 6px; }
+.library-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+.library-row:hover:not(:disabled) { border-color: var(--blue); }
+.library-row:disabled { opacity: 0.55; cursor: default; }
+.library-row.sel { border-color: var(--blue); background: #182234; }
+.library-match { font-weight: 600; min-width: 84px; }
+.library-teams { font-family: var(--mono); font-size: 12px; display: flex; gap: 7px; flex: 1; }
+.library-teams .vs { color: var(--muted); }
+.library-teams .red, .library-score .red { color: var(--red); }
+.library-teams .blue, .library-score .blue { color: #79c0ff; }
+.library-score { font-family: var(--mono); font-size: 13px; min-width: 70px; }
+.library-score .margin { font-size: 11px; }
+.library-when { font-size: 11px; white-space: nowrap; }
+.library-status { font-size: 11px; }
+.to-library { margin-right: 8px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: 7px; padding: 4px 9px; font-size: 12px; }
+.to-library:hover { color: var(--text); border-color: var(--blue); }
