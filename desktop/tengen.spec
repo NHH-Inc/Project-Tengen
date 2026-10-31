@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-ROOT = Path(SPECPATH).resolve().parents[0].parent  # repo root (SPECPATH is desktop/)
+ROOT = Path(SPECPATH).resolve().parent  # repo root (SPECPATH is the spec's dir, desktop/)
 
 datas, binaries, hiddenimports = [], [], []
 for package in ("ultralytics", "torch", "torchvision", "av", "lap", "scipy", "yt_dlp"):
