@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getApi } from './api';
 import { scoringCountsAt } from './api/shots';
 import { isPlayable } from './contracts';
@@ -56,9 +56,13 @@ export default function App() {
     void getApi().then((api) => setApiMode(api.mode));
   }, []);
 
-  // Land on something watchable rather than an empty stage.
+  // On first load, land on a watchable match rather than an empty stage. Only once, though: after
+  // that, a deliberate "back to library" (selectedJobId = null) must stick instead of snapping back
+  // to a match.
+  const autoSelectedOnce = useRef(false);
   useEffect(() => {
-    if (selectedJobId || jobs.length === 0) return;
+    if (autoSelectedOnce.current || selectedJobId || jobs.length === 0) return;
+    autoSelectedOnce.current = true;
     setSelectedJobId((jobs.find((j) => j.status === 'complete') ?? jobs[0]).jobId);
   }, [jobs, selectedJobId]);
 
