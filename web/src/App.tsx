@@ -18,6 +18,7 @@ import { HeatMap } from './views/HeatMap';
 import { MatchLibrary } from './views/MatchLibrary';
 import { MatchPlan } from './views/MatchPlan';
 import { PickList } from './views/PickList';
+import { Sim } from './views/Sim';
 import { StrategyPanel } from './views/Strategy';
 import { TeamProfiles } from './views/TeamProfiles';
 import { TeamStats } from './views/TeamStats';
@@ -25,13 +26,14 @@ import { Timeline } from './views/Timeline';
 import { robotName } from './lib/tracks';
 import { fmtPercent } from './lib/format';
 
-type Tab = 'strategy' | 'profiles' | 'matchplan' | 'picklist' | 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
+type Tab = 'strategy' | 'profiles' | 'matchplan' | 'picklist' | 'sim' | 'timeline' | 'analysis' | 'teams' | 'heatmap' | 'accuracy' | 'export';
 
 const TABS: Array<[Tab, string]> = [
   ['strategy', 'Strategy'],
   ['profiles', 'Team profiles'],
   ['matchplan', 'Match plan'],
   ['picklist', 'Pick list'],
+  ['sim', 'Field sim'],
   ['timeline', 'Timeline'],
   ['analysis', 'Analysis'],
   ['teams', 'Team stats'],
@@ -311,6 +313,7 @@ export default function App() {
             )}
             {analysisComplete && tab === 'matchplan' && <MatchPlan />}
             {analysisComplete && tab === 'picklist' && <PickList />}
+            {analysisComplete && tab === 'sim' && <Sim />}
             {analysisComplete && tab === 'timeline' && (
               <Timeline
                 job={playable}
