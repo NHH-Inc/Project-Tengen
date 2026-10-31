@@ -1,11 +1,12 @@
 # §2 Simulation / prediction testbed — design
 
-**Status (2026-10-31):** scope approved and **all four tiers (T0–T3) are shipped**, Python core in
-`ingest/sim/`. The sim now has real motion, realistic corners, robot-robot blocking (defense), and a
-**config-driven scoring framework** that reads goals + point values from the season config (today's
-values are placeholders — fill them in and scoring comes alive). What remains for §2 is not a tier
-but the **thin web view** to drive it interactively, and richer scoring once the 2026 rules are set.
-See the per-tier status in §3 and `ingest/sim/`.
+**Status (2026-10-31):** **§2 is built.** All four tiers (T0–T3) are shipped as a Python core in
+`ingest/sim/` (real motion, realistic corners, robot-robot blocking/defense, and a config-driven
+scoring framework), and the **interactive web view is shipped too** (`web/src/views/Sim.tsx`, on a
+TypeScript port of the motion core in `web/src/lib/sim.ts`): pick an attacker and a defender and
+watch the match animate, with the defender's delay on the attacker read out live. What's left is not
+code but **data** — the 2026 point values in the season config (fill them in and scoring comes
+alive) — plus optional richer scoring once the game rules are final. See §3 and `ingest/sim/`.
 
 Decided in [PLAN-2026 §2](PLAN-2026.md): **the full physics field sim (b)**, not just the lightweight
 replay (a). This doc records how we get there in a way that pays off early and doesn't balloon.
