@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getApi } from './api';
 import { scoringCountsAt } from './api/shots';
 import { isPlayable } from './contracts';
@@ -15,6 +15,7 @@ import { useShots } from './state/useShots';
 import { AccuracyPanel } from './views/Accuracy';
 import { AnalysisPanel } from './views/Analysis';
 import { HeatMap } from './views/HeatMap';
+import { MatchLibrary } from './views/MatchLibrary';
 import { StrategyPanel } from './views/Strategy';
 import { TeamProfiles } from './views/TeamProfiles';
 import { TeamStats } from './views/TeamStats';
@@ -55,9 +56,13 @@ export default function App() {
     void getApi().then((api) => setApiMode(api.mode));
   }, []);
 
-  // Land on something watchable rather than an empty stage.
+  // On first load, land on a watchable match rather than an empty stage. Only once, though: after
+  // that, a deliberate "back to library" (selectedJobId = null) must stick instead of snapping back
+  // to a match.
+  const autoSelectedOnce = useRef(false);
   useEffect(() => {
-    if (selectedJobId || jobs.length === 0) return;
+    if (autoSelectedOnce.current || selectedJobId || jobs.length === 0) return;
+    autoSelectedOnce.current = true;
     setSelectedJobId((jobs.find((j) => j.status === 'complete') ?? jobs[0]).jobId);
   }, [jobs, selectedJobId]);
 
@@ -153,7 +158,17 @@ export default function App() {
       />
 
       <main className="main">
-        {!job && <div className="stage-empty">Queue a video, or pick one from the queue.</div>}
+        {!job && (
+          <MatchLibrary
+            jobs={jobs}
+            loading={jobsState.loading}
+            selectedJobId={selectedJobId}
+            onSelectJob={(id) => {
+              setSelectedJobId(id);
+              setSelectedEventId(null);
+            }}
+          />
+        )}
 
         {job && !playable && job.status !== 'complete' && (
           <div className="stage-empty">
@@ -254,6 +269,9 @@ export default function App() {
 
             {analysisComplete && (
               <nav className="tabs">
+                <button type="button" className="to-library"
+                        onClick={() => setSelectedJobId(null)}
+                        title="Back to the match library">← Library</button>
                 {TABS.map(([id, label]) => (
                   <button
                     key={id}

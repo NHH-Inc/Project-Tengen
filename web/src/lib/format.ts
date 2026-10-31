@@ -156,3 +156,46 @@ export function parseVideoStartTime(input: string): number {
 export function isMatchKey(s: string): boolean {
   return /^[0-9]{4}[a-z0-9]+_[a-z0-9]+$/.test(s.trim());
 }
+
+/** The match levels, qualification before playoffs, as the strategy layer orders them. */
+const MATCH_LEVELS = ['qm', 'ef', 'qf', 'sf', 'f'];
+const LEVEL_LABEL: Record<string, string> = {
+  qm: 'Qual', ef: 'Eighth', qf: 'Quarter', sf: 'Semi', f: 'Final',
+};
+
+export interface MatchKeyParts {
+  event: string; // e.g. 2026casf
+  level: string; // qm | ef | qf | sf | f
+  levelIndex: number; // for sorting, qualification (0) before playoffs
+  number: number;
+  label: string; // "Qual 42", "Semi 1-2"
+}
+
+/**
+ * Split a TBA match key into event, level and number, mirroring the strategy layer's match_order
+ * (ingest/strategy/profile.py) so the web library sorts matches the same way the Python side does.
+ */
+export function parseMatchKey(matchId: string | null): MatchKeyParts | null {
+  if (!matchId) return null;
+  const m = matchId.match(/^(\d{4}[a-z0-9]+?)_(qm|ef|qf|sf|f)(\d+)(?:m(\d+))?$/);
+  if (!m) return null;
+  const [, event, level, number, game] = m;
+  const label = `${LEVEL_LABEL[level]} ${number}${game ? `-${game}` : ''}`;
+  return { event, level, levelIndex: MATCH_LEVELS.indexOf(level), number: Number(number), label };
+}
+
+/** A short, human "when" for a job's createdAt (ISO string). Falls back to a local date. */
+export function fmtAgo(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return '';
+  const seconds = Math.max(0, (Date.now() - then) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(then).toLocaleDateString();
+}
