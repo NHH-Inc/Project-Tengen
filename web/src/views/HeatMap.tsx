@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { Alliance, Track } from '../contracts';
 import { robotName, stationarySuppressionAt, visibleBoxes } from '../lib/tracks';
 import { fieldExtents, type SeasonConfig } from '../season';
@@ -20,13 +20,19 @@ export interface HeatMapProps {
   tracks: Track[];
   selectedTeam: number | null;
   currentTime: number;
+  /** Seek the video when a point on the field is clicked. */
+  onSeek?: (t: number) => void;
 }
+
+// A click on the field within this many feet of a sample seeks the video to that moment.
+const CLICK_RADIUS_FT = 5;
 
 export function HeatMap({
   season,
   tracks,
   selectedTeam,
   currentTime,
+  onSeek,
 }: HeatMapProps) {
   const FIELD = fieldExtents(season);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -209,6 +215,29 @@ export function HeatMap({
 
   }, [points, liveRobots, tracks, FIELD.lengthFt, FIELD.widthFt, FIELD.minX, FIELD.minY]);
 
+  // Click a point on the field to jump the video to the nearest observation there. In whole-match
+  // mode the whole route is clickable; in playback mode only what has happened so far.
+  const seekToClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!onSeek || !canvas || points.length === 0) return;
+    const rect = canvas.getBoundingClientRect();
+    const displayFieldX = ((event.clientX - rect.left) / rect.width) * FIELD.lengthFt + FIELD.minX;
+    const fieldX = MIRROR_FIELD_X_FOR_BROADCAST ? FIELD.maxX - displayFieldX + FIELD.minX : displayFieldX;
+    const displayFieldY = ((event.clientY - rect.top) / rect.height) * FIELD.widthFt + FIELD.minY;
+    const fieldY = FIELD.maxY - displayFieldY + FIELD.minY;
+    let best: typeof points[number] | null = null;
+    let bestDistance = Infinity;
+    for (const point of points) {
+      const distance = Math.hypot(point.fieldX - fieldX, point.fieldY - fieldY);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = point;
+      }
+    }
+    if (best && bestDistance <= CLICK_RADIUS_FT) onSeek(best.t);
+  };
+  const clickable = onSeek != null && points.length > 0;
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -226,12 +255,15 @@ export function HeatMap({
       <canvas
         ref={canvasRef}
         className="heatmap"
+        onClick={clickable ? seekToClick : undefined}
+        title={clickable ? 'Click a point to jump the video there' : undefined}
         style={{
           backgroundColor: '#101827',
           backgroundImage: `url(${fieldBackgroundUrl})`,
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           backgroundSize: '100% 100%',
+          cursor: clickable ? 'pointer' : 'default',
         }}
       />
       <div className="heat-axis">
@@ -254,6 +286,7 @@ export function HeatMap({
         {sampleCount > 0 && positionedTracks === 0 && (
           <> Re-run this job to generate field positions from the AprilTag homography.</>
         )}
+        {clickable && <> Click a point to jump the video there.</>}
       </p>
     </div>
   );
