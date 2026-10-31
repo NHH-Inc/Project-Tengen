@@ -147,3 +147,42 @@ To measure playback with robot, shot, and heat-map layers enabled:
 The report includes received and uniquely painted frame counts, wall-clock frame rates, playback
 speed, frame timing, and a screenshot. It requires at least 90% of the native frame rate.
 Qt video integration follows the official [QGraphicsVideoItem documentation](https://doc.qt.io/qtforpython-6/PySide6/QtMultimediaWidgets/QGraphicsVideoItem.html).
+
+## Packaging to a Windows app (experimental)
+
+The goal is a double-click `Tengen.exe` with no Python install (plan §7). The scaffolding is in the
+repo; **it is not a finished build yet.** What exists:
+
+- `desktop/tengen.spec` — a PyInstaller spec that bundles PySide6, torch and ultralytics correctly
+  (the tedious part) and ships the season/contract data.
+- `build-windows.ps1` — installs the build deps and runs PyInstaller.
+- `requirements-desktop-build.txt` — pins PyInstaller.
+
+Run it (on Windows, from the repo root):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build-windows.ps1
+```
+
+Output is `dist\Tengen\Tengen.exe`. The **model weights are not bundled** (hundreds of MB, and they
+change): copy `data\robot-v3.pt` into `dist\Tengen\data\` next to the exe.
+
+### Two blockers to solve before the exe actually runs a job
+
+Reading the code, a frozen build will start but fail the moment you analyse or publish, for two
+reasons that need small code changes first:
+
+1. **The analysis/publish subprocess.** The app launches work with
+   `sys.executable -m desktop.worker` / `-m tools.publish` (`desktop/app.py`). In a frozen exe
+   `sys.executable` is `Tengen.exe`, which does not accept `-m module`. Fix: when `sys.frozen`,
+   re-invoke the exe with a flag (e.g. `Tengen.exe --run-worker <path>`) that `tengen.py` dispatches
+   to the worker instead of the GUI.
+2. **Paths.** `desktop/core.py` sets `ROOT` from `__file__` and both reads bundled data and writes
+   runs under it. Frozen, `__file__` is inside the read-only bundle. Fix: split read-only bundle
+   data (use `sys._MEIPASS` when frozen) from the writable data home (a folder beside the exe, or
+   `%LOCALAPPDATA%\Tengen`).
+
+Both are small, but they must be verified by building and running on a real Windows machine — which
+is why this is marked experimental rather than done. The fastest way to finish it is a build loop:
+run `build-windows.ps1`, try the exe, and fix what breaks. If the video panel is blank, the Qt
+Multimedia plugins also need collecting in the spec.

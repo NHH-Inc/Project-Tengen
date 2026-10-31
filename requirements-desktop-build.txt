@@ -1,0 +1,3 @@
+# Packaging the desktop app into a Windows executable. Install on top of requirements-desktop.txt.
+# See docs/DESKTOP.md "Packaging to a Windows app (experimental)".
+pyinstaller==6.16.0
