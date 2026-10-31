@@ -7,6 +7,7 @@
     python -m ingest.strategy heatmap   RUN [RUN ...] [--team 254] [--json out.json]
     python -m ingest.strategy advantagescope RUN [RUN ...]   (write a .wpilog per match)
     python -m ingest.strategy matchplan RUN [RUN ...] --us 254,1678,971 --them 148,118,2056
+    python -m ingest.strategy picklist  RUN [RUN ...] --us 254 [--available 1678,148,...]
     python -m ingest.strategy evaluate  RUN [RUN ...]
 
 RUN is an analysed match folder (it contains job.json and tracks.jsonl), or a folder of them such
@@ -161,16 +162,29 @@ def print_matchplan(plan: dict) -> None:
         print(f"  * {item['advice']}\n      ({item['evidence']})")
 
 
+def print_picklist(our_teams: list[int], ranked: list[dict]) -> None:
+    us = " ".join(str(t) for t in our_teams)
+    print(f"\nPick list for [{us}]  --  best partner first (power = shots/match, minus conflict)")
+    if not ranked:
+        print("  No ranked partners yet. Analyse more teams, or widen --available.")
+        return
+    print(f"  {'rank':<5}{'team':<8}{'score':>8}{'power':>8}{'conflict':>10}")
+    for i, entry in enumerate(ranked, 1):
+        print(f"  {i:<5}{str(entry['team']):<8}{entry['score']:>8.1f}{entry['power']:>8.1f}"
+              f"{entry['conflict']:>10.2f}")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ingest.strategy", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command",
                         choices=["clock", "timeline", "features", "profile", "heatmap",
-                                 "advantagescope", "matchplan", "evaluate"])
+                                 "advantagescope", "matchplan", "picklist", "evaluate"])
     parser.add_argument("runs", nargs="+")
     parser.add_argument("--team", type=int)
-    parser.add_argument("--us", help="matchplan: our alliance's teams, e.g. --us 254,1678,971")
+    parser.add_argument("--us", help="matchplan/picklist: our teams, e.g. --us 254,1678,971")
     parser.add_argument("--them", help="matchplan: the opponent alliance's teams")
+    parser.add_argument("--available", help="picklist: the pick pool; default is every team seen")
     parser.add_argument("--json", type=Path, help="also write the result here as JSON")
     args = parser.parse_args(argv)
 
@@ -259,6 +273,17 @@ def main(argv=None) -> int:
                         for team, matches in by_team.items() if matches}
             output = build_matchplan(us, them, profiles)
             print_matchplan(output)
+        elif args.command == "picklist":
+            from .picklist import rank_partners
+            us = _parse_teams(args.us)
+            if not us:
+                print("picklist needs our team(s), e.g. --us 254", file=sys.stderr)
+                return 1
+            profiles = {team: build_profile(matches, geometry)
+                        for team, matches in by_team.items() if matches}
+            available = _parse_teams(args.available) or list(profiles)
+            output = rank_partners(us, available, profiles)
+            print_picklist(us, output)
         else:
             output = next_match_test(by_team)
             print(json.dumps(output, indent=2))
