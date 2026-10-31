@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 import math
+
+from .timeline import samples_as_rows
 import struct
 
 #: Feet to metres. The field frame is WPILib AprilTag coordinates; AdvantageScope works in metres.
@@ -98,7 +100,7 @@ def match_to_wpilog(timelines: list[dict], *, match_id: str | None = None) -> by
         entry_id = entry_ids[timeline["robot_key"]]
         previous: tuple[float, float] | None = None
         heading = 0.0
-        for sample in timeline.get("samples", []):
+        for sample in samples_as_rows(timeline):  # columnar -> row dicts (timeline stores columns)
             x, y = sample.get("x"), sample.get("y")
             if x is None or y is None:
                 previous = None  # a gap: do not interpolate a facing across it
