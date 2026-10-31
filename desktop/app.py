@@ -297,6 +297,7 @@ class MainWindow(QMainWindow):
         actions.addWidget(button("Delete event", self.delete_event))
         actions.addWidget(button("Undo", self.undo))
         actions.addWidget(button("Export…", self.export))
+        actions.addWidget(button("AdvantageScope…", self.export_advantagescope))
         self.raw = QCheckBox("Raw model output")
         self.raw.toggled.connect(self.refresh_review)
         actions.addWidget(self.raw)
@@ -689,6 +690,33 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(f"Exported {target}")
             except Exception as exc:
                 self.error(exc)
+
+    def export_advantagescope(self):
+        """Write this run's robot positions as a .wpilog for AdvantageScope's 2D Field tab
+        (ingest/strategy/advantagescope.py). One pose entry per robot; open the file in
+        AdvantageScope and drop each /Tengen/... field on the 2D Field as a Robot."""
+        if not self.review:
+            self.statusBar().showMessage("Load an analysis before exporting.")
+            return
+        match_id = self.review.job.get("match_id")
+        default = Path.home() / "Downloads" / f"{match_id or 'tengen-match'}.wpilog"
+        path, _ = QFileDialog.getSaveFileName(self, "Export for AdvantageScope", str(default),
+                                              "WPILib data log (*.wpilog)")
+        if not path:
+            return
+        try:
+            from ingest.strategy.advantagescope import match_to_wpilog
+            target = Path(path)
+            if not target.suffix:
+                target = target.with_suffix(".wpilog")
+            timelines = build_timelines(self.review.directory)
+            target.write_bytes(match_to_wpilog(timelines, match_id=match_id))
+            positioned = sum(1 for t in timelines if t["coverage"]["positioned_s"] > 0)
+            self.statusBar().showMessage(
+                f"Wrote {target.name}: {positioned} of {len(timelines)} robots positioned. "
+                "Open in AdvantageScope and add each /Tengen/… field to the 2D Field.")
+        except Exception as exc:
+            self.error(exc)
 
     def start_analysis(self):
         if not self.source or self.process is not None:

@@ -42,7 +42,12 @@ def parse_wpilog(data: bytes):
 
 
 def timeline(robot_key, samples, team=None, alliance=None):
-    return {"robot_key": robot_key, "team": team, "alliance": alliance, "samples": samples}
+    # Real build_timelines stores samples COLUMNAR (keys -> parallel lists), not as row dicts; mirror
+    # that here so the export is tested against the shape it actually gets (a bug hid behind the old
+    # row-dict shape). `samples` is still written as a list of dicts for readability.
+    keys = ("t", "mt", "phase", "x", "y", "ax", "ay", "speed", "zone", "lane")
+    columns = {key: [sample.get(key) for sample in samples] for key in keys}
+    return {"robot_key": robot_key, "team": team, "alliance": alliance, "samples": columns}
 
 
 class WpilogFormatTests(unittest.TestCase):
