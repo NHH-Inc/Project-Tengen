@@ -66,6 +66,7 @@ class HostedTests(unittest.TestCase):
                 db.execute(table.delete())
             db.commit()
         hosted._feature_cache.clear()
+        hosted._rate_hits.clear()
         self.env = patch.dict(os.environ, {"TENGEN_WRITE_KEY": "write-secret", "TENGEN_READ_KEY": "read-secret"})
         self.env.start()
         # _read_result opens its own session; point it at the same in-memory database.
@@ -100,6 +101,24 @@ class HostedTests(unittest.TestCase):
         with patch.dict(os.environ, {"TENGEN_WRITE_KEY": "", "TENGEN_READ_KEY": "", "TENGEN_REQUIRE_KEYS": "1"}):
             self.assertEqual(self.client.get("/api/jobs").status_code, 503)
             self.assertEqual(self.client.get("/api/health").status_code, 200)
+
+    def test_a_rate_limited_server_returns_429_after_the_budget(self):
+        read = {"X-Tengen-Key": "read-secret"}
+        with patch.dict(os.environ, {"TENGEN_RATE_LIMIT": "3"}):
+            for _ in range(3):
+                self.assertEqual(self.client.get("/api/jobs", headers=read).status_code, 200)
+            over = self.client.get("/api/jobs", headers=read)
+            self.assertEqual(over.status_code, 429)
+            self.assertIn("retry-after", {k.lower() for k in over.headers})
+            # Health is exempt, so a monitor is never throttled.
+            self.assertEqual(self.client.get("/api/health").status_code, 200)
+
+    def test_rate_limiting_is_off_for_a_local_install(self):
+        # No keys required and no explicit limit: a local desktop app is not throttled.
+        with patch.dict(os.environ, {"TENGEN_WRITE_KEY": "", "TENGEN_READ_KEY": ""}):
+            self.assertEqual(hosted._rate_limit(), 0)
+            for _ in range(50):
+                self.assertEqual(self.client.get("/api/jobs").status_code, 200)
 
     def test_a_publish_only_server_refuses_to_analyse(self):
         with patch.dict(os.environ, {"TENGEN_PUBLISH_ONLY": "1"}):

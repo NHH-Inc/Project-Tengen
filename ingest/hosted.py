@@ -60,6 +60,46 @@ PUBLISHED_RATE_HZ = 10.0
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
+#: Per-IP request budget over a one-minute window on a hosted server. Generous for a scouting UI,
+#: but it caps a scraper or a runaway client. Off unless keys are required (a local install is not
+#: on the internet); tune or disable with TENGEN_RATE_LIMIT (0 disables).
+RATE_WINDOW_S = 60.0
+_rate_hits: dict[str, list[float]] = {}
+
+
+# ----------------------------------------------------------------------------- rate limiting
+
+def _rate_limit() -> int:
+    configured = os.environ.get("TENGEN_RATE_LIMIT")
+    if configured is not None and configured != "":
+        try:
+            return max(0, int(configured))
+        except ValueError:
+            return 0
+    return 240 if os.environ.get("TENGEN_REQUIRE_KEYS") == "1" else 0
+
+
+def _client_ip(request: Request) -> str:
+    # Behind Render's proxy the real client is the first hop in X-Forwarded-For.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_exceeded(ip: str, limit: int, now: float) -> float | None:
+    """Seconds to wait if `ip` is over `limit` in the last minute, else None (counting this hit)."""
+    hits = _rate_hits.setdefault(ip, [])
+    cutoff = now - RATE_WINDOW_S
+    hits[:] = [t for t in hits if t > cutoff]
+    if len(hits) >= limit:
+        return RATE_WINDOW_S - (now - hits[0])
+    hits.append(now)
+    if len(_rate_hits) > 4096:  # keep the table bounded when many IPs pass through
+        for key in [k for k, v in _rate_hits.items() if not v or v[-1] <= cutoff]:
+            _rate_hits.pop(key, None)
+    return None
+
 
 # ----------------------------------------------------------------------------- access keys
 
@@ -75,6 +115,14 @@ def access_middleware(get_key_exempt: Callable[[str], bool]):
     async def middleware(request: Request, call_next):
         read_key, write_key = _keys()
         path = request.url.path
+        limit = _rate_limit()
+        if limit and path.startswith("/api") and not get_key_exempt(path):
+            wait = _rate_exceeded(_client_ip(request), limit, time.time())
+            if wait is not None:
+                return JSONResponse(status_code=429, headers={"Retry-After": str(int(wait) + 1)},
+                                    content={"error_code": "rate_limited",
+                                             "error": "Too many requests to this Tengen server; "
+                                                      "slow down and retry shortly."})
         if os.environ.get("TENGEN_REQUIRE_KEYS") == "1" and not write_key and path.startswith("/api")                 and not get_key_exempt(path):
             # A server on the internet that lost its keys must close, not quietly open to anyone.
             return JSONResponse(status_code=503, content={
