@@ -72,8 +72,12 @@ def auto_variants(paths: list[list]) -> list[dict]:
     return sorted(variants, key=lambda v: -len(v["matches"]))
 
 
-def build_profile(team_matches: list[dict]) -> dict:
-    """Profile one team from its per-match feature dicts (any order; sorted here)."""
+def build_profile(team_matches: list[dict], geometry: dict | None = None) -> dict:
+    """Profile one team from its per-match feature dicts (any order; sorted here).
+
+    Pass `geometry` (contracts/strategy/<season>.json) to also attach a scoring heatmap and
+    effective-zone map; without it the profile is unchanged, so older callers keep working.
+    """
     matches = sorted(team_matches, key=match_order)
     located = [m for m in matches if m.get("positions", True) is not None and "movement" in m]
     team = matches[0].get("team") if matches else None
@@ -93,6 +97,9 @@ def build_profile(team_matches: list[dict]) -> dict:
                 (m.get("endgame") or {}).get("stopped_scoring_before_endgame_s") for m in matches),
         },
     }
+    if geometry is not None:
+        from .heatmap import scoring_map
+        profile["scoring_map"] = scoring_map(matches, geometry)
     if not located:
         profile["tendencies"] = None
         profile["prediction"] = None

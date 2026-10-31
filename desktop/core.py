@@ -12,15 +12,32 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-RUNS = ROOT / "data" / "desktop" / "runs"
+#: Read-only data shipped with the app (contracts, the analysis config, the demo fixture). In a
+#: PyInstaller build this is the bundle (sys._MEIPASS); from source it is the repo root.
+FROZEN = getattr(sys, "frozen", False)
+BUNDLE = Path(sys._MEIPASS) if FROZEN else Path(__file__).resolve().parents[1]
+#: Writable data -- analysed runs and the model weights -- lives beside the exe, never inside the
+#: read-only bundle. From source the two are the same repo root, so nothing changes when unfrozen.
+DATA_HOME = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parents[1]
+ROOT = BUNDLE  # the name existing read-only references already use
+
+RUNS = DATA_HOME / "data" / "desktop" / "runs"
 #: The same v3 weights live at different paths on different machines: Robert's training output on
 #: his Mac, `data/robot-v3.pt` on Justin's PC. Use the first that exists, so the default works on
-#: both; if neither does, the error names the first.
-MODEL_CANDIDATES = (ROOT / "data/models/yolo-v3-960-20260906/weights/best.pt", ROOT / "data/robot-v3.pt")
+#: both; if neither does, the error names the first. In a build they ship in data/ beside the exe.
+MODEL_CANDIDATES = (DATA_HOME / "data/models/yolo-v3-960-20260906/weights/best.pt", DATA_HOME / "data/robot-v3.pt")
 DEFAULT_MODEL = next((path for path in MODEL_CANDIDATES if path.is_file()), MODEL_CANDIDATES[0])
-DEFAULT_BALL_CONFIG = ROOT / "analysis/config/ball_scouting.example.json"
-FIXTURE = ROOT / "fixtures/2026casf_qm42"
+DEFAULT_BALL_CONFIG = BUNDLE / "analysis/config/ball_scouting.example.json"
+FIXTURE = BUNDLE / "fixtures/2026casf_qm42"
+
+
+def child_process(kind: str, *args: str) -> tuple[str, list[str]]:
+    """(program, arguments) to launch a Tengen helper subprocess, frozen or not. From source it is
+    `python -m <module>`; in a frozen build it re-invokes the exe, which tengen.py dispatches."""
+    module = {"worker": "desktop.worker", "publish": "tools.publish"}[kind]
+    if FROZEN:
+        return sys.executable, [f"--run-{kind}", *args]
+    return sys.executable, ["-m", module, *args]
 
 
 def read_json(path: Path):

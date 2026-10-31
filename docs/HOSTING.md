@@ -275,3 +275,44 @@ after a week of inactivity; check the provider's current limits before committin
 The honest summary: **you can stop depending on one PC for your *data* today, for free. Not
 depending on one PC for the *website* is a bigger job, and it is not worth doing until the
 analysis backend produces something worth serving.**
+
+## 7. Secrets, rotation, and the rate limit
+
+Everything secret lives in environment variables — in the host's Render env for the deployed
+service, and in `ingest/.env` locally. **None of it is ever committed** (`.gitignore` keeps `.env`,
+weights, video, and service-account JSON out). If a secret lands in git history or a request log,
+treat it as burned and rotate it.
+
+**The secrets**
+
+| Variable | What it is | Who needs it |
+|---|---|---|
+| `DATABASE_URL` | Postgres connection string | the hosted service only |
+| `TENGEN_WRITE_KEY` | lets a client publish/edit (`X-Tengen-Key` header) | whoever publishes from the desktop app |
+| `TENGEN_READ_KEY` | lets a client read | everyone who views the site |
+| `SUPABASE_SERVICE_KEY` | signs the private video bucket's links | the hosted service only |
+
+The media-token secret is **derived** from the write/read key, not stored separately — so rotating
+a key also invalidates outstanding video tokens. That is fine: tokens are short-lived (6 h) and the
+page just fetches a fresh one.
+
+**What the server already enforces** (`ingest/hosted.py`)
+
+- With `TENGEN_REQUIRE_KEYS=1`, a server with no keys **closes** (503) instead of opening to anyone.
+- Read vs write split: the read key cannot publish or edit.
+- Keys travel only in the `X-Tengen-Key` header, never in URLs (URLs end up in logs).
+- Video URLs carry a **signed, expiring, per-job token**, not the key.
+- `TENGEN_PUBLISH_ONLY=1` makes the server serve published runs but refuse to run analysis.
+- **Per-IP rate limiting.** On a hosted server (keys required) each IP gets `TENGEN_RATE_LIMIT`
+  requests per minute — default **240**, generous for the UI but a cap on a scraper. Set
+  `TENGEN_RATE_LIMIT=0` to disable, or any number to tune. It is off for a local install
+  (health checks are always exempt, so monitors never trip it).
+
+**Rotating a key**
+
+1. Generate a new random value (e.g. `python -c "import secrets; print(secrets.token_urlsafe(24))"`).
+2. Update it in the host's Render env and redeploy.
+3. Update `ingest/.env` and `data/tengen-server.json` on each machine that publishes.
+4. Re-share the new **read** key with viewers (the write key stays with publishers only).
+
+Rotate immediately after any suspected exposure, and as a habit at the **start of each season**.

@@ -67,11 +67,44 @@ export interface Counter {
   matches?: Array<string | null>;
 }
 
+export interface HeatCell {
+  x: number;
+  y: number;
+  launches: number;
+  weight: number;
+  matches: number;
+  intensity: number; // 0..1, relative to the team's hottest cell
+}
+
+export interface ZoneScore {
+  zone: string;
+  lane: string;
+  launches: number;
+  weight: number;
+  matches: number;
+  share: number;
+  effective: boolean;
+}
+
+// Where a team scores across matches, weighted toward recent matches, practice scoring kept.
+// See ingest/strategy/heatmap.py and docs/PLAN-2026.md section 5.
+export interface ScoringMap {
+  cell_ft: number;
+  recency_half_life_matches: number;
+  n_matches: number;
+  n_practice: number;
+  hot_spot: { x: number; y: number } | null;
+  heatmap: HeatCell[];
+  effective_zones: ZoneScore[];
+  zones: ZoneScore[];
+}
+
 export interface TeamProfile {
   team: number;
   matches: Array<string | null>;
   n_matches: number;
   n_with_positions: number;
+  scoring_map?: ScoringMap;
   launches_per_match: number | null;
   timing?: {
     median_volley_interval_s: number | null;

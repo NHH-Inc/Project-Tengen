@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop.core import (AnalysisOptions, DEFAULT_MODEL, DEFAULT_BALL_CONFIG, FIXTURE, ROOT, RUNS, Review,
-                          mark_canceled, read_json, write_json)
+                          child_process, mark_canceled, read_json, write_json)
 from ingest.yolo_orchestrator import ABOVE_SCORE_BAR, phase_at, MODEL_CROP
 from desktop.rendering import VideoCanvas, HeatMap, FULL_FRAME
 
@@ -571,8 +571,9 @@ class MainWindow(QMainWindow):
             return
         process = QProcess(self)
         process.setWorkingDirectory(str(ROOT))
-        process.setProgram(sys.executable)
-        process.setArguments(["-m", "tools.publish", str(self.review.directory)])
+        program, arguments = child_process("publish", str(self.review.directory))
+        process.setProgram(program)
+        process.setArguments(arguments)
         process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
 
         def finished(code, _status=None):
@@ -708,8 +709,9 @@ class MainWindow(QMainWindow):
         process = QProcess(self)
         self.process = process
         process.setWorkingDirectory(str(ROOT))
-        process.setProgram(sys.executable)
-        process.setArguments(["-m", "desktop.worker", str(self.request_path)])
+        program, arguments = child_process("worker", str(self.request_path))
+        process.setProgram(program)
+        process.setArguments(arguments)
         process.readyReadStandardOutput.connect(self.read_progress)
         process.readyReadStandardError.connect(self.read_stderr)
         process.finished.connect(self.analysis_finished)

@@ -4,6 +4,7 @@
     python -m ingest.strategy timeline  RUN [RUN ...]
     python -m ingest.strategy features  RUN [RUN ...]
     python -m ingest.strategy profile   RUN [RUN ...] [--team 254] [--json out.json]
+    python -m ingest.strategy heatmap   RUN [RUN ...] [--team 254] [--json out.json]
     python -m ingest.strategy evaluate  RUN [RUN ...]
 
 RUN is an analysed match folder (it contains job.json and tracks.jsonl), or a folder of them such
@@ -88,10 +89,44 @@ def print_profile(profile: dict) -> None:
         print("  No counters yet (needs 3+ matches with positions and a clear tendency).")
 
 
+def _season_of(by_team: dict[int, list[dict]]) -> int:
+    """The season year from any match id (e.g. 2026casf_qm42 -> 2026); 2026 if none is readable."""
+    for matches in by_team.values():
+        for f in matches:
+            mid = f.get("match_id") or ""
+            if len(mid) >= 4 and mid[:4].isdigit():
+                return int(mid[:4])
+    return 2026
+
+
+def print_heatmap(team_map: dict) -> None:
+    print(f"\nTeam {team_map['team']}  --  scoring map over {team_map['n_matches']} matches "
+          f"({team_map['n_practice']} practice)")
+    spot = team_map.get("hot_spot")
+    where = f"({spot['x']}, {spot['y']}) ft" if spot else "-"
+    print(f"  Hot spot: {where}  "
+          f"(recency half-life {team_map['recency_half_life_matches']:.0f} matches)")
+    effective = team_map["effective_zones"]
+    if effective:
+        print("  Effective zones (where they score):")
+        for r in effective:
+            print(f"    {r['zone']} / {r['lane']} lane: {r['launches']} launches in "
+                  f"{r['matches']} matches ({r['share'] * 100:.0f}% of scoring)")
+    else:
+        print("  No effective zone yet (needs scoring in 2+ matches).")
+    top = team_map["heatmap"][:5]
+    if top:
+        print("  Hottest cells:")
+        for c in top:
+            print(f"    ({c['x']:>4}, {c['y']:>4}) ft  intensity {c['intensity']:.2f}  "
+                  f"{c['launches']} launches / {c['matches']} matches")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ingest.strategy", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["clock", "timeline", "features", "profile", "evaluate"])
+    parser.add_argument("command",
+                        choices=["clock", "timeline", "features", "profile", "heatmap", "evaluate"])
     parser.add_argument("runs", nargs="+")
     parser.add_argument("--team", type=int)
     parser.add_argument("--json", type=Path, help="also write the result here as JSON")
@@ -143,10 +178,19 @@ def main(argv=None) -> int:
                     by_team.setdefault(f["team"], []).append(f)
         if args.team:
             by_team = {args.team: by_team.get(args.team, [])}
+        geometry = load_geometry(_season_of(by_team))
         if args.command == "profile":
-            output = [build_profile(matches) for matches in by_team.values() if matches]
+            output = [build_profile(matches, geometry) for matches in by_team.values() if matches]
             for profile in output:
                 print_profile(profile)
+            if not output:
+                print("No robot has a team number yet. Assign teams in review first.")
+        elif args.command == "heatmap":
+            from .heatmap import scoring_map
+            output = [{"team": matches[0].get("team"), **scoring_map(matches, geometry)}
+                      for matches in by_team.values() if matches]
+            for team_map in output:
+                print_heatmap(team_map)
             if not output:
                 print("No robot has a team number yet. Assign teams in review first.")
         else:

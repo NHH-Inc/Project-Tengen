@@ -320,6 +320,7 @@ export default function App() {
                 tracks={overlayTracks}
                 selectedTeam={selectedTeam}
                 currentTime={currentTime}
+                onSeek={seek}
               />
             )}
             {analysisComplete && tab === 'accuracy' && (

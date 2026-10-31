@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { Alliance, Track } from '../contracts';
 import { robotName, stationarySuppressionAt, visibleBoxes } from '../lib/tracks';
 import { fieldExtents, type SeasonConfig } from '../season';
@@ -20,16 +20,27 @@ export interface HeatMapProps {
   tracks: Track[];
   selectedTeam: number | null;
   currentTime: number;
+  /** Seek the video when a point on the field is clicked. */
+  onSeek?: (t: number) => void;
 }
+
+// A click on the field within this many feet of a sample seeks the video to that moment.
+const CLICK_RADIUS_FT = 5;
 
 export function HeatMap({
   season,
   tracks,
   selectedTeam,
   currentTime,
+  onSeek,
 }: HeatMapProps) {
   const FIELD = fieldExtents(season);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Playback shows paths only up to the current time, so a robot's route does not spoil ahead of
+  // the video. "Whole match" lifts that to overlay every robot's full path at once -- the report
+  // view the drive team reads between matches (docs/PLAN-2026.md section 3).
+  const [wholeMatch, setWholeMatch] = useState(false);
+  const cutoff = wholeMatch ? Infinity : currentTime;
 
   const { points, missing, sampleCount, positionedTracks, positionSources } = useMemo(() => {
     const points: Array<{
@@ -51,7 +62,7 @@ export function HeatMap({
       for (const box of track.boxes) {
         // The heat map is a playback view, not a full-match report: future samples must not
         // reveal where a robot will travel later in the match.
-        if (box.t > currentTime) continue;
+        if (box.t > cutoff) continue;
         if (track.alliance == null && suppressedAt != null && box.t >= suppressedAt) continue;
         sampleCount++;
         if (box.fieldX == null || box.fieldY == null) {
@@ -85,7 +96,7 @@ export function HeatMap({
       positionedTracks: positioned.size,
       positionSources: [...sources].sort(),
     };
-  }, [tracks, selectedTeam, currentTime, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
+  }, [tracks, selectedTeam, cutoff, FIELD.minX, FIELD.maxX, FIELD.minY, FIELD.maxY]);
 
   const liveRobots = useMemo(
     () => visibleBoxes(tracks, currentTime, 0.25).filter(({ track, box }) =>
@@ -204,23 +215,55 @@ export function HeatMap({
 
   }, [points, liveRobots, tracks, FIELD.lengthFt, FIELD.widthFt, FIELD.minX, FIELD.minY]);
 
+  // Click a point on the field to jump the video to the nearest observation there. In whole-match
+  // mode the whole route is clickable; in playback mode only what has happened so far.
+  const seekToClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!onSeek || !canvas || points.length === 0) return;
+    const rect = canvas.getBoundingClientRect();
+    const displayFieldX = ((event.clientX - rect.left) / rect.width) * FIELD.lengthFt + FIELD.minX;
+    const fieldX = MIRROR_FIELD_X_FOR_BROADCAST ? FIELD.maxX - displayFieldX + FIELD.minX : displayFieldX;
+    const displayFieldY = ((event.clientY - rect.top) / rect.height) * FIELD.widthFt + FIELD.minY;
+    const fieldY = FIELD.maxY - displayFieldY + FIELD.minY;
+    let best: typeof points[number] | null = null;
+    let bestDistance = Infinity;
+    for (const point of points) {
+      const distance = Math.hypot(point.fieldX - fieldX, point.fieldY - fieldY);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = point;
+      }
+    }
+    if (best && bestDistance <= CLICK_RADIUS_FT) onSeek(best.t);
+  };
+  const clickable = onSeek != null && points.length > 0;
+
   return (
     <div className="panel">
       <div className="panel-head">
         <h2>Field heat map</h2>
         <span className="muted">
-          {selectedTeam ? `team ${selectedTeam}` : 'all robots'} · through {formatTime(currentTime)}
+          {selectedTeam ? `team ${selectedTeam}` : 'all robots'}
+          {' · '}{wholeMatch ? 'whole match' : `through ${formatTime(currentTime)}`}
+          <button type="button" className={`chip${wholeMatch ? ' on' : ''}`}
+                  onClick={() => setWholeMatch((on) => !on)}
+                  title="Overlay every robot's full path, instead of only up to the current time">
+            {wholeMatch ? 'Following playback' : 'Whole match'}
+          </button>
         </span>
       </div>
       <canvas
         ref={canvasRef}
         className="heatmap"
+        onClick={clickable ? seekToClick : undefined}
+        title={clickable ? 'Click a point to jump the video there' : undefined}
         style={{
           backgroundColor: '#101827',
           backgroundImage: `url(${fieldBackgroundUrl})`,
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           backgroundSize: '100% 100%',
+          cursor: clickable ? 'pointer' : 'default',
         }}
       />
       <div className="heat-axis">
@@ -243,6 +286,7 @@ export function HeatMap({
         {sampleCount > 0 && positionedTracks === 0 && (
           <> Re-run this job to generate field positions from the AprilTag homography.</>
         )}
+        {clickable && <> Click a point to jump the video there.</>}
       </p>
     </div>
   );

@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -482,10 +483,14 @@ class YoloAnalysisOrchestrator:
             for character in str(job_data.get("video_id") or "video")
         )
         snapshot_dir = self.output_base_dir.parent / "robot_image_exports" / f"{video_label}_{job_id}"
+        # From source, run the tracker in its dedicated CUDA/Ultralytics interpreter. In a frozen
+        # desktop build there is no such interpreter and `exe -m module` is impossible, so the exe
+        # re-invokes itself with --run-tracker (dispatched by tengen.py). The web backend is never
+        # frozen, so it always takes the first branch.
+        launcher = ([sys.executable, "--run-tracker"] if getattr(sys, "frozen", False)
+                    else [str(self.python_path), "-m", "training.track_yolo"])
         command = [
-            str(self.python_path),
-            "-m",
-            "training.track_yolo",
+            *launcher,
             "--model",
             str(self.model_path),
             *( ["--stream-url", stream_url] if stream_url else ["--video", str(video_path)] ),

@@ -147,3 +147,66 @@ To measure playback with robot, shot, and heat-map layers enabled:
 The report includes received and uniquely painted frame counts, wall-clock frame rates, playback
 speed, frame timing, and a screenshot. It requires at least 90% of the native frame rate.
 Qt video integration follows the official [QGraphicsVideoItem documentation](https://doc.qt.io/qtforpython-6/PySide6/QtMultimediaWidgets/QGraphicsVideoItem.html).
+
+## Packaging to a Windows app (experimental)
+
+The goal is a double-click `Tengen.exe` with no Python install (plan §7). The build works: the
+code is freeze-aware, the exe builds (~1.2 GB folder with CPU torch), all three background entry
+points (`--run-worker`, `--run-tracker`, `--run-publish`) import and route inside the frozen exe,
+and the GUI launches. What is **not** yet verified on a packaged build: a full end-to-end analysis
+run and in-GUI video playback — do those on your machine (see the end of this section).
+
+What exists:
+
+- `desktop/tengen.spec` — a PyInstaller spec that bundles PySide6, torch and ultralytics, ships the
+  season/contract data, and collects the `desktop`/`ingest`/`training`/`tools` packages (the app
+  imports them lazily, so they must be named explicitly).
+- `build-windows.ps1` — installs the build deps and runs PyInstaller.
+- `requirements-desktop-build.txt` — pins PyInstaller.
+
+Run it (on Windows, from the repo root):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build-windows.ps1
+```
+
+Output is `dist\Tengen\Tengen.exe`. The **model weights are not bundled** (hundreds of MB, and they
+change): copy `data\robot-v3.pt` into `dist\Tengen\data\` next to the exe.
+
+### What the freeze-aware code does
+
+A frozen exe cannot run `Tengen.exe -m <module>`, and `__file__` points inside a read-only bundle.
+Both are handled:
+
+1. **Subprocesses re-invoke the exe.** The GUI spawns its analysis, tracker and publish helpers via
+   `desktop.core.child_process` / the orchestrator's launcher. Frozen, these become
+   `Tengen.exe --run-worker|--run-tracker|--run-publish …`, which `tengen.py` dispatches to the
+   right module instead of the GUI. From source they are still `python -m <module>`, unchanged.
+2. **Paths are split.** `desktop/core.py` separates read-only bundle data (`BUNDLE`, from
+   `sys._MEIPASS` when frozen) from the writable data home (`DATA_HOME`, the folder beside the exe).
+   Runs and model weights live under `DATA_HOME`; contracts and the demo fixture under `BUNDLE`.
+   From source both are the repo root, so nothing changes when unfrozen.
+
+### Finish verifying on your machine
+
+Two things need a real run that the automated build check can't do:
+
+1. **End-to-end analysis.** Copy weights into place and analyse a clip:
+   ```powershell
+   mkdir dist\Tengen\data -Force
+   copy data\robot-v3.pt dist\Tengen\data\
+   .\dist\Tengen\Tengen.exe        # queue a video, hit Analyze
+   ```
+   This exercises the full frozen chain (GUI → `--run-worker` → `--run-tracker`). On CPU torch it
+   is slow; that is expected.
+2. **Video playback.** Open a completed run and scrub. If the video panel is blank, the Qt
+   Multimedia plugins need collecting in `desktop/tengen.spec` (`collect_all("PySide6")` or the
+   specific `QtMultimedia` plugins).
+
+Other notes: a **CUDA** torch works but adds gigabytes (CPU keeps it ~1.2 GB); the one-folder
+build starts faster than one-file. Hit an error? Send it over and I'll adjust the spec.
+
+Both are small, but they must be verified by building and running on a real Windows machine — which
+is why this is marked experimental rather than done. The fastest way to finish it is a build loop:
+run `build-windows.ps1`, try the exe, and fix what breaks. If the video panel is blank, the Qt
+Multimedia plugins also need collecting in the spec.
