@@ -7,6 +7,8 @@ even from practice, and let the latest matches count for more.
 import unittest
 
 from ingest.strategy.heatmap import (
+    auto_heatmap,
+    auto_map,
     effective_zones,
     is_practice,
     ordered_with_recency,
@@ -21,6 +23,12 @@ GEOMETRY = load_geometry(2026)
 def match(match_id, points, team=254):
     """A feature dict with just what the scoring map reads: match id and shooting points (feet)."""
     return {"match_id": match_id, "team": team, "shooting": {"points": [(x, y) for x, y in points]}}
+
+
+def auto_match(match_id, path, team=254):
+    """A feature dict with an auto path: per-second [x, y] points (feet), None where unseen."""
+    return {"match_id": match_id, "team": team, "auto_path": {"points": [list(p) if p else None
+                                                                          for p in path]}}
 
 
 class PracticeTests(unittest.TestCase):
@@ -84,6 +92,42 @@ class HeatmapTests(unittest.TestCase):
         self.assertEqual(result["heatmap"], [])
         self.assertIsNone(result["hot_spot"])
         self.assertEqual(result["effective_zones"], [])
+
+
+class AutoHeatmapTests(unittest.TestCase):
+    def test_auto_paths_land_on_the_grid(self):
+        # A corridor the robot drives every match: four points along y as it leaves the wall.
+        path = [[2.0, 13.0], [6.0, 13.0], [10.0, 13.0], [14.0, 13.0]]
+        matches = [auto_match(f"2026x_qm{i}", path) for i in range(1, 4)]
+        cells = auto_heatmap(matches, GEOMETRY)
+        self.assertTrue(cells)
+        self.assertEqual(cells[0]["intensity"], 1.0)
+        self.assertIn("samples", cells[0])
+
+    def test_practice_auto_is_excluded_as_noise(self):
+        # Practice drives one way, every official match the other. Only official should show.
+        practice = auto_match("scrimmage", [[2.0, 4.0], [6.0, 4.0]])
+        official = [auto_match(f"2026x_qm{i}", [[40.0, 22.0], [44.0, 22.0]]) for i in range(1, 3)]
+        cells = auto_heatmap([practice, *official], GEOMETRY)
+        # Nothing from the practice corridor (near y=4) survives; only the official one (near y=22).
+        self.assertTrue(cells)
+        self.assertTrue(all(c["y"] > 12 for c in cells))
+
+    def test_auto_map_counts_official_and_excluded_practice(self):
+        matches = [auto_match("scrimmage", [[2.0, 4.0]]),
+                   auto_match("2026x_qm1", [[40.0, 22.0]]),
+                   auto_match("2026x_qm2", [[40.0, 22.0]])]
+        result = auto_map(matches, GEOMETRY)
+        self.assertEqual(result["n_matches"], 2)
+        self.assertEqual(result["n_excluded_practice"], 1)
+        self.assertIsNotNone(result["busiest_cell"])
+
+    def test_only_practice_yields_an_empty_auto_map(self):
+        # The honesty rule taken to its edge: with no official match, there is no auto map at all.
+        result = auto_map([auto_match("scrimmage", [[2.0, 4.0], [6.0, 4.0]])], GEOMETRY)
+        self.assertEqual(result["n_matches"], 0)
+        self.assertEqual(result["heatmap"], [])
+        self.assertIsNone(result["busiest_cell"])
 
 
 if __name__ == "__main__":

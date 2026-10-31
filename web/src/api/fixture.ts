@@ -124,6 +124,21 @@ const DEMO_PROFILE: TeamProfile = {
       { zone: 'neutral_zone', lane: 'right', launches: 3, weight: 1.8, matches: 2, share: 0.08, effective: false },
     ],
   },
+  auto_map: {
+    cell_ft: 3.0,
+    recency_half_life_matches: 4,
+    n_matches: 7, // the practice match is excluded from the auto map
+    n_excluded_practice: 1,
+    busiest_cell: { x: 1.5, y: 4.5 }, // leaves the right-lane start every match, so it dwells there
+    heatmap: [
+      { x: 1.5, y: 4.5, samples: 14, weight: 10.8, matches: 7, intensity: 1.0 },
+      { x: 4.5, y: 7.5, samples: 9, weight: 7.1, matches: 7, intensity: 0.66 },
+      { x: 7.5, y: 7.5, samples: 8, weight: 6.2, matches: 6, intensity: 0.57 },
+      { x: 10.5, y: 10.5, samples: 7, weight: 5.0, matches: 6, intensity: 0.46 },
+      { x: 13.5, y: 13.5, samples: 6, weight: 4.1, matches: 5, intensity: 0.38 },
+      { x: 10.5, y: 4.5, samples: 2, weight: 0.8, matches: 1, intensity: 0.07 }, // the one-off variant
+    ],
+  },
   timing: {
     median_volley_interval_s: 8.4,
     median_launches_per_volley: 3,

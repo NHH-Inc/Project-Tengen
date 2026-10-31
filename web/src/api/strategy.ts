@@ -76,6 +76,15 @@ export interface HeatCell {
   intensity: number; // 0..1, relative to the team's hottest cell
 }
 
+export interface AutoCell {
+  x: number;
+  y: number;
+  samples: number; // per-second auto-path points that fell in this cell
+  weight: number;
+  matches: number;
+  intensity: number; // 0..1, relative to the team's busiest auto cell
+}
+
 export interface ZoneScore {
   zone: string;
   lane: string;
@@ -99,12 +108,24 @@ export interface ScoringMap {
   zones: ZoneScore[];
 }
 
+// Where a team drives in autonomous, over OFFICIAL matches only (practice auto is noise -- the
+// team is testing routines). See ingest/strategy/heatmap.py auto_map and docs/PLAN-2026.md section 5.
+export interface AutoMap {
+  cell_ft: number;
+  recency_half_life_matches: number;
+  n_matches: number; // official matches behind the map
+  n_excluded_practice: number;
+  busiest_cell: { x: number; y: number } | null;
+  heatmap: AutoCell[];
+}
+
 export interface TeamProfile {
   team: number;
   matches: Array<string | null>;
   n_matches: number;
   n_with_positions: number;
   scoring_map?: ScoringMap;
+  auto_map?: AutoMap;
   launches_per_match: number | null;
   timing?: {
     median_volley_interval_s: number | null;

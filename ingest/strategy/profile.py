@@ -98,8 +98,9 @@ def build_profile(team_matches: list[dict], geometry: dict | None = None) -> dic
         },
     }
     if geometry is not None:
-        from .heatmap import scoring_map
+        from .heatmap import auto_map, scoring_map
         profile["scoring_map"] = scoring_map(matches, geometry)
+        profile["auto_map"] = auto_map(matches, geometry)
     if not located:
         profile["tendencies"] = None
         profile["prediction"] = None
