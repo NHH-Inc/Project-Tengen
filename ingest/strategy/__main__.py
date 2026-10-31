@@ -6,6 +6,7 @@
     python -m ingest.strategy profile   RUN [RUN ...] [--team 254] [--json out.json]
     python -m ingest.strategy heatmap   RUN [RUN ...] [--team 254] [--json out.json]
     python -m ingest.strategy advantagescope RUN [RUN ...]   (write a .wpilog per match)
+    python -m ingest.strategy matchplan RUN [RUN ...] --us 254,1678,971 --them 148,118,2056
     python -m ingest.strategy evaluate  RUN [RUN ...]
 
 RUN is an analysed match folder (it contains job.json and tracks.jsonl), or a folder of them such
@@ -135,14 +136,41 @@ def print_heatmap(team_map: dict) -> None:
             print("    No auto paths yet (needs an official match with field positions in auto).")
 
 
+def _parse_teams(raw: str | None) -> list[int]:
+    """Parse '254,1678 971' -> [254, 1678, 971]; drops anything that is not a team number."""
+    if not raw:
+        return []
+    out = []
+    for token in raw.replace(",", " ").split():
+        try:
+            out.append(int(token))
+        except ValueError:
+            continue
+    return out
+
+
+def print_matchplan(plan: dict) -> None:
+    us = " ".join(str(t) for t in plan["alliance"])
+    them = " ".join(str(t) for t in plan["opponents"])
+    print(f"\nMatch plan  --  us [{us}]  vs  them [{them}]")
+    if plan["missing"]:
+        print(f"  (no profile yet for: {', '.join(str(t) for t in plan['missing'])})")
+    if not plan["advice"]:
+        print("  Not enough data for a call yet. Analyse more of these teams' matches.")
+    for item in plan["advice"]:
+        print(f"  * {item['advice']}\n      ({item['evidence']})")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ingest.strategy", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command",
                         choices=["clock", "timeline", "features", "profile", "heatmap",
-                                 "advantagescope", "evaluate"])
+                                 "advantagescope", "matchplan", "evaluate"])
     parser.add_argument("runs", nargs="+")
     parser.add_argument("--team", type=int)
+    parser.add_argument("--us", help="matchplan: our alliance's teams, e.g. --us 254,1678,971")
+    parser.add_argument("--them", help="matchplan: the opponent alliance's teams")
     parser.add_argument("--json", type=Path, help="also write the result here as JSON")
     args = parser.parse_args(argv)
 
@@ -220,6 +248,17 @@ def main(argv=None) -> int:
                 print_heatmap(team_map)
             if not output:
                 print("No robot has a team number yet. Assign teams in review first.")
+        elif args.command == "matchplan":
+            from .engine import build_matchplan
+            us, them = _parse_teams(args.us), _parse_teams(args.them)
+            if not us or not them:
+                print("matchplan needs both alliances, e.g. --us 254,1678,971 --them 148,118,2056",
+                      file=sys.stderr)
+                return 1
+            profiles = {team: build_profile(matches, geometry)
+                        for team, matches in by_team.items() if matches}
+            output = build_matchplan(us, them, profiles)
+            print_matchplan(output)
         else:
             output = next_match_test(by_team)
             print(json.dumps(output, indent=2))
