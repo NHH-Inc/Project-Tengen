@@ -8,6 +8,7 @@
     python -m ingest.strategy advantagescope RUN [RUN ...]   (write a .wpilog per match)
     python -m ingest.strategy matchplan RUN [RUN ...] --us 254,1678,971 --them 148,118,2056
     python -m ingest.strategy picklist  RUN [RUN ...] --us 254 [--available 1678,148,...]
+    python -m ingest.strategy sim       RUN [RUN ...]   (replay each auto and score the motion model)
     python -m ingest.strategy evaluate  RUN [RUN ...]
 
 RUN is an analysed match folder (it contains job.json and tracks.jsonl), or a folder of them such
@@ -179,7 +180,7 @@ def main(argv=None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command",
                         choices=["clock", "timeline", "features", "profile", "heatmap",
-                                 "advantagescope", "matchplan", "picklist", "evaluate"])
+                                 "advantagescope", "matchplan", "picklist", "sim", "evaluate"])
     parser.add_argument("runs", nargs="+")
     parser.add_argument("--team", type=int)
     parser.add_argument("--us", help="matchplan/picklist: our teams, e.g. --us 254,1678,971")
@@ -231,6 +232,25 @@ def main(argv=None) -> int:
             positioned = sum(1 for t in timelines if t["coverage"]["positioned_s"] > 0)
             print(f"{run.name}: wrote {out.name} ({len(timelines)} robots, {positioned} positioned). "
                   f"Open in AdvantageScope and drop each /Tengen/... field on the 2D Field as a Robot.")
+        return 0
+
+    if args.command == "sim":
+        from ..sim.validate import validate_auto
+        for run in runs:
+            print(f"\n{run.name}")
+            reported = False
+            for timeline in build_timelines(run):
+                report = validate_auto(timeline)
+                if report is None:
+                    continue
+                reported = True
+                err = report["error"]
+                who = report["team"] or report["robot_key"]
+                print(f"  {str(who):<10} auto {report['actual_duration_s']:>4.1f}s, "
+                      f"{report['n_waypoints']} waypoints  --  sim vs actual: "
+                      f"mean {_fmt(err['mean_ft'])} ft, max {_fmt(err['max_ft'])} ft")
+            if not reported:
+                print("  No robot had enough positioned auto to simulate.")
         return 0
 
     per_match = [(run, analyse(run)) for run in runs]
