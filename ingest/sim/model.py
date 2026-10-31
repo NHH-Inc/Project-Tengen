@@ -26,6 +26,12 @@ DEFAULT_MAX_ACCEL_FTPS2 = 10.0
 DEFAULT_WAYPOINT_TOL_FT = 1.0
 #: Integrator step. 50 Hz is well below the robot's dynamics and matches a fine replay.
 DEFAULT_DT_S = 0.02
+#: An FRC robot is ~3 ft across the bumpers, so ~1.5 ft centre-to-edge. Two robots are in contact
+#: when their centres are within the sum of their radii (T2 blocking).
+ROBOT_RADIUS_FT = 1.5
+#: How fast the velocity heading may rotate. The default is large enough to be effectively
+#: holonomic (T1 behaviour is unchanged); lower it to model a tank drive that must turn to redirect.
+DEFAULT_MAX_TURN_RADPS = 12.0
 
 
 @dataclass(frozen=True)
@@ -33,6 +39,8 @@ class RobotParams:
     max_speed_ftps: float = DEFAULT_MAX_SPEED_FTPS
     max_accel_ftps2: float = DEFAULT_MAX_ACCEL_FTPS2
     waypoint_tol_ft: float = DEFAULT_WAYPOINT_TOL_FT
+    max_turn_radps: float = DEFAULT_MAX_TURN_RADPS
+    radius_ft: float = ROBOT_RADIUS_FT
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,42 @@ def params_from_profile(profile: dict) -> RobotParams:
     return RobotParams(max_speed_ftps=float(top) if top else DEFAULT_MAX_SPEED_FTPS)
 
 
+def _desired_velocity(x: float, y: float, target: tuple[float, float], params: RobotParams,
+                      final: bool) -> tuple[float, float]:
+    """Velocity we *want*: toward the target at top speed, but slowed to stop on a final waypoint
+    (v = sqrt(2*a*d) is the fastest speed we can still brake from within the remaining distance)."""
+    dx, dy = target[0] - x, target[1] - y
+    distance = math.hypot(dx, dy)
+    if distance <= 1e-9:
+        return 0.0, 0.0
+    speed = min(params.max_speed_ftps, math.sqrt(2.0 * params.max_accel_ftps2 * distance)) \
+        if final else params.max_speed_ftps
+    return speed * dx / distance, speed * dy / distance
+
+
+def _apply_limits(vx: float, vy: float, desired_vx: float, desired_vy: float,
+                  params: RobotParams, dt: float) -> tuple[float, float]:
+    """The velocity we can actually reach this step: capped change (acceleration) and capped
+    rotation of the heading (turn rate). Turn capping is skipped near rest, where heading is ill-
+    defined; this keeps the holonomic T1 behaviour when max_turn_radps is left at its large default."""
+    dvx, dvy = desired_vx - vx, desired_vy - vy
+    dv = math.hypot(dvx, dvy)
+    max_dv = params.max_accel_ftps2 * dt
+    if dv > max_dv and dv > 1e-9:
+        dvx *= max_dv / dv
+        dvy *= max_dv / dv
+    nvx, nvy = vx + dvx, vy + dvy
+    speed0, speed1 = math.hypot(vx, vy), math.hypot(nvx, nvy)
+    if speed0 > 0.5 and speed1 > 1e-9:
+        a0, a1 = math.atan2(vy, vx), math.atan2(nvy, nvx)
+        delta = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        max_delta = params.max_turn_radps * dt
+        if abs(delta) > max_delta:
+            angle = a0 + math.copysign(max_delta, delta)
+            nvx, nvy = speed1 * math.cos(angle), speed1 * math.sin(angle)
+    return nvx, nvy
+
+
 def simulate_path(start: tuple[float, float], waypoints: list[tuple[float, float]],
                   params: RobotParams | None = None, *, dt: float = DEFAULT_DT_S,
                   max_time_s: float = 20.0, start_t: float = 0.0) -> list[Pose]:
@@ -63,38 +107,14 @@ def simulate_path(start: tuple[float, float], waypoints: list[tuple[float, float
     target = 0
     steps = int(round(max_time_s / dt))
     for step in range(1, steps + 1):
+        while target < len(waypoints) and \
+                math.hypot(waypoints[target][0] - x, waypoints[target][1] - y) <= params.waypoint_tol_ft:
+            target += 1
         if target >= len(waypoints):
             break
-        tx, ty = waypoints[target]
-        dx, dy = tx - x, ty - y
-        distance = math.hypot(dx, dy)
-        if distance <= params.waypoint_tol_ft:
-            target += 1
-            if target >= len(waypoints):
-                break
-            tx, ty = waypoints[target]
-            dx, dy = tx - x, ty - y
-            distance = math.hypot(dx, dy)
-        # Desired velocity: toward the waypoint at top speed, but slow down so we can stop on the
-        # final one instead of overshooting (v = sqrt(2*a*d) is the fastest speed we can still brake
-        # from within the remaining distance).
-        if distance > 1e-9:
-            brake_speed = math.sqrt(2.0 * params.max_accel_ftps2 * distance)
-            speed = min(params.max_speed_ftps, brake_speed) if target == len(waypoints) - 1 \
-                else params.max_speed_ftps
-            desired_vx = speed * dx / distance
-            desired_vy = speed * dy / distance
-        else:
-            desired_vx = desired_vy = 0.0
-        # Accelerate toward the desired velocity, capped by the acceleration limit this step.
-        dvx, dvy = desired_vx - vx, desired_vy - vy
-        dv = math.hypot(dvx, dvy)
-        max_dv = params.max_accel_ftps2 * dt
-        if dv > max_dv and dv > 1e-9:
-            dvx *= max_dv / dv
-            dvy *= max_dv / dv
-        vx += dvx
-        vy += dvy
+        desired_vx, desired_vy = _desired_velocity(x, y, waypoints[target], params,
+                                                   final=target == len(waypoints) - 1)
+        vx, vy = _apply_limits(vx, vy, desired_vx, desired_vy, params, dt)
         x += vx * dt
         y += vy * dt
         if vx * vx + vy * vy > 1e-6:

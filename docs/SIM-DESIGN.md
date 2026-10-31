@@ -2,8 +2,8 @@
 
 **Status (2026-10-31):** scope approved. **Target: T3 (full game physics + scoring).** Core language:
 **Python** (`ingest/sim/`), with a thin web view driving it. We build up the tiers in order, each a
-PR; **Phase 0/T1 (motion model + validation harness) is shipped** — see the status line per tier in
-§3 and `ingest/sim/`.
+PR; **T0, T1 and T2 are shipped** (motion model, validation harness, turn-rate limit, and multi-robot
+blocking/defense). Next is T3. See the per-tier status in §3 and `ingest/sim/`.
 
 Decided in [PLAN-2026 §2](PLAN-2026.md): **the full physics field sim (b)**, not just the lightweight
 replay (a). This doc records how we get there in a way that pays off early and doesn't balloon.
@@ -49,7 +49,7 @@ Each tier is a superset of the one before. Higher tiers cost more and help fewer
 |---|---|---|---|
 | **T0 — Kinematic replay** | Play predicted waypoint paths and actual tracks on one field, time-aligned. No forces. | S | High — the (a) stepping stone; makes everything else checkable. | ✅ shipped (`validate.py`) |
 | **T1 — Motion dynamics** | Robots as point masses with **max velocity + acceleration** (from each team's measured `top_speed`). Waypoint-following controller. Produces *realistic* trajectories and **arrival times**. | M | High — "can this auto reach 3 pieces in 15 s?" needs real accel limits. | ✅ shipped (`model.py`) |
-| **T2 — Interactions** | Robot–robot **collision/blocking** as soft bodies (circles/rects with separation forces), so **defense** is simulable; also a turn-rate limit for non-holonomic drive. | M–L | Medium — defense is the main multi-robot question. | next |
+| **T2 — Interactions** | Robot–robot **collision/blocking** as soft bodies (separation + removing the velocity driving them together), so **defense** is simulable; plus a turn-rate limit for non-holonomic drive. | M–L | Medium — defense is the main multi-robot question. | ✅ shipped (`match.py`) |
 | **T3 — Game pieces & scoring** | Balls/pieces with trajectories, intake/launch, goal regions, a scoring model. | L–XL | Season-dependent; the approved end target. | planned |
 
 **Approved target: T3.** Build order is still T0 → T1 → T2 → T3, each independently useful, because
