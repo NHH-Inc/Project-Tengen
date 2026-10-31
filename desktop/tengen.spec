@@ -24,7 +24,10 @@ for package in ("ultralytics", "torch", "torchvision", "av", "lap", "scipy", "yt
     datas += pkg_datas
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
-hiddenimports += collect_submodules("ingest")
+# tengen.py imports these lazily (inside functions), so collect them explicitly or the frozen
+# build will not contain the worker, tracker, publisher or app.
+for package in ("ingest", "desktop", "training", "tools"):
+    hiddenimports += collect_submodules(package)
 
 # Read-only data the app loads at runtime, shipped inside the bundle.
 for rel in ("contracts", "analysis/config", "fixtures/2026casf_qm42", "brand/tengen-mark.svg"):

@@ -150,11 +150,14 @@ Qt video integration follows the official [QGraphicsVideoItem documentation](htt
 
 ## Packaging to a Windows app (experimental)
 
-The goal is a double-click `Tengen.exe` with no Python install (plan §7). The scaffolding is in the
-repo; **it is not a finished build yet.** What exists:
+The goal is a double-click `Tengen.exe` with no Python install (plan §7). The code is now
+freeze-aware; what remains is building it and shaking out the build on a real Windows machine.
 
-- `desktop/tengen.spec` — a PyInstaller spec that bundles PySide6, torch and ultralytics correctly
-  (the tedious part) and ships the season/contract data.
+What exists:
+
+- `desktop/tengen.spec` — a PyInstaller spec that bundles PySide6, torch and ultralytics, ships the
+  season/contract data, and collects the `desktop`/`ingest`/`training`/`tools` packages (the app
+  imports them lazily, so they must be named explicitly).
 - `build-windows.ps1` — installs the build deps and runs PyInstaller.
 - `requirements-desktop-build.txt` — pins PyInstaller.
 
@@ -167,20 +170,29 @@ powershell -ExecutionPolicy Bypass -File build-windows.ps1
 Output is `dist\Tengen\Tengen.exe`. The **model weights are not bundled** (hundreds of MB, and they
 change): copy `data\robot-v3.pt` into `dist\Tengen\data\` next to the exe.
 
-### Two blockers to solve before the exe actually runs a job
+### What the freeze-aware code does
 
-Reading the code, a frozen build will start but fail the moment you analyse or publish, for two
-reasons that need small code changes first:
+A frozen exe cannot run `Tengen.exe -m <module>`, and `__file__` points inside a read-only bundle.
+Both are handled:
 
-1. **The analysis/publish subprocess.** The app launches work with
-   `sys.executable -m desktop.worker` / `-m tools.publish` (`desktop/app.py`). In a frozen exe
-   `sys.executable` is `Tengen.exe`, which does not accept `-m module`. Fix: when `sys.frozen`,
-   re-invoke the exe with a flag (e.g. `Tengen.exe --run-worker <path>`) that `tengen.py` dispatches
-   to the worker instead of the GUI.
-2. **Paths.** `desktop/core.py` sets `ROOT` from `__file__` and both reads bundled data and writes
-   runs under it. Frozen, `__file__` is inside the read-only bundle. Fix: split read-only bundle
-   data (use `sys._MEIPASS` when frozen) from the writable data home (a folder beside the exe, or
-   `%LOCALAPPDATA%\Tengen`).
+1. **Subprocesses re-invoke the exe.** The GUI spawns its analysis, tracker and publish helpers via
+   `desktop.core.child_process` / the orchestrator's launcher. Frozen, these become
+   `Tengen.exe --run-worker|--run-tracker|--run-publish …`, which `tengen.py` dispatches to the
+   right module instead of the GUI. From source they are still `python -m <module>`, unchanged.
+2. **Paths are split.** `desktop/core.py` separates read-only bundle data (`BUNDLE`, from
+   `sys._MEIPASS` when frozen) from the writable data home (`DATA_HOME`, the folder beside the exe).
+   Runs and model weights live under `DATA_HOME`; contracts and the demo fixture under `BUNDLE`.
+   From source both are the repo root, so nothing changes when unfrozen.
+
+### Known build-time unknowns (shake these out in the build loop)
+
+- **torch** hidden imports/DLLs: `collect_all("torch")` usually suffices, but a `ModuleNotFoundError`
+  at launch means another `--hidden-import` or `--collect-submodules`.
+- **Qt Multimedia**: if the video panel is blank, the multimedia plugins need collecting in the spec.
+- **GPU**: a CPU-only torch keeps the build smaller; CUDA wheels work but add gigabytes.
+- **Size/startup**: the one-folder build starts faster than one-file; expect 1–3 GB with torch.
+
+Build, run, and send the first error — that is the fastest way to close the remaining gaps.
 
 Both are small, but they must be verified by building and running on a real Windows machine — which
 is why this is marked experimental rather than done. The fastest way to finish it is a build loop:
