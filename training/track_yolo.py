@@ -295,7 +295,14 @@ class ReIDConfig:
     missing_appearance_motion_weight: float = 0.82
     edge_neutral_score: float = 0.50
     raw_continuity_bonus: float = 0.06
-    velocity_update_weight: float = 0.45
+    #: Fit recent observations rather than averaging displacement across an occlusion. Speeds
+    #: are only trusted once the observations span enough time to distinguish motion from jitter.
+    motion_history_seconds: float = 0.5
+    motion_min_span_seconds: float = 0.08
+    motion_reset_gap_seconds: float = 0.5
+    prediction_horizon_seconds: float = 1.0
+    normalized_acceleration: float = 0.75
+    field_acceleration_ftps2: float = 20.0
     template_distinct_similarity: float = 0.995
     alliance_lock_seconds: float = DEFAULT_REID_ALLIANCE_LOCK_SECONDS
     alliance_lock_margin_seconds: float = DEFAULT_REID_ALLIANCE_LOCK_MARGIN_SECONDS
@@ -333,13 +340,15 @@ class ReIDDetection:
 class _IdentityState:
     last_seen: float
     center: tuple[float, float]
-    velocity: tuple[float, float] = (0.0, 0.0)
+    velocity: tuple[float, float] | None = None
+    motion_samples: list[tuple[float, float, float]] = field(default_factory=list)
     alliance: str | None = None
     templates: list[list[float]] = field(default_factory=list)
     last_raw_id: int | None = None
     last_edge: str | None = None
     field_center: tuple[float, float] | None = None
-    field_velocity: tuple[float, float] = (0.0, 0.0)
+    field_velocity: tuple[float, float] | None = None
+    field_motion_samples: list[tuple[float, float, float]] = field(default_factory=list)
     camera_offset: tuple[float, float] = (0.0, 0.0)
     pending_raw_id: int | None = None
     pending_template: list[float] | None = None
@@ -454,6 +463,39 @@ class AppearanceTrackMemory:
             return None
         return max(appearance_similarity(detection.descriptor, template) for template in state.templates)
 
+    def _observe_motion(
+        self,
+        samples: list[tuple[float, float, float]],
+        timestamp: float,
+        position: tuple[float, float] | None,
+        maximum_speed: float,
+    ) -> tuple[float, float] | None:
+        """Fit a bounded velocity to visible observations only, in one coordinate system."""
+        if position is None:
+            samples.clear()  # calibration was lost; never reuse an old field-space velocity
+            return None
+        if samples and timestamp - samples[-1][0] > self.config.motion_reset_gap_seconds:
+            samples.clear()  # a hidden robot may have stopped or turned; learn its motion anew
+        samples.append((timestamp, *position))
+        cutoff = timestamp - self.config.motion_history_seconds
+        samples[:] = [sample for sample in samples if sample[0] >= cutoff][-64:]
+        if len(samples) < 2 or samples[-1][0] - samples[0][0] < self.config.motion_min_span_seconds:
+            return None
+        # Centred least squares reduces box jitter and has no zero-velocity warm-up bias. Use
+        # relative times so a long-running stream does not lose precision in the regression.
+        times = [sample[0] - timestamp for sample in samples]
+        mean_t = sum(times) / len(times)
+        variance = sum((t - mean_t) ** 2 for t in times)
+        if variance <= 1e-12:
+            return None
+        velocity = tuple(
+            sum((t - mean_t) * sample[axis] for t, sample in zip(times, samples)) / variance
+            for axis in (1, 2)
+        )
+        speed = math.hypot(*velocity)
+        scale = min(1.0, maximum_speed / max(speed, 1e-12))
+        return velocity[0] * scale, velocity[1] * scale
+
     def _record_alliance_evidence(
         self,
         state: _IdentityState,
@@ -508,9 +550,16 @@ class AppearanceTrackMemory:
             allowed = self.config.field_motion_slack_feet + self.config.maximum_field_speed_ftps * gap
             if math.hypot(dx, dy) > allowed:
                 return None
-            predicted = (
-                state.field_center[0] + state.field_velocity[0] * gap,
-                state.field_center[1] + state.field_velocity[1] * gap,
+            velocity = state.field_velocity
+            horizon = min(gap, self.config.prediction_horizon_seconds)
+            predicted = tuple(
+                state.field_center[axis] + (velocity[axis] if velocity is not None else 0.0) * horizon
+                for axis in (0, 1)
+            )
+            uncertainty = (
+                self.config.field_motion_slack_feet
+                + 0.5 * self.config.field_acceleration_ftps2 * gap * gap
+                + self.config.maximum_field_speed_ftps * (gap - horizon)
             )
             residual = math.hypot(
                 detection.field_center[0] - predicted[0], detection.field_center[1] - predicted[1]
@@ -526,14 +575,26 @@ class AppearanceTrackMemory:
             )
             if math.hypot(dx, dy) > allowed:
                 return None
+            velocity = state.velocity
+            horizon = min(gap, self.config.prediction_horizon_seconds)
             predicted = (
-                state.center[0] + state.velocity[0] * gap + camera_dx,
-                state.center[1] + state.velocity[1] * gap + camera_dy,
+                state.center[0] + (velocity[0] if velocity is not None else 0.0) * horizon + camera_dx,
+                state.center[1] + (velocity[1] if velocity is not None else 0.0) * horizon + camera_dy,
+            )
+            uncertainty = (
+                self.config.motion_slack
+                + 0.5 * self.config.normalized_acceleration * gap * gap
+                + self.config.max_normalized_speed * (gap - horizon)
             )
             residual = math.hypot(
                 detection.center[0] - predicted[0], detection.center[1] - predicted[1]
             )
-        motion_score = max(0.0, 1.0 - residual / max(allowed, 1e-9))
+        # A recently observed speed and heading are more informative than "anywhere reachable at
+        # maximum speed". Uncertainty grows with hidden time and possible acceleration/turning;
+        # beyond the prediction horizon we stop extending the old heading. Untrained velocities
+        # keep the broad physical gate, and appearance still protects against a plausible impostor.
+        radius = min(allowed, uncertainty) if velocity is not None else allowed
+        motion_score = max(0.0, 1.0 - residual / max(radius, 1e-9))
 
         current_edge = detection.edge or self._edge(detection.center)
         raw_continuity = self.raw_to_stable.get(detection.raw_track_id) == stable_id
@@ -621,30 +682,28 @@ class AppearanceTrackMemory:
                 last_edge=detection.edge or self._edge(detection.center),
                 field_center=detection.field_center,
                 camera_offset=self.camera_offset,
+                motion_samples=[(timestamp, detection.center[0] - self.camera_offset[0],
+                                 detection.center[1] - self.camera_offset[1])],
+                field_motion_samples=(
+                    [(timestamp, *detection.field_center)] if detection.field_center is not None else []
+                ),
             )
             return
 
         gap = timestamp - state.last_seen
         if gap > 0.0:
-            new_weight = self.config.velocity_update_weight
-            old_weight = 1.0 - new_weight
-            measured = (
-                (detection.center[0] - state.center[0]) / gap,
-                (detection.center[1] - state.center[1]) / gap,
+            # The camera offset is accumulated in resolve_frame. Subtract it from observations
+            # as well as candidate displacement, otherwise a camera pan teaches a false speed.
+            state.velocity = self._observe_motion(
+                state.motion_samples, timestamp,
+                (detection.center[0] - self.camera_offset[0],
+                 detection.center[1] - self.camera_offset[1]),
+                self.config.max_normalized_speed,
             )
-            state.velocity = (
-                old_weight * state.velocity[0] + new_weight * measured[0],
-                old_weight * state.velocity[1] + new_weight * measured[1],
+            state.field_velocity = self._observe_motion(
+                state.field_motion_samples, timestamp, detection.field_center,
+                self.config.maximum_field_speed_ftps,
             )
-            if detection.field_center is not None and state.field_center is not None:
-                measured_field = (
-                    (detection.field_center[0] - state.field_center[0]) / gap,
-                    (detection.field_center[1] - state.field_center[1]) / gap,
-                )
-                state.field_velocity = (
-                    old_weight * state.field_velocity[0] + new_weight * measured_field[0],
-                    old_weight * state.field_velocity[1] + new_weight * measured_field[1],
-                )
 
         descriptor_similarity = self._appearance(detection, state)
         eligible_template = (
@@ -748,9 +807,7 @@ class AppearanceTrackMemory:
                 stable_id = self._recover_stale(
                     timestamp, detection, {s for s in resolved if s is not None})
                 if stable_id is not None:
-                    # Its velocity is from before the gap and means nothing now.
-                    self.states[stable_id].velocity = (0.0, 0.0)
-                    self.states[stable_id].field_velocity = (0.0, 0.0)
+                    # _update_state discards the pre-gap motion history on recovery.
                     self.recovered += 1
             if stable_id is None:
                 self.raw_to_stable.pop(detection.raw_track_id, None)

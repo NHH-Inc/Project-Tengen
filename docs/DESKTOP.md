@@ -103,6 +103,14 @@ workflow accepts local recordings and exports files that can be imported into Sh
 
 ## Analysis limits
 
+Robot identity recovery uses recent speed and direction to predict where a hidden robot could
+reappear, alongside appearance, alliance, and maximum-speed checks. Prediction is used only to
+associate real detections: hidden positions are not written as observed tracks. The forecast is
+limited to one second of travel along the last heading, with increasing uncertainty for longer
+gaps or turns. After a longer dropout, motion is learned again from visible observations. See
+[Robot identity tracking](ROBOT-IDENTITY.md) for the model, checks, and limitations. Reanalyze an
+older saved run to apply these tracking changes; loading it does not recompute its identities.
+
 The desktop conversion does not retrain the detector. It still uses the existing broadcast crop
 (top portion of the image); camera views outside that format can require analyzer configuration
 changes. Track fragments are not a reliable count of unique robots, and team numbers require
