@@ -79,6 +79,27 @@ def test_worker_failure_returns_control_to_gui(app, tmp_path):
         window.close()
 
 
+def test_advantagescope_button_exports_loaded_match(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    window = MainWindow()
+    errors = []
+    window.error = lambda message: errors.append(str(message))
+    window.open_review(FIXTURE, tmp_path / "corrections.json")
+    monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                        lambda *a, **k: (str(tmp_path / "match"), "WPILib data log (*.wpilog)"))
+    try:
+        window.export_advantagescope()
+        assert not errors
+        exported = (tmp_path / "match.wpilog").read_bytes()
+        assert exported.startswith(b"WPILOG")
+        assert b"/Tengen/" in exported
+        assert "Wrote match.wpilog" in window.statusBar().currentMessage()
+    finally:
+        window.close()
+        app.processEvents()
+
+
 def test_cancel_stops_worker_and_detector(app, tmp_path):
     import psutil
     from desktop.core import AnalysisOptions, RUNS, read_json

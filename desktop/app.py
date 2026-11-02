@@ -706,6 +706,7 @@ class MainWindow(QMainWindow):
             return
         try:
             from ingest.strategy.advantagescope import match_to_wpilog
+            from ingest.strategy.timeline import build_timelines
             target = Path(path)
             if not target.suffix:
                 target = target.with_suffix(".wpilog")
